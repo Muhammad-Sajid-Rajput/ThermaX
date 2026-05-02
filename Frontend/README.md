@@ -154,13 +154,12 @@ Frontend/
 │   │   ├── auth/          # Authentication components
 │   │   ├── dashboard/     # Dashboard-specific components
 │   │   ├── layout/        # Layout components (Navbar, AppLayout, DashboardLayout)
-│   │   ├── map/           # Advanced map components
 │   │   └── ui/            # Base UI components
 │   ├── Pages/             # Route-based page components
 │   │   ├── Admin/         # Admin pages
 │   │   ├── Auth/          # Authentication pages
 │   │   ├── Dashboard/     # Dashboard page
-│   │   ├── HeatReport/    # Heat reporting pages
+|   |   |- HeatReport/    # Heat reporting pages, including the local MiniMap
 │   │   ├── Insight/       # Analytics insight pages
 │   │   ├── Landing/       # Landing page
 │   │   ├── Permission/    # Geolocation permission pages
@@ -262,6 +261,12 @@ Main layout component featuring:
 - **SaaS Navbar** with user dropdown and mobile slide-out menu
 - **Integrated Context Panel** for detailed map analytics
 - **Mobile-Responsive Behavior** handling overflow gracefully
+
+### MiniMap
+Heat report-only location preview component featuring:
+- Red pin marker for the user-selected coordinates
+- Auto-centering on typed or detected latitude/longitude
+- Local ownership inside `Pages/HeatReport/MiniMap.jsx`
 
 ## 🔄 State Management
 
@@ -397,6 +402,7 @@ const toggleTheme = () => {
 - **Zustand 5.0**: Updated to latest version with improved performance
 - **Enhanced Hooks Structure**: Organized hooks into api/, data/, and ui/ subdirectories
 - **Additional Services**: Added localStorageService and seedData for better data management
+- **Heat Report Mini Map**: Moved the preview map into `Pages/HeatReport/MiniMap.jsx` and removed the old shared `components/map` folder
 
 ### April 2026
 - **Tailwind CSS v4 Migration**: Updated gradient classes (`bg-gradient-to-*` → `bg-linear-to-*`)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import MiniMap from '../../components/map/MiniMap';
+import MiniMap from './MiniMap';
 import { detectAreaName, submitHeatReport } from '../../services/api';
 import {
   MapPin,
@@ -73,6 +73,10 @@ function HeatReport() {
       label: form.areaName || 'Report location',
     }),
     [form.areaName, form.latitude, form.longitude]
+  );
+  const mapCenter = useMemo(
+    () => [Number(form.latitude) || 24.8607, Number(form.longitude) || 67.0011],
+    [form.latitude, form.longitude]
   );
   const validateStep = (currentStep) => {
     const nextErrors = {};
@@ -737,7 +741,7 @@ function HeatReport() {
               <MapPin className="w-5 h-5 text-green-600" />
               Location Preview
             </h3>
-            <MiniMap marker={marker} />
+            <MiniMap center={mapCenter} markers={[marker]} />
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">

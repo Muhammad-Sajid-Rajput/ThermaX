@@ -91,17 +91,6 @@ ThermaX/
 │   │   │   │   ├── MapSection.jsx         # Map section with controls
 │   │   │   │   ├── MapLegend.jsx          # Map legend overlay
 │   │   │   │   └── AnalyticsSection.jsx   # Analytics charts
-│   │   │   └── map/                   # Advanced map components
-│   │   │       ├── InteractiveMap.jsx     # Main map with all features
-│   │   │       ├── HeatmapLayer.jsx       # Heat intensity visualization
-│   │   │       ├── ClusterLayer.jsx       # Marker clustering
-│   │   │       ├── HotspotLayer.jsx       # DBSCAN risk zones
-│   │   │       ├── AnalyticsPanel.jsx     # Click analytics
-│   │   │       ├── LayerControl.jsx       # Base maps & overlays
-│   │   │       ├── UserLocation.jsx       # Geolocation features
-│   │   │       ├── MapErrorBoundary.jsx   # Error handling
-│   │   │       ├── MapLoadingStates.jsx   # Loading components
-│   │   │       └── README.md              # Map documentation
 │   │   ├── Pages/                     # Route-based page components
 │   │   │   ├── Dashboard/             # New SaaS dashboard
 │   │   │   │   └── SaaS.jsx              # Main SaaS dashboard page
@@ -119,6 +108,7 @@ ThermaX/
 │   │   │   │   └── PermissionDeniedPage.jsx
 │   │   │   ├── HeatReport/            # Wizard-style reporting form
 │   │   │   │   ├── HeatReportPage.jsx
+|   |   |   |   |- MiniMap.jsx           # Form-only location preview map
 │   │   │   │   └── SubmissionStatusPage.jsx
 │   │   │   ├── Insight/               # DBSCAN Hotspot analytics explanation
 │   │   │   │   └── InsightPage.jsx
@@ -1252,18 +1242,15 @@ Ensure these CSS files are imported in your main CSS file:
 
 #### Basic Map Usage
 ```jsx
-import InteractiveMap from './Components/map/InteractiveMap';
+import MapSection from './components/dashboard/MapSection.jsx';
 
 function MyComponent() {
   return (
-    <div className="h-96">
-      <InteractiveMap
-        enableRealTimeUpdates={true}
-        initialHeatmap={[]}
-        initialHotspots={[]}
-        initialReports={[]}
-      />
-    </div>
+    <MapSection
+      heatmap={[]}
+      hotspots={[]}
+      reports={[]}
+    />
   );
 }
 ```
@@ -1291,16 +1278,12 @@ function CustomLayer({ data, visible }) {
 }
 ```
 
-#### Error Handling Pattern
+#### Heat Report Mini Map
 ```jsx
-import MapErrorBoundary from './Components/map/MapErrorBoundary';
+import MiniMap from './Pages/HeatReport/MiniMap.jsx';
 
-function SafeMap() {
-  return (
-    <MapErrorBoundary>
-      <InteractiveMap />
-    </MapErrorBoundary>
-  );
+function LocationPreview({ center, marker }) {
+  return <MiniMap center={center} markers={[marker]} />;
 }
 ```
 
@@ -1547,6 +1530,7 @@ A full submission lifecycle from citizen device to visualization output, combini
 #### Component Fixes
 - **ProtectedRoute**: Resolved IDE false-positive errors (file has single valid export)
 - **ContextPanel**: Previously fixed overlay issue with proper grid layout integration
+- **Heat Report Mini Map**: Moved the location preview component into `Pages/HeatReport/` and removed the old standalone `components/map` folder
 - All components now follow Tailwind v4 best practices
 
 #### Code Quality

@@ -5,6 +5,17 @@ import 'leaflet.heat';
 
 const KARACHI_CENTER = [24.8607, 67.0011];
 
+const getLatLng = (item) => {
+  const lat = Number(item?.lat ?? item?.latitude ?? item?.coordinates?.[0]);
+  const lng = Number(item?.lng ?? item?.longitude ?? item?.coordinates?.[1]);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  return [lat, lng];
+};
+
 const MiniMap = ({
   center = KARACHI_CENTER,
   zoom = 13,
@@ -36,14 +47,13 @@ const MiniMap = ({
     }
 
     const layerGroup = layersRef.current[type];
-    layerGroup.forEach((l) => map.removeLayer(l));
+    layerGroup.forEach((layer) => map.removeLayer(layer));
     layersRef.current[type] = [];
   }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Initialize map once
     if (!mapRef.current) {
       const map = L.map(containerRef.current, {
         center,
@@ -66,8 +76,6 @@ const MiniMap = ({
       ).addTo(map);
 
       mapRef.current = map;
-    } else {
-      mapRef.current.setView(center, zoom);
     }
 
     return () => {
@@ -78,7 +86,17 @@ const MiniMap = ({
     };
   }, []);
 
-  // Update heatmap
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const [lat, lng] = center ?? [];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    map.setView([lat, lng], zoom);
+    map.invalidateSize();
+  }, [center, zoom]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -87,13 +105,13 @@ const MiniMap = ({
 
     if (heatmap && heatmap.length > 0) {
       const points = heatmap
-        .map((p) => {
-          const lat = p.lat ?? p[0];
-          const lng = p.lng ?? p[1];
-          const weight = p.intensity ?? p.weight ?? p[2] ?? 0.5;
+        .map((point) => {
+          const lat = point.lat ?? point[0];
+          const lng = point.lng ?? point[1];
+          const weight = point.intensity ?? point.weight ?? point[2] ?? 0.5;
           return [lat, lng, weight];
         })
-        .filter((p) => p[0] != null && p[1] != null);
+        .filter((point) => point[0] != null && point[1] != null);
 
       const heatLayer = L.heatLayer(points, {
         radius: 25,
@@ -113,7 +131,6 @@ const MiniMap = ({
     }
   }, [heatmap, clearLayers]);
 
-  // Update markers
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -121,14 +138,43 @@ const MiniMap = ({
     clearLayers('markers');
 
     const newLayers = markers
-      .map((m) => {
-        const lat = m.lat ?? m.latitude ?? m.coordinates?.[0];
-        const lng = m.lng ?? m.longitude ?? m.coordinates?.[1];
-        if (lat == null || lng == null) return null;
+      .map((markerConfig) => {
+        const point = getLatLng(markerConfig);
+        if (!point) return null;
 
-        const marker = L.marker([lat, lng]);
-        if (m.popup) marker.bindPopup(m.popup);
-        if (m.label) marker.bindTooltip(m.label);
+        const [lat, lng] = point;
+        const icon = L.divIcon({
+          html: `
+            <div style="
+              width: 26px;
+              height: 36px;
+              filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.22));
+            ">
+              <svg
+                width="26"
+                height="36"
+                viewBox="0 0 34 46"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M17 2C9.26801 2 3 8.26801 3 16C3 26.5 17 44 17 44C17 44 31 26.5 31 16C31 8.26801 24.732 2 17 2Z"
+                  fill="#DC2626"
+                  stroke="white"
+                  stroke-width="2.5"
+                />
+                <circle cx="17" cy="16" r="5.5" fill="white" />
+                <circle cx="17" cy="16" r="2.75" fill="#DC2626" />
+              </svg>
+            </div>`,
+          className: '',
+          iconSize: [26, 36],
+          iconAnchor: [13, 34],
+        });
+
+        const marker = L.marker([lat, lng], { icon });
+        if (markerConfig.popup) marker.bindPopup(markerConfig.popup);
+        if (markerConfig.label) marker.bindTooltip(markerConfig.label);
 
         marker.addTo(map);
         return marker;
@@ -136,9 +182,16 @@ const MiniMap = ({
       .filter(Boolean);
 
     layersRef.current.markers = newLayers;
-  }, [markers, clearLayers]);
 
-  // Update report dots
+    if (newLayers.length > 0) {
+      const bounds = L.latLngBounds(newLayers.map((layer) => layer.getLatLng()));
+      map.fitBounds(bounds, {
+        padding: [30, 30],
+        maxZoom: zoom,
+      });
+    }
+  }, [markers, clearLayers, zoom]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -154,13 +207,13 @@ const MiniMap = ({
     };
 
     const newLayers = reports
-      .map((rpt) => {
-        const [lat, lng] = rpt.coordinates ?? [];
+      .map((report) => {
+        const [lat, lng] = report.coordinates ?? [];
         if (!lat || !lng) return null;
 
-        const sev = rpt.severity ?? 1;
-        const color = SEVERITY_COLORS[sev] ?? '#94a3b8';
-        const size = 10 + sev * 3;
+        const severity = report.severity ?? 1;
+        const color = SEVERITY_COLORS[severity] ?? '#94a3b8';
+        const size = 10 + severity * 3;
 
         const icon = L.divIcon({
           html: `
@@ -169,7 +222,7 @@ const MiniMap = ({
             background:${color};border:2.5px solid white;
             box-shadow:0 2px 10px ${color}99;
             display:flex;align-items:center;justify-content:center;
-            color:white;font-size:11px;font-weight:700;font-family:Inter,sans-serif">${sev}</div>`,
+            color:white;font-size:11px;font-weight:700;font-family:Inter,sans-serif">${severity}</div>`,
           className: '',
           iconSize: [size * 2, size * 2],
           iconAnchor: [size, size],
@@ -177,11 +230,11 @@ const MiniMap = ({
 
         const marker = L.marker([lat, lng], { icon }).bindPopup(`
         <div style="min-width:210px;font-family:Inter,sans-serif;line-height:1.5">
-          <div style="font-weight:700;font-size:13px;margin-bottom:1px">${rpt.id || ''}</div>
-          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${rpt.area || ''} · ${rpt.category || ''}</div>
-          <div style="font-size:12px;color:#334155;margin-bottom:5px">${rpt.description || ''}</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:1px">${report.id || ''}</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${report.area || ''} · ${report.category || ''}</div>
+          <div style="font-size:12px;color:#334155;margin-bottom:5px">${report.description || ''}</div>
           <div style="font-size:11px;color:#94a3b8">
-            <b>Source:</b> ${rpt.source || ''} &nbsp;·&nbsp; <b>Severity:</b> ${rpt.severity}/5
+            <b>Source:</b> ${report.source || ''} &nbsp;·&nbsp; <b>Severity:</b> ${report.severity}/5
           </div>
         </div>`);
 
@@ -193,7 +246,6 @@ const MiniMap = ({
     layersRef.current.reports = newLayers;
   }, [reports, clearLayers]);
 
-  // Update hotspot polygons
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -208,11 +260,11 @@ const MiniMap = ({
     };
 
     const newLayers = hotspots
-      .map((hs) => {
-        if (!hs.geojson) return null;
+      .map((hotspot) => {
+        if (!hotspot.geojson) return null;
 
-        const color = PRIORITY_COLORS[hs.priority] ?? '#0f766e';
-        const layer = L.geoJSON(hs.geojson, {
+        const color = PRIORITY_COLORS[hotspot.priority] ?? '#0f766e';
+        const layer = L.geoJSON(hotspot.geojson, {
           style: {
             color,
             weight: 1.5,
@@ -222,16 +274,16 @@ const MiniMap = ({
           },
         }).bindPopup(`
         <div style="min-width:190px;font-family:Inter,sans-serif;line-height:1.5">
-          <div style="font-weight:700;font-size:13px;margin-bottom:3px">${hs.area}</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:3px">${hotspot.area}</div>
           <span style="
             background:${color}22;color:${color};
             font-size:11px;font-weight:600;
-            padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:6px">${hs.priority}</span>
+            padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:6px">${hotspot.priority}</span>
           <div style="font-size:12px;color:#475569">
-            <div>Avg temp: <b>${hs.avgTemperature ?? 'N/A'}°C</b></div>
-            <div>Avg severity: <b>${hs.avgSeverity?.toFixed(1) ?? 'N/A'}</b></div>
-            <div>Reports: <b>${hs.reportCount ?? 0}</b></div>
-            <div>Confidence: <b>${((hs.confidence ?? 0) * 100).toFixed(0)}%</b></div>
+            <div>Avg temp: <b>${hotspot.avgTemperature ?? 'N/A'}°C</b></div>
+            <div>Avg severity: <b>${hotspot.avgSeverity?.toFixed(1) ?? 'N/A'}</b></div>
+            <div>Reports: <b>${hotspot.reportCount ?? 0}</b></div>
+            <div>Confidence: <b>${((hotspot.confidence ?? 0) * 100).toFixed(0)}%</b></div>
           </div>
         </div>`);
 
