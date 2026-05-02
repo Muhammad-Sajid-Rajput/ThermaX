@@ -203,7 +203,11 @@ const ActivityFeed = ({ maxItems = 50 }) => {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent hover:scrollbar-thumb-slate-300 transition-colors scroll-smooth"
+        className="flex-1 overflow-y-auto space-y-2 pr-3 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 transition-colors scroll-smooth"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#cbd5e1 #f1f5f9'
+        }}
       >
         {activities.map((activity) => (
           <div

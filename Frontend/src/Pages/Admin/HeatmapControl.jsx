@@ -8,8 +8,6 @@ import {
   EyeOff,
   Thermometer,
   Zap,
-  Wind,
-  Droplets,
   Activity,
   Download,
   RefreshCw,

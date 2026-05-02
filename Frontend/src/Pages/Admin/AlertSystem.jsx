@@ -17,10 +17,6 @@ import {
   Megaphone,
   Shield,
   Thermometer,
-  Wind,
-  Droplets,
-  Sun,
-  Flame,
 } from 'lucide-react';
 function AlertSystem() {
   const [alertForm, setAlertForm] = useState({
@@ -66,6 +62,7 @@ function AlertSystem() {
     },
   ]);
   const [isSending, setIsSending] = useState(false);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
   const alertTypes = [
     {
       id: 'heat',
@@ -73,34 +70,6 @@ function AlertSystem() {
       icon: Thermometer,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
-    },
-    {
-      id: 'air',
-      name: 'Air Quality',
-      icon: Wind,
-      color: 'text-slate-600',
-      bgColor: 'bg-slate-100',
-    },
-    {
-      id: 'water',
-      name: 'Water Shortage',
-      icon: Droplets,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-    },
-    {
-      id: 'uv',
-      name: 'UV Index',
-      icon: Sun,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-    },
-    {
-      id: 'fire',
-      name: 'Fire Risk',
-      icon: Flame,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
     },
   ];
   const targetAreas = [
@@ -175,7 +144,7 @@ function AlertSystem() {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2 gap-6">
         {/* Alert Composer */}
         <div className="lg:col-span-2 space-y-6">
           <AdminPanel
@@ -367,20 +336,6 @@ ${isSelected ? `${type.bgColor} ${type.color} border-current ring-1 ring-current
                   message:
                     'High temperatures predicted. Drink plenty of water, wear light clothing, and limit sun exposure.',
                 },
-                {
-                  title: 'Water Supply Alert',
-                  type: 'water',
-                  severity: 'warning',
-                  message:
-                    'Water supply may be disrupted in your area. Please store water and use conservatively.',
-                },
-                {
-                  title: 'High UV Index',
-                  type: 'uv',
-                  severity: 'info',
-                  message:
-                    'UV index is high today. Apply sunscreen and wear protective clothing when outdoors.',
-                },
               ].map((template, index) => {
                 const typeConfig = alertTypes.find(
                   (t) => t.id === template.type
@@ -430,55 +385,66 @@ ${isSelected ? `${type.bgColor} ${type.color} border-current ring-1 ring-current
             subtitle="Last 30 days"
             icon={Bell}
             iconColor="orange"
-            className="h-[calc(100vh-200px)] min-h-150"
+            className={
+              alertsExpanded
+                ? 'lg:row-span-2 flex flex-col'
+                : 'h-[calc(100vh-200px)] min-h-150 flex flex-col'
+            }
           >
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto space-y-4 pr-3 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 transition-colors scroll-smooth" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 #f1f5f9' }}>
               {recentAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="p-4 rounded-xl bg-white border border-gray-200 hover:bg-slate-50 transition-all duration-200 shadow-sm"
+                  className="p-4 rounded-xl bg-white border border-gray-200 hover:bg-slate-50 transition-all duration-200 shadow-sm overflow-hidden w-full"
                 >
+                  <div className="mb-3 flex justify-end">
+                    <StatusBadge
+                      status={
+                        alert.status === 'delivered'
+                          ? 'validated'
+                          : 'pending'
+                      }
+                      size="sm"
+                    />
+                  </div>
                   <div className="flex items-start gap-3">
-                    {getSeverityIcon(alert.severity)}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-bold text-slate-900">
+                    <div className="shrink-0 mt-1">
+                      {getSeverityIcon(alert.severity)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="mb-2">
+                        <h3 className="font-bold text-slate-900 leading-snug text-lg whitespace-normal wrap-break-word">
                           {alert.title}
-                        </p>
-                        <StatusBadge
-                          status={
-                            alert.status === 'delivered'
-                              ? 'validated'
-                              : 'pending'
-                          }
-                          size="sm"
-                        />
+                        </h3>
                       </div>
-                      <p className="text-sm text-slate-600 font-medium line-clamp-2">
+                      <p className="text-sm text-slate-600 font-medium line-clamp-2 mb-3">
                         {alert.message}
                       </p>
-                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {alert.target}
+                      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+                        <span className="flex items-center gap-1 min-w-0">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{alert.target}</span>
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          {alert.recipients.toLocaleString()} reached
+                        <span className="flex items-center gap-1 min-w-0">
+                          <Users className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{alert.recipients.toLocaleString()} reached</span>
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(alert.sentAt).toLocaleDateString()}
+                        <span className="flex items-center gap-1 min-w-0">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{new Date(alert.sentAt).toLocaleDateString()}</span>
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
-              <button className="w-full py-3 text-sm text-slate-500 font-bold hover:text-green-600 transition-colors border-t border-slate-100">
-                View All Alert History
-              </button>
             </div>
+            <button
+              onClick={() => setAlertsExpanded((s) => !s)}
+              className="w-full py-3 text-sm text-slate-500 font-bold hover:text-green-600 transition-colors border-t border-slate-100 mt-auto"
+            >
+              {alertsExpanded ? 'Collapse Alert History' : 'View All Alert History'}
+            </button>
           </AdminPanel>
         </div>
       </div>

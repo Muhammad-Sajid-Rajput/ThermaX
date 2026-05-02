@@ -13,7 +13,6 @@ import {
   Users,
   AlertTriangle,
   Map,
-  Flame,
   CheckCircle,
   XCircle,
   Shield,
@@ -27,9 +26,8 @@ import {
   MapPin,
   Zap,
   Thermometer,
-  Wind,
-  Droplets,
   Eye,
+  Flame,
 } from 'lucide-react';
 import {
   fetchReports,
@@ -282,7 +280,7 @@ function AdminDashboard() {
           change="40%"
           changeType="up"
           trend="from yesterday"
-          icon={Flame}
+          icon={Zap}
           color="orange"
           glow={stats.criticalHotspots > 5}
         >

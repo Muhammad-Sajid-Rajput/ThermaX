@@ -58,7 +58,7 @@ border-b border-slate-100 ${headerClassName}`}
         )}
       </div>
       {/* Content */}
-      <div className="flex-1 p-6 overflow-hidden min-h-0">{children}</div>
+      <div className="flex-1 p-6 overflow-visible min-h-0 flex flex-col">{children}</div>
     </div>
   );
 };
