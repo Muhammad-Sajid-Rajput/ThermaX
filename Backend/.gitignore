@@ -1,0 +1,162 @@
+# ThermaX Backend - Node.js/Express .gitignore
+# ==============================================
+
+# Dependencies
+# ------------
+node_modules/
+jspm_packages/
+bower_components/
+
+# Build Outputs
+# -------------
+dist/
+build/
+out/
+
+# Environment Variables
+# ---------------------
+.env
+.env.*.local
+.env.local
+!.env.example
+
+# Logs
+# ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Backend specific logs
+access.log
+error.log
+combined.log
+morgan.log
+
+# Runtime data
+# ------------
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Testing & Coverage
+# ------------------
+coverage/
+*.lcov
+.nyc_output
+test-results/
+
+# TypeScript
+# ----------
+*.tsbuildinfo
+
+# ESLint
+# ------
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Package manager files
+# ---------------------
+.yarn-integrity
+.npm
+*.tgz
+
+# Editor & IDE
+# ------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+# -------------------
+.DS_Store
+Thumbs.db
+
+# Temporary folders
+# -----------------
+tmp/
+temp/
+.tmp/
+
+# ==============================================
+# Backend Specific
+# ==============================================
+
+# Uploads & Storage
+# -----------------
+uploads/
+storage/
+public/uploads/
+static/uploads/
+
+# Database files
+# ---------------
+*.db
+*.sqlite
+*.sqlite3
+database/
+db/
+
+# Session storage
+# -----------------
+sessions/
+session-store/
+
+# Cache
+# -----
+cache/
+
+# SSL certificates
+# ---------------
+*.pem
+*.key
+*.crt
+*.csr
+
+# API Keys and Secrets
+# --------------------
+config/
+secrets/
+credentials/
+api-keys/
+private-keys/
+jwt-keys/
+
+# Backup files
+# ------------
+*.bak
+*.backup
+backup/
+
+# PM2 (Process Manager)
+# ----------------------
+.pm2/
+ecosystem.config.js.backup
+
+# Docker
+# ------
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+# -----------
+*.kubeconfig
+
+# Monitoring and Analytics
+# ------------------------
+*.prof
+.heapdumps/
