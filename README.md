@@ -1513,7 +1513,7 @@ A full submission lifecycle from citizen device to visualization output, combini
 
 ## 🔧 Recent Improvements
 
-### April 2026 Bug Fixes & Code Quality Improvements
+### April-May 2026 Bug Fixes & Code Quality Improvements
 
 #### Tailwind CSS Optimization
 - Updated gradient syntax: `bg-gradient-to-r` → `bg-linear-to-r` (modern Tailwind v4 syntax)
@@ -1531,6 +1531,11 @@ A full submission lifecycle from citizen device to visualization output, combini
 - **ProtectedRoute**: Resolved IDE false-positive errors (file has single valid export)
 - **ContextPanel**: Previously fixed overlay issue with proper grid layout integration
 - **Heat Report Mini Map**: Moved the location preview component into `Pages/HeatReport/` and removed the old standalone `components/map` folder
+- **Alert System**: Moved recent alert validation badges into a dedicated outer row to prevent overlap with long alert titles on smaller screens
+- **StatusBadge**: Added `whitespace-nowrap` behavior for more stable badge rendering across admin cards
+- **Admin Dashboard / Heatmap Control**: Fixed runtime crashes by restoring missing `Flame` icon imports from `lucide-react`
+- **Alert History Typography**: Replaced deprecated `break-words` usage with Tailwind's canonical `wrap-break-word` utility
+- **Documentation Sync**: Updated root, frontend, and backend READMEs to reflect the latest admin UI polish and stability fixes
 - All components now follow Tailwind v4 best practices
 
 #### Code Quality

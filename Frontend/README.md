@@ -403,6 +403,10 @@ const toggleTheme = () => {
 - **Enhanced Hooks Structure**: Organized hooks into api/, data/, and ui/ subdirectories
 - **Additional Services**: Added localStorageService and seedData for better data management
 - **Heat Report Mini Map**: Moved the preview map into `Pages/HeatReport/MiniMap.jsx` and removed the old shared `components/map` folder
+- **Alert History Cards**: Moved recent alert validation badges into a dedicated outer row to prevent overlap with long titles on smaller screens
+- **Shared Status Badges**: Added nowrap behavior for more reliable admin badge rendering
+- **Admin Stability Fixes**: Restored missing `Flame` icon imports in `AdminDashboard.jsx` and `HeatmapControl.jsx`
+- **Tailwind Cleanup**: Replaced `break-words` with the canonical `wrap-break-word` utility
 
 ### April 2026
 - **Tailwind CSS v4 Migration**: Updated gradient classes (`bg-gradient-to-*` → `bg-linear-to-*`)
