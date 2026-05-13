@@ -407,6 +407,10 @@ const toggleTheme = () => {
 - **Shared Status Badges**: Added nowrap behavior for more reliable admin badge rendering
 - **Admin Stability Fixes**: Restored missing `Flame` icon imports in `AdminDashboard.jsx` and `HeatmapControl.jsx`
 - **Tailwind Cleanup**: Replaced `break-words` with the canonical `wrap-break-word` utility
+- **Authentication Enhancements**: Standardized Auth UI to align with the green-themed design system and integrated Google and Microsoft branding for social login
+- **Admin UI Refactor**: Transitioned admin dashboard to a cohesive light theme, standardized typography, and added auto-scrolling activity feeds
+- **Map Interface Standardization**: Refined `MapSection` with clean mode configuration, standardized cross-page sizing, and improved marker/legend aesthetics
+- **Layout Optimizations**: Fixed SaaS dashboard map overlap and refined Profile page spacing
 
 ### April 2026
 - **Tailwind CSS v4 Migration**: Updated gradient classes (`bg-gradient-to-*` → `bg-linear-to-*`)

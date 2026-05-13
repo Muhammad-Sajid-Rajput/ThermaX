@@ -44,6 +44,7 @@ ThermaX is a **production-ready MERN SaaS platform** featuring:
 - **Role-Based Access Control** (USER, COMMUNITY_REPORTER, COMMUNITY_ANALYST, ADMIN, OPERATIONS_ADMIN)
 - **Public vs Protected Routes** - Users can explore dashboard, login required for reporting
 - **App-Password Style Login** - Clean email/password authentication flow
+- **Social Login Integration** - Enterprise provider options with Google and Microsoft branding
 - **Session Management** - Persistent authentication with localStorage
 - **Security Features** - Rate limiting, input validation, CORS protection
 
@@ -52,7 +53,7 @@ ThermaX is a **production-ready MERN SaaS platform** featuring:
 - **Advanced Geolocation**: GPS-based location capture with auto-area detection.
 - **Reporting Pipeline**: Multi-step wizard with image uploads (Multer-integrated).
 - **DBSCAN Insights**: Visual explainability for machine learning hotspot clusters.
-- **Admin Management**: Full user and report moderation interfaces.
+- **Admin Management**: Full user and report moderation interfaces featuring a cohesive light theme and auto-scrolling activity feeds.
 
 #### 🚀 **Backend API (MERN Stack)**
 - **Express.js Server**: Modular architecture with specialized route handlers.
@@ -469,6 +470,8 @@ User Accesses Platform
 
 - **Multi-Role Login System**: Supports USER, COMMUNITY_REPORTER, COMMUNITY_ANALYST, ADMIN, OPERATIONS_ADMIN
 - **Role-Based Redirects**: Admins → `/admin`, Users → `/dashboard`
+- **Design System Alignment**: Green-themed premium aesthetic for modern, professional authentication flows
+- **Enterprise Social Login**: Integrated Google and Microsoft provider options
 - **Session Persistence**: Automatic login restoration and logout handling
 - **User Context**: Displays user information and role in authenticated sections
 
@@ -497,7 +500,8 @@ User Accesses Platform
 ### 7. 🗺️ Heat Map Dashboard (`/dashboard`)
 
 - GeoPulse dashboard layout with KPI cards and filter controls
-- Interactive map using Leaflet with heat overlay integration
+- Interactive map using Leaflet with cross-page unified sizing and heat overlay integration
+- Specialized "Clean Mode" configuration for focused, clutter-free user map interfaces
 - Real-time data fetching from `/api/heatmap` and `/api/hotspots`
 - Top-right dashboard actions route to Insight and Reports
 

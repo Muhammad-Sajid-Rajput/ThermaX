@@ -407,7 +407,7 @@ Common HTTP status codes:
   - Added express-rate-limit 7.1 for enhanced security
 - **Exports Route**: Added `/api/exports` endpoint for admin data export functionality
 - **Project Structure**: Updated documentation to reflect controllers and routes organization
-- **Frontend Compatibility Note**: Recent admin alert layout and icon-import fixes required no backend API changes; existing endpoints remain compatible with the updated admin UI
+- **Frontend Compatibility Note**: Recent frontend updates including the admin UI refactor (light theme, auto-scrolling feeds), Map interface standardization (clean mode), and new social login providers required no backend API changes; existing endpoints remain compatible with the updated application architecture.
 
 ### April 2026
 - **API Stability**: All endpoints tested and verified with frontend integration
