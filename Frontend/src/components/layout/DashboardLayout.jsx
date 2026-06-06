@@ -4,6 +4,7 @@ import Navbar from './Navbar';
 import ContextPanel from './ContextPanel';
 import ContextModal from './ContextModal';
 import useSelectedLocation from '../../hooks/useSelectedLocation';
+import UserLocationInit from './UserLocationInit';
 /**
  * Main application layout with shared Navbar.
  *
@@ -33,6 +34,7 @@ const DashboardLayout = ({ children }) => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 font-sans">
+      <UserLocationInit />
       {/* ── Top Navigation ───────────────────────────────────────── */}
       <Navbar />
       {/* ── Main App Area ─────────────────────────────────────────── */}

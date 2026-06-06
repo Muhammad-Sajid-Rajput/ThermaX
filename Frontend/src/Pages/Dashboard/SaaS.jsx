@@ -31,6 +31,7 @@ import {
 } from '../../components/ui/Card';
 import { fetchDashboardSnapshot } from '../../services/api.js';
 import toast from 'react-hot-toast';
+import LiveWeatherCard from '../../components/weather/LiveWeatherCard';
 // ─── View navigation config ────────────────────────────────────────────────
 const VIEWS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -225,6 +226,8 @@ const SaaSDashboard = () => {
           </div>
         </div>
       </div>
+      <LiveWeatherCard />
+
       {/* View Navigation Tabs */}
       <div className="flex items-center justify-center gap-1 flex-wrap">
         {VIEWS.map((view) => {

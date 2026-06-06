@@ -1567,13 +1567,31 @@ cd ThermaX
 cd Backend
 npm install
 ```
-Create a `.env` file in the `Backend` directory:
+Copy the example env and configure secrets:
+```bash
+cp .env.example .env
+```
+
+Required variables in `Backend/.env`:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/thermax
 JWT_SECRET=your_jwt_secret_key_here
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5173,http://localhost:5174
 NODE_ENV=development
+WEATHER_API_KEY=your_weatherapi_com_key
+WEATHER_CACHE_TTL_MS=900000
+WEATHER_SAVE_COOLDOWN_MS=900000
+WEATHER_HEAT_ALERT_C=45
+```
+
+> If you run the frontend on a different local port, add it to `FRONTEND_URL` as a comma-separated list.
+
+**Weather API smoke test** (after setting `WEATHER_API_KEY`):
+```bash
+node scripts/test-weather.mjs 25.4284 68.2828
+curl "http://localhost:5000/api/weather/current?lat=25.4284&lng=68.2828"
+curl "http://localhost:5000/api/weather/current?lat=25.4284&lng=68.2828&save=true"
 ```
 Start the backend:
 ```bash
@@ -1587,7 +1605,7 @@ npm install
 ```
 Create a `.env` file in the `Frontend` directory:
 ```env
-VITE_API_URL=http://localhost:5000
+VITE_API_BASE_URL=http://localhost:5000
 VITE_ENABLE_MOCKS=false
 ```
 Start the frontend:
@@ -1597,6 +1615,28 @@ npm run dev
 
 ### 4. Default Admin Credentials (Development)
 If the database is empty, the system will use mock authentication or you can register a new user. To enable admin features, update the user role in MongoDB to `ADMIN`.
+
+---
+
+## Weather API integration
+
+ThermaX uses [WeatherAPI.com](https://www.weatherapi.com/) as the real-time environmental layer.
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /api/weather/current?lat=&lng=` | Public | Live conditions (cached 15 min) |
+| `GET /api/weather/current?...&save=true` | Public | Fetch and persist snapshot |
+| `GET /api/weather/history?lat=&lng=` | JWT | Historical readings for a grid cell |
+| `GET /api/weather/analytics/summary` | Admin | 7-day aggregates |
+| `POST /api/weather/refresh` | Admin | Force refresh + save |
+
+**Coordinates:** use `lat` and `lng` only (not `lon`). WeatherAPI receives `q=lat,lng` internally.
+
+**Persistence:** MongoDB `Weather` collection with `2dsphere` on `geoPoint` for nearest-neighbor joins with citizen reports. Helpers: `Backend/utils/nearestWeather.js`, `Frontend/src/utils/geo/weatherUtils.js` (`weatherToIntensity`, DBSCAN enrichment).
+
+**Rate limit:** 30 requests / 15 minutes per IP on `/api/weather/*`.
+
+**Security:** never commit API keys; rotate if exposed. Use `Backend/.env` only.
 
 ---
 

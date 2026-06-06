@@ -1,4 +1,5 @@
 import { DBSCAN } from 'density-clustering';
+import { scoreClusterByHeatIndex } from './weatherUtils.js';
 
 /**
  * Perform DBSCAN clustering on geographic points.
@@ -23,3 +24,5 @@ export const runDbscan = (points, eps = 0.01, minPts = 3) => {
 
   return clusters;
 };
+
+export { scoreClusterByHeatIndex };

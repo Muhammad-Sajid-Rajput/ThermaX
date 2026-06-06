@@ -22,3 +22,8 @@ export {
 } from './api.js';
 export { default as heatmapService } from './heatmapService.js';
 export { default as hotspotsService } from './hotspotsService.js';
+export {
+  fetchCurrentWeather,
+  fetchWeatherHistory,
+  getWeatherErrorMessage,
+} from './weatherService.js';

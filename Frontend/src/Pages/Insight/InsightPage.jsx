@@ -7,6 +7,7 @@ import Panel from '../../components/ui/Panel';
 import SectionHeading from '../../components/ui/SectionHeading';
 import useApiResource from '../../hooks/api/useApiResource';
 import useHotspots from '../../hooks/data/useHotspots';
+import LiveWeatherCard from '../../components/weather/LiveWeatherCard';
 import {
   fetchInsightSnapshot,
   formatTimestamp,
@@ -56,6 +57,7 @@ function Insight() {
   const hotspotState = useHotspots(deferredFilters);
   const hotspots = hotspotState.data?.data ?? [];
   const insight = insightState.data;
+  const insightHotspots = insight?.hotspots ?? [];
   const setArea = (area) => {
     startTransition(() => {
       setFilters((current) => ({ ...current, area }));
@@ -81,6 +83,7 @@ function Insight() {
           Back to Dashboard
         </Link>
       </div>
+      <LiveWeatherCard />
       <Panel className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -131,7 +134,7 @@ function Insight() {
                 description="Each card reflects DBSCAN output and satellite fusion signals for a hotspot polygon."
               />
               <div className="grid gap-4 md:grid-cols-2">
-                {insight.hotspots.map((cluster) => {
+                {insightHotspots.map((cluster) => {
                   const style =
                     PRIORITY_STYLES[cluster.priority] ?? PRIORITY_STYLES.Low;
                   const avgTemp =

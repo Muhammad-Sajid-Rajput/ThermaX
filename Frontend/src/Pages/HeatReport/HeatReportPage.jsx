@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import MiniMap from './MiniMap';
 import { detectAreaName, submitHeatReport } from '../../services/api';
+import { fetchCurrentWeather } from '../../services/weatherService';
+import useWeather from '../../hooks/data/useWeather';
+import useUserLocationStore from '../../stores/userLocationStore';
 import {
   MapPin,
   Camera,
@@ -47,12 +50,12 @@ function HeatReport() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
-    latitude: 24.8532,
-    longitude: 67.0284,
-    areaName: 'Saddar',
+    latitude: null,
+    longitude: null,
+    areaName: '',
     severity: '',
     causes: [],
-    observedAt: '2026-04-25T08:10',
+    observedAt: new Date().toISOString().slice(0, 16), // default to current datetime
     description: '',
   });
   useEffect(() => {
@@ -74,10 +77,20 @@ function HeatReport() {
     }),
     [form.areaName, form.latitude, form.longitude]
   );
+  const userLat = useUserLocationStore((s) => s.lat);
+  const userLng = useUserLocationStore((s) => s.lng);
+  const geoStatus = useUserLocationStore((s) => s.status);
+  const requestLocation = useUserLocationStore((s) => s.requestLocation);
+  const appliedUserGeo = useRef(false);
+
   const mapCenter = useMemo(
-    () => [Number(form.latitude) || 24.8607, Number(form.longitude) || 67.0011],
-    [form.latitude, form.longitude]
+    () => [
+      Number(form.latitude) || userLat || 24.8607,
+      Number(form.longitude) || userLng || 67.0011,
+    ],
+    [form.latitude, form.longitude, userLat, userLng]
   );
+
   const validateStep = (currentStep) => {
     const nextErrors = {};
     if (currentStep === 1) {
@@ -104,6 +117,34 @@ function HeatReport() {
       ...current,
       ...patch,
     }));
+
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
+
+  useEffect(() => {
+    if (userLat == null || userLng == null || appliedUserGeo.current) {
+      return;
+    }
+    appliedUserGeo.current = true;
+    const applyLocation = async () => {
+      updateForm({ latitude: userLat, longitude: userLng });
+      try {
+        const areaName = await detectAreaName(userLat, userLng);
+        updateForm({ areaName });
+      } catch {
+        /* area name optional */
+      }
+    };
+    applyLocation();
+  }, [userLat, userLng]);
+
+  const { data: ambientWeather, isLoading: weatherLoading } = useWeather(
+    form.latitude,
+    form.longitude,
+    { save: false, enabled: step >= 1 && form.latitude != null }
+  );
+
   const handleNext = () => {
     if (!validateStep(step)) {
       return;
@@ -125,31 +166,27 @@ function HeatReport() {
       setIsLocating(false);
     }
   };
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
+  const handleGetLocation = async () => {
+    setIsLocating(true);
+    appliedUserGeo.current = false;
+    const coords = await requestLocation({ force: true });
+    if (!coords) {
+      const err = useUserLocationStore.getState().error;
+      toast.error(err || 'Failed to get location');
+      setIsLocating(false);
       return;
     }
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        updateForm({ latitude, longitude });
-        try {
-          const areaName = await detectAreaName(latitude, longitude);
-          updateForm({ areaName });
-          toast.success('Location updated successfully');
-        } catch (err) {
-          toast.success('Coordinates updated, but failed to detect area name');
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (error) => {
-        setIsLocating(false);
-        toast.error('Failed to get location:' + error.message);
-      }
-    );
+    updateForm({ latitude: coords.lat, longitude: coords.lng });
+    try {
+      const areaName = await detectAreaName(coords.lat, coords.lng);
+      updateForm({ areaName });
+      toast.success('Location updated successfully');
+    } catch {
+      toast.success('Coordinates updated, but failed to detect area name');
+    } finally {
+      setIsLocating(false);
+      appliedUserGeo.current = true;
+    }
   };
   const handleSubmit = async () => {
     if (!validateStep(3)) {
@@ -158,11 +195,24 @@ function HeatReport() {
     }
     setIsSubmitting(true);
     try {
+      let temperature;
+      try {
+        const weather = await fetchCurrentWeather(
+          Number(form.latitude),
+          Number(form.longitude),
+          { save: true }
+        );
+        temperature = weather.heatIndex ?? weather.temperature;
+      } catch {
+        temperature = ambientWeather?.heatIndex ?? ambientWeather?.temperature;
+      }
+
       const result = await submitHeatReport({
         ...form,
         image: selectedFile,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
+        temperature,
       });
       setShowSuccessModal(true);
       setTimeout(() => {
@@ -302,11 +352,29 @@ function HeatReport() {
                   />
                 </div>
               </div>
+              {(geoStatus === 'loading' && !form.latitude) && (
+                <p className="text-sm text-slate-500 flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-green-500/30 border-t-green-600 rounded-full animate-spin" />
+                  Detecting your location for this report…
+                </p>
+              )}
+
+              {ambientWeather && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">Live weather at your location</p>
+                  <p className="mt-1">
+                    {ambientWeather.temperature}°C · heat index{' '}
+                    {ambientWeather.heatIndex}°C · {ambientWeather.humidity}%
+                    humidity · {ambientWeather.condition}
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-end mt-2">
                 <button
                   type="button"
                   onClick={handleGetLocation}
-                  disabled={isLocating}
+                  disabled={isLocating || geoStatus === 'loading'}
                   className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isLocating ? (
@@ -585,7 +653,7 @@ function HeatReport() {
                   queue
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 border border-green-200 p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <MapPin className="w-4 h-4 text-green-600" />
@@ -613,6 +681,35 @@ function HeatReport() {
                     <p className="font-semibold text-slate-900">
                       Level {form.severity || 'Not set'}
                     </p>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-linear-to-br from-sky-50 to-blue-50 border border-sky-200 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Thermometer className="w-4 h-4 text-sky-600" />
+                    <h4 className="text-sm font-semibold text-sky-800">
+                      Ambient (API)
+                    </h4>
+                  </div>
+                  <div className="space-y-1 text-sm text-slate-700">
+                    {weatherLoading ? (
+                      <p>Loading live weather…</p>
+                    ) : ambientWeather ? (
+                      <>
+                        <p>
+                          <span className="font-semibold">
+                            {ambientWeather.temperature}°C
+                          </span>{' '}
+                          · HI {ambientWeather.heatIndex}°C
+                        </p>
+                        <p>
+                          {ambientWeather.humidity}% humidity · UV{' '}
+                          {ambientWeather.uv}
+                        </p>
+                        <p className="text-slate-500">{ambientWeather.condition}</p>
+                      </>
+                    ) : (
+                      <p className="text-slate-500">Weather unavailable</p>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-xl bg-linear-to-br from-amber-50 to-orange-50 border border-amber-200 p-5">

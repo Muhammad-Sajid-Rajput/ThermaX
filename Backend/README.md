@@ -60,7 +60,7 @@ npm install
 cp .env.example .env
 ```
 
-4. Configure `.env` file
+4. Configure `.env` file (see `.env.example`)
 ```env
 PORT=5000
 NODE_ENV=development
@@ -68,9 +68,22 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=7d
 MONGODB_URI=mongodb://localhost:27017/thermax
 FRONTEND_URL=http://localhost:5173
+WEATHER_API_KEY=your_weatherapi_com_key
+WEATHER_CACHE_TTL_MS=900000
+WEATHER_SAVE_COOLDOWN_MS=900000
+WEATHER_HEAT_ALERT_C=45
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 ```
+
+### Weather endpoints
+
+- `GET /api/weather/current?lat=&lng=` — public, optional `save=true`
+- `GET /api/weather/history?lat=&lng=` — authenticated
+- `GET /api/weather/analytics/summary` — admin
+- `POST /api/weather/refresh` — admin body `{ lat, lng }`
+
+Test: `node scripts/test-weather.mjs [lat] [lng]`
 
 5. Start the server
 ```bash
