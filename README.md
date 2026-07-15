@@ -1,4 +1,7 @@
 # 🌡️ ThermaX
+
+![ThermaX Banner](assets/thermax_banner.webp)
+
 ### Advanced Crowdsourced Urban Heat Mapping Platform
 
 > A production-grade SaaS analytics dashboard with role-based access control, empowering citizens and researchers to collaboratively report, analyze, and visualize urban heat islands through advanced spatial analytics, real-time data processing, and interactive mapping.
