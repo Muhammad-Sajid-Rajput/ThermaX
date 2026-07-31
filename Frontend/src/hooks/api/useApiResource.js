@@ -1,55 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+
 function useApiResource(request, params = {}, options = {}) {
   const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState({
-    data: null,
-    loading: true,
-    error: null,
-  });
-  const serializedParams = useMemo(() => JSON.stringify(params), [params]);
-  const stableParams = useMemo(
-    () => JSON.parse(serializedParams),
-    [serializedParams]
-  );
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(options.enabled !== false);
+  const [error, setError] = useState(null);
+
+  const reload = useCallback(() => setReloadKey((prev) => prev + 1), []);
+
   useEffect(() => {
     let isActive = true;
     if (options.enabled === false) {
-      setState({ data: null, loading: false, error: null });
-      return undefined;
+      setLoading(false);
+      return;
     }
-    setState((current) => ({
-      data: current.data,
-      loading: true,
-      error: null,
-    }));
-    request(stableParams)
-      .then((data) => {
-        if (!isActive) {
-          return;
+
+    setLoading(true);
+    setError(null);
+
+    request(params)
+      .then((res) => {
+        if (isActive) {
+          setData(res);
+          setLoading(false);
         }
-        setState({
-          data,
-          loading: false,
-          error: null,
-        });
       })
-      .catch((error) => {
-        if (!isActive) {
-          return;
+      .catch((err) => {
+        if (isActive) {
+          setError(err);
+          setLoading(false);
         }
-        setState({
-          data: null,
-          loading: false,
-          error,
-        });
       });
+
     return () => {
       isActive = false;
     };
-  }, [options.enabled, reloadKey, request, stableParams]);
-  return {
-    ...state,
-    reload: () => setReloadKey((current) => current + 1),
-  };
+  }, [options.enabled, reloadKey, request]);
+
+  return { data, loading, error, reload };
 }
+
 export default useApiResource;
+

@@ -3,6 +3,7 @@
  * Handles all localStorage operations for local demo mode
  */
 import { STORAGE_KEYS } from './config';
+
 // Generic get/set helpers
 export const storage = {
   get: (key, defaultValue = null) => {
@@ -42,6 +43,7 @@ export const storage = {
     }
   },
 };
+
 // User-related operations
 export const userStorage = {
   getAll: () => storage.get(STORAGE_KEYS.USERS, []),
@@ -85,6 +87,7 @@ export const userStorage = {
     return null;
   },
 };
+
 // Report-related operations
 export const reportStorage = {
   getAll: () => storage.get(STORAGE_KEYS.HEAT_REPORTS, []),
@@ -130,6 +133,7 @@ export const reportStorage = {
     storage.set(STORAGE_KEYS.HEAT_REPORTS, filtered);
   },
 };
+
 // Hotspot-related operations
 export const hotspotStorage = {
   getAll: () => storage.get(STORAGE_KEYS.HOTSPOTS, []),
@@ -164,6 +168,7 @@ export const hotspotStorage = {
     storage.set(STORAGE_KEYS.HOTSPOTS, hotspots);
   },
 };
+
 // Analytics-related operations
 export const analyticsStorage = {
   get: () => storage.get(STORAGE_KEYS.ANALYTICS, {}),
@@ -175,6 +180,7 @@ export const analyticsStorage = {
     analyticsStorage.set({ ...current, ...updates });
   },
 };
+
 // Auth-related operations
 export const authStorage = {
   getCurrentUser: () => storage.get(STORAGE_KEYS.CURRENT_USER, null),
@@ -190,6 +196,7 @@ export const authStorage = {
     storage.remove(STORAGE_KEYS.TOKEN);
   },
 };
+
 // Check if data has been seeded
 export const isSeeded = () => storage.get(STORAGE_KEYS.SEEDED, false);
 export const setSeeded = () => storage.set(STORAGE_KEYS.SEEDED, true);

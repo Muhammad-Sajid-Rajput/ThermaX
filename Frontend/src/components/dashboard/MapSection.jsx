@@ -11,7 +11,6 @@ import {
   formatHeatmapPoints,
   HEATMAP_CONFIG,
 } from '../../utils/geo/heatmapLayer';
-import { patchLeafletHeat } from '../../utils/geo/heatmapPatch';
 
 // Fix default marker icon paths (Vite asset pipeline issue)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -65,9 +64,6 @@ const LeafletMapInner = ({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    // Apply patch for leaflet.heat Canvas2D performance warning
-    const cleanupPatch = patchLeafletHeat();
-
     const map = L.map(containerRef.current, {
       center: KARACHI_CENTER,
       zoom: 12,
@@ -102,7 +98,6 @@ const LeafletMapInner = ({
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
-      cleanupPatch();
     };
   }, []);
 
