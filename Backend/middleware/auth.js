@@ -1,76 +1,49 @@
-import { verifyToken, extractTokenFromHeader } from '../utils/jwt.js';
-import { User } from '../models/User.js';
-import { ROLES } from '../models/User.js';
+import { verifyAccessToken, extractTokenFromHeader } from '../utils/jwt.js';
+import { User, ROLES } from '../models/User.js';
 
 /**
  * Authentication Middleware
- * Verifies JWT token and attaches user to req.user
- * Returns 401 if no token or invalid token
+ * Verifies JWT access token from Authorization header or cookie
  */
 export const authenticate = async (req, res, next) => {
   try {
-    // Extract token from header
-    const token = extractTokenFromHeader(req.headers.authorization);
+    const token = extractTokenFromHeader(req.headers.authorization) || req.cookies?.accessToken;
 
     if (!token) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: 'No token provided. Please log in.',
+        message: 'No access token provided. Please log in.',
       });
     }
 
-    // Verify token
     let decoded;
     try {
-      decoded = verifyToken(token);
+      decoded = verifyAccessToken(token);
     } catch (error) {
       return res.status(401).json({
         error: 'Authentication failed',
-        message: 'Invalid or expired token. Please log in again.',
+        message: 'Invalid or expired access token. Please refresh your session.',
       });
     }
 
-    // Find user in database
-    let user;
-    try {
-      user = await User.findById(decoded.userId);
-    } catch (dbError) {
-      // If DB is unavailable, check if it's a mock user
-      if (
-        decoded.userId &&
-        (decoded.userId.startsWith('admin') ||
-          decoded.userId.startsWith('user'))
-      ) {
-        // Mock user fallback - attach minimal user data
-        user = {
-          _id: decoded.userId,
-          role: decoded.role || ROLES.USER,
-          name: 'Mock User',
-          email: 'mock@thermax.com',
-          isActive: true,
-        };
-      }
-    }
+    const user = await User.findById(decoded.userId);
 
     if (!user) {
       return res.status(401).json({
         error: 'Authentication failed',
-        message: 'User not found or account no longer exists.',
+        message: 'User account no longer exists.',
       });
     }
 
-    // Check if user is active
     if (user.isActive === false) {
       return res.status(401).json({
         error: 'Account deactivated',
-        message: 'Your account has been deactivated. Please contact support.',
+        message: 'Your account has been deactivated.',
       });
     }
 
-    // Attach user to request
     req.user = user;
     req.token = token;
-
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
@@ -83,50 +56,30 @@ export const authenticate = async (req, res, next) => {
 
 /**
  * Optional Authentication Middleware
- * Attaches user to req.user if token is valid, but doesn't require it
  */
 export const optionalAuth = async (req, res, next) => {
   try {
-    const token = extractTokenFromHeader(req.headers.authorization);
+    const token = extractTokenFromHeader(req.headers.authorization) || req.cookies?.accessToken;
 
     if (!token) {
-      // No token provided, continue without user
       req.user = null;
       return next();
     }
 
     try {
-      const decoded = verifyToken(token);
-      let user = await User.findById(decoded.userId);
-
-      // If DB unavailable, check for mock user
-      if (
-        !user &&
-        decoded.userId &&
-        (decoded.userId.startsWith('admin') ||
-          decoded.userId.startsWith('user'))
-      ) {
-        user = {
-          _id: decoded.userId,
-          role: decoded.role || ROLES.USER,
-          name: 'Mock User',
-          email: 'mock@thermax.com',
-          isActive: true,
-        };
-      }
+      const decoded = verifyAccessToken(token);
+      const user = await User.findById(decoded.userId);
 
       if (user && user.isActive !== false) {
         req.user = user;
         req.token = token;
       }
     } catch (error) {
-      // Invalid token, continue without user (public access)
       req.user = null;
     }
 
     next();
   } catch (error) {
-    console.error('Optional auth middleware error:', error);
     req.user = null;
     next();
   }
@@ -134,11 +87,8 @@ export const optionalAuth = async (req, res, next) => {
 
 /**
  * Admin Authorization Middleware
- * Must be used AFTER authenticate middleware
- * Returns 403 if user is not an ADMIN
  */
 export const authorizeAdmin = (req, res, next) => {
-  // Check if authenticate middleware was run first
   if (!req.user) {
     return res.status(401).json({
       error: 'Authentication required',
@@ -146,8 +96,8 @@ export const authorizeAdmin = (req, res, next) => {
     });
   }
 
-  // Check if user has ADMIN role
-  if (req.user.role !== ROLES.ADMIN) {
+  const userRole = String(req.user.role).toLowerCase();
+  if (userRole !== ROLES.ADMIN && userRole !== 'admin') {
     return res.status(403).json({
       error: 'Access denied',
       message: 'Admin privileges required to access this resource.',
@@ -159,9 +109,10 @@ export const authorizeAdmin = (req, res, next) => {
 
 /**
  * Role-based Authorization Middleware Factory
- * Creates middleware that checks if user has one of the allowed roles
  */
 export const authorizeRoles = (...allowedRoles) => {
+  const normalizedAllowed = allowedRoles.map((r) => String(r).toLowerCase());
+
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -170,7 +121,8 @@ export const authorizeRoles = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const currentRole = String(req.user.role).toLowerCase();
+    if (!normalizedAllowed.includes(currentRole)) {
       return res.status(403).json({
         error: 'Access denied',
         message: `Required roles: ${allowedRoles.join(', ')}`,

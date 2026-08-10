@@ -1,19 +1,41 @@
 import express from 'express';
 import { User } from '../models/User.js';
-import { generateToken, verifyToken } from '../utils/jwt.js';
+import { RefreshToken } from '../models/RefreshToken.js';
+import {
+  generateAccessToken,
+  generateRefreshTokenString,
+  hashToken,
+  verifyAccessToken,
+} from '../utils/jwt.js';
 import { validate, schemas } from '../middleware/validation.js';
-import { rateLimit } from 'express-rate-limit';
+import { authLimiter } from '../middleware/rateLimiters.js';
+import { authenticate, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Rate limiting for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
-  message: 'Too many authentication attempts, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
+async function createAndAttachRefreshToken(user, req, res) {
+  const rawRefreshToken = generateRefreshTokenString();
+  const tokenHash = hashToken(rawRefreshToken);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
+
+  await RefreshToken.create({
+    user: user._id,
+    tokenHash,
+    deviceInfo,
+    expiresAt,
+  });
+
+  res.cookie('refreshToken', rawRefreshToken, COOKIE_OPTIONS);
+  return rawRefreshToken;
+}
 
 // User signup
 router.post(
@@ -22,9 +44,8 @@ router.post(
   validate(schemas.signup),
   async (req, res) => {
     try {
-      const { name, email, password } = req.body;
+      const { name, email, password, phone, organization } = req.body;
 
-      // Check if user already exists
       const existingUser = await User.findOne({ email });
       if (existingUser) {
         return res.status(409).json({
@@ -33,31 +54,32 @@ router.post(
         });
       }
 
-      // Create new user
       const user = new User({
         name,
         email,
         password,
+        phone,
+        organization,
       });
 
       await user.save();
 
-      // Generate JWT token
-      const token = generateToken(user._id, user.role);
+      const accessToken = generateAccessToken(user._id, user.role);
+      await createAndAttachRefreshToken(user, req, res);
 
-      // Update last login
-      user.lastLogin = new Date();
+      user.lastLoginAt = new Date();
       await user.save();
 
-      // Return token and user info
       res.status(201).json({
         message: 'User registered successfully',
-        token,
+        accessToken,
         user: {
           id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
+          phone: user.phone,
+          organization: user.organization,
           createdAt: user.createdAt,
         },
       });
@@ -80,17 +102,15 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      // Find user by email with password
       const user = await User.findByEmailWithPassword(email);
 
-      if (!user) {
+      if (!user || !(await user.comparePassword(password))) {
         return res.status(401).json({
           error: 'Login failed',
           message: 'Invalid email or password',
         });
       }
 
-      // Check if user is active
       if (!user.isActive) {
         return res.status(401).json({
           error: 'Login failed',
@@ -98,33 +118,21 @@ router.post(
         });
       }
 
-      // Compare password
-      const isPasswordValid = await user.comparePassword(password);
+      const accessToken = generateAccessToken(user._id, user.role);
+      await createAndAttachRefreshToken(user, req, res);
 
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          error: 'Login failed',
-          message: 'Invalid email or password',
-        });
-      }
-
-      // Generate JWT token
-      const token = generateToken(user._id, user.role);
-
-      // Update last login
-      user.lastLogin = new Date();
+      user.lastLoginAt = new Date();
       await user.save();
 
-      // Return token and user info
       res.json({
         message: 'Login successful',
-        token,
+        accessToken,
         user: {
           id: user._id,
           name: user.name,
           email: user.email,
           role: user.role,
-          lastLogin: user.lastLogin,
+          lastLoginAt: user.lastLoginAt,
           createdAt: user.createdAt,
         },
       });
@@ -138,28 +146,85 @@ router.post(
   }
 );
 
-// Verify token endpoint (for frontend to check token validity)
-router.get('/verify', async (req, res) => {
+// Token Refresh (Token Rotation)
+router.post('/refresh', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const rawToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
-    if (!token) {
+    if (!rawToken) {
       return res.status(401).json({
-        error: 'Verification failed',
-        message: 'No token provided',
+        error: 'Refresh failed',
+        message: 'No refresh token provided',
       });
     }
 
-    const decoded = verifyToken(token);
+    const tokenHash = hashToken(rawToken);
 
-    // Find user to ensure they still exist and are active
+    const storedTokenDoc = await RefreshToken.findOne({
+      tokenHash,
+      revoked: false,
+      expiresAt: { $gt: new Date() },
+    }).populate('user');
+
+    if (!storedTokenDoc || !storedTokenDoc.user || !storedTokenDoc.user.isActive) {
+      return res.status(401).json({
+        error: 'Refresh failed',
+        message: 'Invalid or revoked refresh token',
+      });
+    }
+
+    storedTokenDoc.revoked = true;
+    await storedTokenDoc.save();
+
+    const user = storedTokenDoc.user;
+    const newAccessToken = generateAccessToken(user._id, user.role);
+    await createAndAttachRefreshToken(user, req, res);
+
+    res.json({
+      message: 'Token rotated successfully',
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({
+      error: 'Refresh failed',
+      message: 'Internal server error during token refresh',
+    });
+  }
+});
+
+// Logout
+router.post('/logout', optionalAuth, async (req, res) => {
+  try {
+    const rawToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    if (rawToken) {
+      const tokenHash = hashToken(rawToken);
+      await RefreshToken.updateOne({ tokenHash }, { revoked: true });
+    }
+
+    res.clearCookie('refreshToken', COOKIE_OPTIONS);
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Logout failed', message: error.message });
+  }
+});
+
+// Verify Access Token
+router.get('/verify', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || req.cookies?.accessToken;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Verification failed', message: 'No token provided' });
+    }
+
+    const decoded = verifyAccessToken(token);
     const user = await User.findById(decoded.userId);
 
     if (!user || !user.isActive) {
-      return res.status(401).json({
-        error: 'Verification failed',
-        message: 'User not found or inactive',
-      });
+      return res.status(401).json({ error: 'Verification failed', message: 'User inactive or not found' });
     }
 
     res.json({
@@ -172,12 +237,24 @@ router.get('/verify', async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(401).json({
-      error: 'Verification failed',
-      message: 'Invalid or expired token',
-    });
+    res.status(401).json({ error: 'Verification failed', message: 'Invalid or expired token' });
   }
 });
 
-export { router as authRoutes };
+// Get Current User (/me)
+router.get('/me', authenticate, (req, res) => {
+  res.json({
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      phone: req.user.phone,
+      organization: req.user.organization,
+      createdAt: req.user.createdAt,
+    },
+  });
+});
 
+export { router as authRoutes };
+export default router;

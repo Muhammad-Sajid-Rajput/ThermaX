@@ -1,22 +1,41 @@
 import Joi from 'joi';
+import zxcvbn from 'zxcvbn';
+
+// Strong password regex: 8+ chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#()[\]{}_\-+=~|:<>,./]).{8,}$/;
 
 // Validation schemas
 export const schemas = {
   // User registration validation
   signup: Joi.object({
-    name: Joi.string().min(2).max(50).trim().required().messages({
+    name: Joi.string().min(2).max(100).trim().required().messages({
       'string.empty': 'Name is required',
       'string.min': 'Name must be at least 2 characters long',
-      'string.max': 'Name cannot exceed 50 characters',
+      'string.max': 'Name cannot exceed 100 characters',
     }),
     email: Joi.string().email().lowercase().trim().required().messages({
       'string.email': 'Please enter a valid email address',
       'string.empty': 'Email is required',
     }),
-    password: Joi.string().min(6).required().messages({
-      'string.empty': 'Password is required',
-      'string.min': 'Password must be at least 6 characters long',
-    }),
+    password: Joi.string()
+      .pattern(PASSWORD_REGEX)
+      .required()
+      .custom((value, helpers) => {
+        const evaluation = zxcvbn(value);
+        if (evaluation.score < 2) {
+          return helpers.message(
+            'Password is too weak. Please use a mix of uppercase, lowercase, numbers, and symbols.'
+          );
+        }
+        return value;
+      })
+      .messages({
+        'string.empty': 'Password is required',
+        'string.pattern.base':
+          'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+      }),
+    phone: Joi.string().trim().optional(),
+    organization: Joi.string().trim().optional(),
   }),
 
   // User login validation

@@ -3,10 +3,10 @@ import bcrypt from 'bcryptjs';
 
 const { Schema } = mongoose;
 
-// Role constants
+// Role constants (2-tier system: user, admin)
 export const ROLES = {
-  USER: 'USER',
-  ADMIN: 'ADMIN',
+  USER: 'user',
+  ADMIN: 'admin',
 };
 
 const userSchema = new Schema(
@@ -31,22 +31,33 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: [true, 'Password is required'],
-      minlength: [6, 'Password must be at least 6 characters'],
-      select: false, // Don't include password in queries by default
+      minlength: [8, 'Password must be at least 8 characters'],
+      select: false,
     },
     role: {
       type: String,
       enum: {
         values: [ROLES.USER, ROLES.ADMIN],
-        message: 'Role must be either USER or ADMIN',
+        message: 'Role must be either user or admin',
       },
       default: ROLES.USER,
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    organization: {
+      type: String,
+      trim: true,
     },
     isActive: {
       type: Boolean,
       default: true,
     },
-    lastLogin: {
+    lastLoginAt: {
+      type: Date,
+    },
+    passwordChangedAt: {
       type: Date,
     },
     createdAt: {
@@ -71,7 +82,6 @@ const userSchema = new Schema(
 );
 
 // Index for faster queries
-userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
 
 // Hash password before saving
