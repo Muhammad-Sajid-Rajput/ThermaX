@@ -15,7 +15,7 @@ const getStoredMode = () => {
       return stored;
     }
   }
-  return 'local'; // Default to local mode for demo
+  return import.meta.env.VITE_API_BASE_URL ? 'api' : 'api';
 };
 export const DATA_MODE = getStoredMode();
 export const isLocalMode = () => DATA_MODE === 'local';

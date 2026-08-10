@@ -116,6 +116,18 @@ reportSchema
     this.ambientTemp = Number(val);
   });
 
+reportSchema.virtual('area').get(function () {
+  return this.areaName;
+});
+
+reportSchema.virtual('coordinates').get(function () {
+  return [this.latitude, this.longitude];
+});
+
+reportSchema.virtual('timestamp').get(function () {
+  return this.createdAt || new Date();
+});
+
 reportSchema.pre('save', function (next) {
   if (!this.user && this.userId) {
     this.user = this.userId;

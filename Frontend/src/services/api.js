@@ -12,6 +12,14 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
   timeout: 7000,
 });
+
+api.interceptors.request.use((config) => {
+  const token = authStorage.getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 const ARRAY_CANDIDATE_KEYS = [
   'data',
   'items',

@@ -1,0 +1,85 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Saddar", "district": "Karachi South" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [67.010, 24.845],
+            [67.045, 24.845],
+            [67.045, 24.865],
+            [67.010, 24.865],
+            [67.010, 24.845]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Korangi Industrial Zone", "district": "Korangi" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [67.120, 24.820],
+            [67.155, 24.820],
+            [67.155, 24.845],
+            [67.120, 24.845],
+            [67.120, 24.820]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Gulshan-e-Iqbal", "district": "Karachi East" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [67.080, 24.900],
+            [67.120, 24.900],
+            [67.120, 24.935],
+            [67.080, 24.935],
+            [67.080, 24.900]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Nazimabad", "district": "Karachi Central" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [67.020, 24.910],
+            [67.060, 24.910],
+            [67.060, 24.950],
+            [67.020, 24.950],
+            [67.020, 24.910]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Clifton", "district": "Karachi South" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [67.015, 24.800],
+            [67.050, 24.800],
+            [67.050, 24.840],
+            [67.015, 24.840],
+            [67.015, 24.800]
+          ]
+        ]
+      }
+    }
+  ]
+}
