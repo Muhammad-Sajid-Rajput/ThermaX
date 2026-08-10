@@ -71,12 +71,12 @@ const authReducer = (state, action) => {
         error: null,
       };
     case AUTH_ACTIONS.LOGIN_SUCCESS:
-      const userRole = action.payload.user.role;
+      const userRole = (action.payload.user.role || 'USER').toUpperCase();
       const userPermissions = ROLE_PERMISSIONS[userRole] || [];
       return {
         ...state,
         user: action.payload.user,
-        token: action.payload.token,
+        token: action.payload.token || action.payload.accessToken,
         isAuthenticated: true,
         isLoading: false,
         permissions: userPermissions,

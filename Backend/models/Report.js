@@ -1,50 +1,139 @@
 import mongoose from 'mongoose';
+import { REPORT_CATEGORIES } from '../constants/categories.js';
 
-const reportSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const reportSchema = new Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
+    user: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      index: true,
     },
-    userName: String,
-    userEmail: String,
-    userRole: String,
-    location: {
-      lat: { type: Number, required: true },
-      lng: { type: Number, required: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
     },
-    areaName: String,
-    severity: {
+    latitude: {
       type: Number,
-      required: true,
+    },
+    longitude: {
+      type: Number,
+    },
+    severityLevel: {
+      type: Number,
       min: 1,
       max: 5,
     },
-    temperature: Number,
-    description: String,
+    ambientTemp: Number,
+    surfaceTemp: Number,
+    humidity: Number,
+    images: [String],
+    image: String,
+    status: {
+      type: String,
+      enum: ['pending', 'verified', 'validated', 'rejected', 'anomaly'],
+      default: 'pending',
+      index: true,
+    },
+    areaName: String,
+    district: String,
+    city: {
+      type: String,
+      default: 'Karachi',
+      index: true,
+    },
     category: {
       type: String,
-      default: 'Heat observation',
+      default: REPORT_CATEGORIES.URBAN_HEAT_ISLAND,
     },
+    description: String,
     source: {
       type: String,
       default: 'Citizen',
     },
-    status: {
+
+    // References to sibling enrichment models
+    weatherSnapshotRef: {
+      type: Schema.Types.ObjectId,
+      ref: 'WeatherSnapshot',
+    },
+    satelliteAnalysisRef: {
+      type: Schema.Types.ObjectId,
+      ref: 'SatelliteAnalysis',
+    },
+    aiAnalysisRef: {
+      type: Schema.Types.ObjectId,
+      ref: 'AIAnalysis',
+    },
+
+    reportRef: {
       type: String,
-      enum: ['pending', 'validated', 'rejected', 'anomaly'],
-      default: 'pending',
+      unique: true,
+      sparse: true,
+      index: true,
     },
-    image: String, // URL or base64
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
+    deviceId: String,
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true, getters: true },
+    toObject: { virtuals: true, getters: true },
+  }
 );
 
-const Report = mongoose.model('Report', reportSchema);
+// Compatibility virtual getters/setters for Frontend
+reportSchema
+  .virtual('location')
+  .get(function () {
+    return {
+      lat: this.latitude ?? this.get('location.lat'),
+      lng: this.longitude ?? this.get('location.lng'),
+    };
+  })
+  .set(function (loc) {
+    if (loc && typeof loc === 'object') {
+      if (loc.lat !== undefined) this.latitude = Number(loc.lat);
+      if (loc.lng !== undefined) this.longitude = Number(loc.lng);
+    }
+  });
 
+reportSchema
+  .virtual('severity')
+  .get(function () {
+    return this.severityLevel;
+  })
+  .set(function (val) {
+    this.severityLevel = Number(val);
+  });
+
+reportSchema
+  .virtual('temperature')
+  .get(function () {
+    return this.ambientTemp;
+  })
+  .set(function (val) {
+    this.ambientTemp = Number(val);
+  });
+
+reportSchema.pre('save', function (next) {
+  if (!this.user && this.userId) {
+    this.user = this.userId;
+  }
+  if (!this.userId && this.user) {
+    this.userId = this.user;
+  }
+  if (!this.severityLevel && this.severity) {
+    this.severityLevel = this.severity;
+  }
+  if (!this.ambientTemp && this.temperature) {
+    this.ambientTemp = this.temperature;
+  }
+  next();
+});
+
+reportSchema.index({ latitude: 1, longitude: 1 });
+reportSchema.index({ createdAt: -1 });
+
+export const Report = mongoose.model('Report', reportSchema);
 export default Report;

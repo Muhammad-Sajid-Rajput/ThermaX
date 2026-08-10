@@ -83,6 +83,7 @@ const routeMap = [
   ['/auth', authRoutes],
   ['/users', userRoutes],
   ['/reports', reportRoutes],
+  ['/report', reportRoutes],
   ['/weather', weatherRoutes],
   ['/heatmap', heatmapRoutes],
   ['/hotspots', hotspotRoutes],
