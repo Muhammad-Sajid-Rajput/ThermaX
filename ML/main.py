@@ -3,7 +3,7 @@ from typing import List, Optional
 from services.gee_service import gee_service
 from services.clustering_service import run_dbscan_clustering
 from services.fusion_service import calculate_fusion_score
-from services.pipeline_runner import enrich_report_pipeline
+from worker import dispatch_enrichment, dispatch_clustering
 
 try:
     fastapi_mod = importlib.import_module("fastapi")
@@ -36,13 +36,18 @@ if FastAPI:
 
     @app.post("/enrich/report/{report_id}")
     def enrich_report(report_id: str, background_tasks: BackgroundTasks):
-        background_tasks.add_task(enrich_report_pipeline, report_id)
-        return {"message": f"Enrichment pipeline queued for report {report_id}", "reportId": report_id, "status": "QUEUED"}
+        background_tasks.add_task(dispatch_enrichment, report_id)
+        return {"message": f"Enrichment pipeline task queued for report {report_id}", "reportId": report_id, "status": "QUEUED"}
 
     @app.post("/cluster")
     def execute_clustering(req: ClusterRequest):
         points = [p.dict() for p in req.reports]
         return {"totalPoints": len(points), "clusterCount": len(run_dbscan_clustering(points)), "clusters": run_dbscan_clustering(points)}
+
+    @app.post("/cluster/run")
+    def run_scheduled_clustering(city: str = "Karachi"):
+        dispatch_clustering(city)
+        return {"message": f"Periodic DBSCAN clustering task dispatched for {city}", "status": "QUEUED"}
 
     @app.post("/fuse")
     def execute_fusion(req: FusionRequest):
