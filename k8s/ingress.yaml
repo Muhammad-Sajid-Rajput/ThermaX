@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: thermax-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: thermax.southasia.cloudapp.azure.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: thermax-backend-service
+                port:
+                  number: 5000
+          - path: /ml
+            pathType: Prefix
+            backend:
+              service:
+                name: thermax-ml-service
+                port:
+                  number: 8000
