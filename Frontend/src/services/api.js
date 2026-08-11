@@ -1480,6 +1480,59 @@ export async function fetchAdminStats() {
     return null;
   }
 }
+export async function fetchExportHistory() {
+  if (isLocalMode()) {
+    await wait(150);
+    return {
+      history: [
+        {
+          _id: 'EXP-1001',
+          reportRef: 'EXP-1001',
+          city: 'Karachi',
+          pdfUrl: '/exports/EXP-1001_karachi.html',
+          fileSizeBytes: 2377,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      count: 1,
+    };
+  }
+  try {
+    const response = await api.get('/api/exports/history');
+    return response.data;
+  } catch (error) {
+    return { history: [], count: 0 };
+  }
+}
+
+export async function generateExportBriefing(options = {}) {
+  const { city = 'Karachi', format = 'pdf', fromDate, toDate } = options;
+  if (isLocalMode()) {
+    await wait(300);
+    const ref = `EXP-${Date.now().toString().slice(-6)}`;
+    const filename = `${ref}_${city.toLowerCase()}.${format === 'csv' ? 'csv' : 'html'}`;
+    return {
+      message: 'Export briefing generated successfully',
+      export: {
+        _id: ref,
+        reportRef: ref,
+        city,
+        pdfUrl: `/exports/${filename}`,
+        fileSizeBytes: 2400,
+        createdAt: new Date().toISOString(),
+      },
+      downloadUrl: `/api/exports/download/${filename}`,
+    };
+  }
+  const response = await api.post('/api/exports/generate', {
+    city,
+    format,
+    fromDate,
+    toDate,
+  });
+  return response.data;
+}
+
 export {
   PLATFORM_UPDATED_AT,
   formatTimestamp,
