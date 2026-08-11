@@ -1,68 +1,34 @@
 import express from 'express';
 import { optionalAuth } from '../middleware/auth.js';
+import Hotspot from '../models/Hotspot.js';
 
 const router = express.Router();
 
-// Mock hotspots data
-const MOCK_HOTSPOTS = [
-  {
-    id: 'CL-01',
-    clusterId: 'CL-01',
-    area: 'Saddar',
-    avgTemperature: 41.6,
-    avgSeverity: 4.2,
-    priority: 'Critical',
-    confidence: 0.93,
-    reportCount: 15,
-    geojson: {
-      type: 'Feature',
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [67.0224, 24.8582],
-            [67.0348, 24.8582],
-            [67.0348, 24.8482],
-            [67.0224, 24.8482],
-            [67.0224, 24.8582],
-          ],
-        ],
-      },
-    },
-  },
-  {
-    id: 'CL-02',
-    clusterId: 'CL-02',
-    area: 'Korangi',
-    avgTemperature: 40.8,
-    avgSeverity: 3.9,
-    priority: 'High',
-    confidence: 0.86,
-    reportCount: 12,
-    geojson: {
-      type: 'Feature',
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [67.1325, 24.8356],
-            [67.1465, 24.8356],
-            [67.1465, 24.8247],
-            [67.1325, 24.8247],
-            [67.1325, 24.8356],
-          ],
-        ],
-      },
-    },
-  },
-];
-
-router.get('/', optionalAuth, (req, res) => {
-  res.json({
-    message: 'Hotspots retrieved successfully',
-    hotspots: MOCK_HOTSPOTS,
-    lastUpdated: new Date().toISOString(),
-  });
+router.get('/', optionalAuth, async (req, res) => {
+  try {
+    const query = { status: 'active' };
+    if (req.query.city) query.city = req.query.city;
+    const dbHotspots = await Hotspot.find(query).sort({ detectedAt: -1 }).limit(50);
+    const hotspots = dbHotspots.map(h => ({
+      id: h._id,
+      clusterId: h.clusterId,
+      area: h.district || h.zone || h.city,
+      city: h.city,
+      avgTemperature: h.avgTemp,
+      peakTemp: h.peakTemp,
+      avgSeverity: h.severity === 'critical' ? 5 : h.severity === 'high' ? 4 : h.severity === 'moderate' ? 3 : 2,
+      priority: h.severity.charAt(0).toUpperCase() + h.severity.slice(1),
+      confidence: 0.85,
+      reportCount: h.reportCount || 0,
+      status: h.status,
+      detectedAt: h.detectedAt,
+      centroid: h.centroid,
+      geojson: h.boundary ? { type: 'Feature', geometry: h.boundary } : null,
+    }));
+    res.json({ message: 'Hotspots retrieved successfully', hotspots, total: hotspots.length, lastUpdated: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch hotspots', message: error.message, hotspots: [] });
+  }
 });
 
 export { router as hotspotRoutes };

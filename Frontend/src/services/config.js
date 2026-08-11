@@ -17,9 +17,9 @@ const getStoredMode = () => {
   }
   return import.meta.env.VITE_API_BASE_URL ? 'api' : 'api';
 };
-export const DATA_MODE = getStoredMode();
-export const isLocalMode = () => DATA_MODE === 'local';
-export const isApiMode = () => DATA_MODE === 'api';
+export const DATA_MODE = 'api';
+export const isLocalMode = () => false;
+export const isApiMode = () => true;
 // Helper to set mode at runtime
 export const setDataMode = (mode) => {
   if (mode === 'local' || mode === 'api') {
