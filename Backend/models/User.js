@@ -54,6 +54,18 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailOtp: {
+      type: String,
+      select: false,
+    },
+    emailOtpExpiry: {
+      type: Date,
+      select: false,
+    },
     lastLoginAt: {
       type: Date,
     },
@@ -109,6 +121,27 @@ userSchema.pre('save', function (next) {
 // Instance method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Generate 6-digit OTP and set 15-minute expiry
+userSchema.methods.generateOtp = async function () {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  this.emailOtp = otp;
+  this.emailOtpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+  return otp;
+};
+
+// Verify 6-digit OTP
+userSchema.methods.verifyOtp = async function (candidateOtp) {
+  if (!this.emailOtp || !this.emailOtpExpiry) return false;
+  if (new Date() > this.emailOtpExpiry) return false;
+  const isValid = this.emailOtp === candidateOtp;
+  if (isValid) {
+    this.emailOtp = undefined;
+    this.emailOtpExpiry = undefined;
+    this.isEmailVerified = true;
+  }
+  return isValid;
 };
 
 // Static method to find user by email with password (for login)

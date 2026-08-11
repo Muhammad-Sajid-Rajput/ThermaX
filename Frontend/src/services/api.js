@@ -1568,6 +1568,46 @@ export async function fetchAuditLogs(limit = 50) {
   }
 }
 
+export async function verifyEmail(email, code) {
+  if (isLocalMode()) {
+    await wait(200);
+    return { success: true, message: 'Email verified successfully.' };
+  }
+  const response = await api.post('/api/auth/verify-email', { email, code });
+  return response.data;
+}
+
+export async function forgotPassword(email) {
+  if (isLocalMode()) {
+    await wait(200);
+    return { message: 'If an account exists, a 6-digit password reset code has been sent.' };
+  }
+  const response = await api.post('/api/auth/forgot-password', { email });
+  return response.data;
+}
+
+export async function resetPassword(email, code, newPassword) {
+  if (isLocalMode()) {
+    await wait(200);
+    return { message: 'Password reset successfully.' };
+  }
+  const response = await api.post('/api/auth/reset-password', {
+    email,
+    code,
+    newPassword,
+  });
+  return response.data;
+}
+
+export async function resendOtp(email, type = 'verification') {
+  if (isLocalMode()) {
+    await wait(200);
+    return { message: 'Verification code resent successfully.' };
+  }
+  const response = await api.post('/api/auth/resend-otp', { email, type });
+  return response.data;
+}
+
 export {
   PLATFORM_UPDATED_AT,
   formatTimestamp,
