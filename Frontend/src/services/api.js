@@ -11,6 +11,7 @@ import { seedDemoData } from './seedData';
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
   timeout: 7000,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
@@ -20,6 +21,43 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response interceptor for automatic 401 Access Token refresh (Token Rotation)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error.response &&
+      error.response.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url.includes('/api/auth/login') &&
+      !originalRequest.url.includes('/api/auth/refresh')
+    ) {
+      originalRequest._retry = true;
+      try {
+        const refreshRes = await axios.post(
+          `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+        const newAccessToken = refreshRes.data?.accessToken;
+        if (newAccessToken) {
+          authStorage.setToken(newAccessToken);
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          return api(originalRequest);
+        }
+      } catch (refreshErr) {
+        authStorage.clearAuth();
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshErr);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 const ARRAY_CANDIDATE_KEYS = [
   'data',
   'items',
