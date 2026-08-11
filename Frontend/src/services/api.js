@@ -1533,6 +1533,41 @@ export async function generateExportBriefing(options = {}) {
   return response.data;
 }
 
+export async function fetchAuditLogs(limit = 50) {
+  if (isLocalMode()) {
+    await wait(150);
+    return {
+      logs: [
+        {
+          _id: 'LOG-001',
+          action: 'REPORT_SUBMITTED',
+          performedBy: 'demo_user_id',
+          targetType: 'REPORT',
+          targetId: 'RPT-2401',
+          ip: '127.0.0.1',
+          timestamp: new Date().toISOString(),
+        },
+        {
+          _id: 'LOG-002',
+          action: 'REPORT_VERIFIED',
+          performedBy: 'admin_user_id',
+          targetType: 'REPORT',
+          targetId: 'RPT-2402',
+          ip: '127.0.0.1',
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+        },
+      ],
+      count: 2,
+    };
+  }
+  try {
+    const response = await api.get(`/api/users/audit-logs?limit=${limit}`);
+    return response.data;
+  } catch (error) {
+    return { logs: [], count: 0 };
+  }
+}
+
 export {
   PLATFORM_UPDATED_AT,
   formatTimestamp,

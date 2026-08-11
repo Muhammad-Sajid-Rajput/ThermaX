@@ -2,6 +2,8 @@ import Report from '../models/Report.js';
 import { resolveDistrictAndCity } from '../services/boundaryService.js';
 import { enrichAndSaveSnapshot } from '../services/weatherService.js';
 import { triggerReportEnrichment } from '../services/mlServiceClient.js';
+import { snapToGrid } from '../services/anonymizationService.js';
+import { logAuditEvent } from '../middleware/auditLogger.js';
 
 let mockReports = [
   {
@@ -71,6 +73,7 @@ export const submitReport = async (req, res) => {
 
     // Server-side boundary & district resolution
     const geofence = resolveDistrictAndCity(lat, lng);
+    const snappedCoords = snapToGrid(lat, lng);
 
     const reportData = {
       user: user._id,
@@ -81,6 +84,7 @@ export const submitReport = async (req, res) => {
       latitude: lat,
       longitude: lng,
       location: { lat, lng },
+      snappedLocation: snappedCoords,
       areaName: areaName || geofence.areaName,
       district: geofence.district,
       city: geofence.city,
@@ -100,6 +104,16 @@ export const submitReport = async (req, res) => {
     try {
       const newReport = new Report(reportData);
       await newReport.save();
+
+      // Log PDPB Privacy & Governance Audit Event
+      logAuditEvent({
+        action: 'REPORT_SUBMITTED',
+        performedBy: user._id,
+        targetType: 'REPORT',
+        targetId: newReport._id,
+        details: { district: geofence.district, city: geofence.city, snappedCoords },
+        req
+      });
 
       // Weather snapshot enrichment (non-blocking if error occurs)
       enrichAndSaveSnapshot(newReport._id, lat, lng)
