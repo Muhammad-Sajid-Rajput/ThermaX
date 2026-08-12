@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
-  RefreshCw,
   LayoutDashboard,
   Map,
   Flame,
@@ -135,7 +134,7 @@ const SaaSDashboard = () => {
       case 'heatmap':
         return {
           title: 'Heat Map View',
-          desc: 'Interactive heatmap visualization across Karachi districts',
+          desc: 'Interactive heatmap visualization across Pakistan regions',
         };
       case 'hotspots':
         return {
@@ -150,7 +149,7 @@ const SaaSDashboard = () => {
       default:
         return {
           title: 'Urban Heat Intelligence',
-          desc: 'Real-time monitoring of urban heat islands across Karachi',
+          desc: 'Real-time monitoring of urban heat islands across Pakistan',
         };
     }
   };
@@ -199,18 +198,6 @@ const SaaSDashboard = () => {
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {/* Refresh */}
-          <button
-            onClick={() => loadSnapshot(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
-            title="Refresh data"
-          >
-            <RefreshCw
-              className={`w-4 h-4 text-slate-500 ${refreshing ? 'animate-spin' : ''}`}
-            />
-            <span className="hidden sm:inline text-slate-600">Refresh</span>
-          </button>
           {/* Submit Report */}
           <button
             onClick={handleReportHeatClick}
@@ -219,11 +206,6 @@ const SaaSDashboard = () => {
             <Plus className="w-4 h-4" />
             Report Heat
           </button>
-          {/* Live indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            Live
-          </div>
         </div>
       </div>
       <LiveWeatherCard />
@@ -551,7 +533,7 @@ const SaaSDashboard = () => {
                         }
                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
                       >
-                        <option value="all">Entire Karachi Region</option>
+                        <option value="all">All Pakistan Regions</option>
                         {(snapshot?.availableAreas ?? []).map((a) => (
                           <option key={a} value={a}>
                             {a}

@@ -121,8 +121,11 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Database connection
-const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/thermax';
+// Database connection — MongoDB is strictly required
+const mongoUri =
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  'mongodb://localhost:27017/thermax';
 
 mongoose
   .connect(mongoUri)
@@ -134,10 +137,8 @@ mongoose
     });
   })
   .catch((error) => {
-    console.error('Database connection error:', error);
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT} (Standalone Mode)`);
-    });
+    console.error('Fatal: MongoDB connection failed. Server will not start without database:', error);
+    process.exit(1);
   });
 
 export default app;

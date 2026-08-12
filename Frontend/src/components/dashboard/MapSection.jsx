@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
-import { Map, Eye, EyeOff, RotateCcw, Maximize, Minimize } from 'lucide-react';
+import { Map, Eye, EyeOff, RotateCcw, Maximize, Minimize, Navigation } from 'lucide-react';
 import useFullscreen from '../../hooks/ui/useFullscreen';
+import { useAuth } from '../../context/AuthContext';
+import useUserLocationStore from '../../stores/userLocationStore';
 
 import { runDbscan } from '../../utils/geo/clustering';
 import { processClustersToHotspots } from '../../utils/geo/hotspotUtils';
@@ -40,7 +42,8 @@ const SEVERITY_COLORS = {
   1: '#3b82f6',
 };
 
-const KARACHI_CENTER = [24.8607, 67.0011];
+const PAKISTAN_CENTER = [30.3753, 69.3451];
+const PAKISTAN_ZOOM = 5.5;
 
 // ─── Inner map component ───────────────────────────────────────────────────
 const LeafletMapInner = ({
@@ -51,9 +54,13 @@ const LeafletMapInner = ({
   layers,
   onLayersChange,
   resetTrigger,
+  center = PAKISTAN_CENTER,
+  zoom = PAKISTAN_ZOOM,
+  isFullscreen = false,
 }) => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  const zoomControlRef = useRef(null);
   const layerRefs = useRef({
     heat: null,
     hotspotLayers: [],
@@ -65,12 +72,15 @@ const LeafletMapInner = ({
     if (!containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
-      center: KARACHI_CENTER,
-      zoom: 12,
+      center: center || PAKISTAN_CENTER,
+      zoom: zoom || PAKISTAN_ZOOM,
       zoomControl: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      boxZoom: false,
+      keyboard: false,
     });
-
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     // Carto Voyager basemap
     L.tileLayer(
@@ -314,15 +324,44 @@ const LeafletMapInner = ({
     };
   }, []);
 
-  // Handle reset view
+  // Dynamic view update when center/zoom changes or reset is triggered
   useEffect(() => {
-    if (resetTrigger > 0 && mapRef.current) {
-      mapRef.current.setView(KARACHI_CENTER, 12, {
+    if (mapRef.current && center) {
+      mapRef.current.setView(center, zoom, {
         animate: true,
-        duration: 0.5,
+        duration: 0.8,
       });
     }
-  }, [resetTrigger]);
+  }, [center, zoom, resetTrigger]);
+
+  // Toggle zoom controls and interactions based strictly on Fullscreen mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (isFullscreen) {
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.touchZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+      if (!zoomControlRef.current) {
+        zoomControlRef.current = L.control
+          .zoom({ position: 'bottomright' })
+          .addTo(map);
+      }
+    } else {
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.touchZoom.disable();
+      map.boxZoom.disable();
+      map.keyboard.disable();
+      if (zoomControlRef.current) {
+        map.removeControl(zoomControlRef.current);
+        zoomControlRef.current = null;
+      }
+    }
+  }, [isFullscreen]);
 
   return (
     <div
@@ -400,10 +439,33 @@ const MapSection = ({
   eps = 0.015,
   minPts = 2,
   hideControls = false,
-  title = 'Urban Heat Map — Karachi',
+  title = null,
   showHotspots = true,
   showMarkers = true,
 }) => {
+  const { isAuthenticated } = useAuth();
+  const { lat, lng, cityName, status: locationStatus, requestLocation } = useUserLocationStore();
+
+  const isUserLocated = isAuthenticated && locationStatus === 'ready' && lat != null && lng != null;
+
+  const mapCenter = useMemo(() => {
+    if (isUserLocated) return [lat, lng];
+    return PAKISTAN_CENTER;
+  }, [isUserLocated, lat, lng]);
+
+  const mapZoom = useMemo(() => {
+    if (isUserLocated) return 12;
+    return PAKISTAN_ZOOM;
+  }, [isUserLocated]);
+
+  const displayTitle = useMemo(() => {
+    if (title && title !== 'Urban Heat Map — Karachi') return title;
+    if (isUserLocated) {
+      return `Urban Heat Map — ${cityName || 'Your Location'}`;
+    }
+    return 'Urban Heat Map — Pakistan';
+  }, [title, isUserLocated, cityName]);
+
   const [showLegend, setShowLegend] = useState(true);
   const [layers, setLayers] = useState({
     heat: hideControls ? focus === 'heatmap' : focus === 'heatmap' || !focus,
@@ -476,9 +538,20 @@ const MapSection = ({
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Map className="w-4 h-4 text-green-600" />
-            {title}
+            {displayTitle}
           </CardTitle>
           <div className="flex items-center gap-3">
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => requestLocation({ force: true })}
+                className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-lg border border-green-200 transition-colors"
+                title="Detect your current city/location"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                {isUserLocated ? cityName || 'My Location' : 'Detect Location'}
+              </button>
+            )}
             {!hideControls && (
               <button
                 onClick={() => setShowLegend((v) => !v)}
@@ -492,10 +565,7 @@ const MapSection = ({
                 Legend
               </button>
             )}
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              Live
-            </div>
+
             <button
               onClick={toggleFullscreen}
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors ml-2"
@@ -557,6 +627,9 @@ const MapSection = ({
           layers={layers}
           onLayersChange={handleLayerToggle}
           resetTrigger={resetTrigger}
+          center={mapCenter}
+          zoom={mapZoom}
+          isFullscreen={isFullscreen}
         />
       </CardContent>
     </Card>

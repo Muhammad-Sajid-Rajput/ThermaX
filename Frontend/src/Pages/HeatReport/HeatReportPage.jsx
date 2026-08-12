@@ -85,8 +85,8 @@ function HeatReport() {
 
   const mapCenter = useMemo(
     () => [
-      Number(form.latitude) || userLat || 24.8607,
-      Number(form.longitude) || userLng || 67.0011,
+      Number(form.latitude) || userLat || 30.3753,
+      Number(form.longitude) || userLng || 69.3451,
     ],
     [form.latitude, form.longitude, userLat, userLng]
   );

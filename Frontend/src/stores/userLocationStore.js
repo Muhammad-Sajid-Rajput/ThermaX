@@ -3,6 +3,7 @@ import { create } from 'zustand';
 const useUserLocationStore = create((set, get) => ({
   lat: null,
   lng: null,
+  cityName: null,
   accuracy: null,
   status: 'idle',
   error: null,
@@ -15,7 +16,7 @@ const useUserLocationStore = create((set, get) => ({
     if (!force && state.requested && state.status !== 'idle') {
       return Promise.resolve(
         state.status === 'ready'
-          ? { lat: state.lat, lng: state.lng }
+          ? { lat: state.lat, lng: state.lng, cityName: state.cityName }
           : null
       );
     }
@@ -33,16 +34,35 @@ const useUserLocationStore = create((set, get) => ({
 
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude, accuracy } = position.coords;
+          let cityName = null;
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
+              { headers: { 'User-Agent': 'ThermaX-App' } }
+            );
+            const data = await res.json();
+            cityName =
+              data.address?.city ||
+              data.address?.town ||
+              data.address?.county ||
+              data.address?.state_district ||
+              data.address?.state ||
+              'Your City';
+          } catch {
+            cityName = 'Your City';
+          }
+
           set({
             lat: latitude,
             lng: longitude,
+            cityName,
             accuracy,
             status: 'ready',
             error: null,
           });
-          resolve({ lat: latitude, lng: longitude });
+          resolve({ lat: latitude, lng: longitude, cityName });
         },
         (err) => {
           const message =
@@ -70,6 +90,7 @@ const useUserLocationStore = create((set, get) => ({
     set({
       lat: null,
       lng: null,
+      cityName: null,
       accuracy: null,
       status: 'idle',
       error: null,

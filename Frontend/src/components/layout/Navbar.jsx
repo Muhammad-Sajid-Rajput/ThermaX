@@ -7,11 +7,8 @@ import {
   LogOut,
   User as UserIcon,
   Shield,
-  Database,
-  Wifi,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { isLocalMode, setDataMode } from '../../services/config';
 // Base navigation items — visible to all users
 const getNavItems = (isAuthenticated) => {
   const items = [
@@ -204,35 +201,7 @@ const Navbar = () => {
                   </NavLink>
                 )}
               </div>
-              <div className="w-px h-6 bg-slate-200 hidden lg:block mx-1"></div>
-              {/* Mode Indicator */}
-              <button
-                onClick={() => {
-                  const newMode = isLocalMode() ? 'api' : 'local';
-                  if (
-                    confirm(
-                      `Switch to ${newMode === 'local' ? 'Local (Demo)' : 'API'} mode? The page will reload.`
-                    )
-                  ) {
-                    setDataMode(newMode);
-                  }
-                }}
-                className={`hidden sm:flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  isLocalMode()
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-green-100 text-green-700 hover:bg-green-200'
-                }`}
-                title="Click to switch mode"
-              >
-                {isLocalMode() ? (
-                  <Database className="w-3.5 h-3.5" />
-                ) : (
-                  <Wifi className="w-3.5 h-3.5" />
-                )}
-                <span className="hidden lg:inline">
-                  {isLocalMode() ? 'Local' : 'API'}
-                </span>
-              </button>
+
               {renderAuthSection()}
               <button
                 onClick={() => setIsMobileMenuOpen(true)}

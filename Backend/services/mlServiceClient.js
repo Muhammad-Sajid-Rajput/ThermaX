@@ -16,15 +16,12 @@ export async function triggerReportEnrichment(reportId) {
     .then((res) => {
       clearTimeout(timeoutId);
       if (res.ok) {
-        console.log(`[ML Client] Successfully triggered pipeline for report ${reportId}`);
+        console.log(`[ML Client] Triggered ML enrichment pipeline for report ${reportId}`);
       }
     })
-    .catch((err) => {
+    .catch(() => {
       clearTimeout(timeoutId);
-      // Silently log — report submission response is never blocked or failed
-      if (err.name !== 'AbortError') {
-        console.warn(`[ML Client] Background trigger notification skipped (${err.message})`);
-      }
+      // Fire-and-forget: report submission succeeds in MongoDB regardless of ML service state
     });
 }
 

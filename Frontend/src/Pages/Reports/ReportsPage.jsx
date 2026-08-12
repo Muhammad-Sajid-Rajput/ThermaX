@@ -77,7 +77,7 @@ function ReportsPage() {
             Active Hotspot Reports
           </h1>
           <p className="text-slate-500 mt-1 max-w-xl leading-snug">
-            Real-time heat vulnerability data across Karachi — sourced from
+            Real-time heat vulnerability data across Pakistan — sourced from
             citizen reports and satellite correlation.
           </p>
         </div>
@@ -145,13 +145,7 @@ function ReportsPage() {
               <SectionHeading
                 eyebrow="Live Map"
                 title="Hotspot distribution"
-                description={`Showing ${data.hotspots?.length ?? 0} identified heat clusters across Karachi. Updated ${formatTimestamp(data.lastUpdated ?? new Date().toISOString())}.`}
-                action={
-                  <Badge tone="info">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse mr-1.5" />
-                    Live
-                  </Badge>
-                }
+                description={`Showing ${data.hotspots?.length ?? 0} identified heat clusters across Pakistan. Updated ${formatTimestamp(data.lastUpdated ?? new Date().toISOString())}.`}
               />
               <div className="h-[60vh] min-h-125 flex flex-col">
                 <MapSection

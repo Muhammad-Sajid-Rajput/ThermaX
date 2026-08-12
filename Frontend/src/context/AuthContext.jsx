@@ -2,6 +2,7 @@ import { createContext, useContext, useReducer, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authenticateUser } from '../services/api';
 import { authStorage } from '../services/localStorageService';
+import useUserLocationStore from '../stores/userLocationStore';
 
 // Role definitions
 export const ROLES = {
@@ -120,11 +121,13 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Persist session to localStorage when auth state changes
+  // Persist session & prompt for location on login
   useEffect(() => {
     if (state.isAuthenticated && state.token && state.user) {
       authStorage.setToken(state.token);
       authStorage.setCurrentUser(state.user);
+      // Immediately prompt for location after login
+      useUserLocationStore.getState().requestLocation({ force: true });
     } else if (!state.isAuthenticated) {
       authStorage.clearAuth();
     }

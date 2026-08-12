@@ -8,3 +8,5 @@ router.post('/generate', generateExport);
 router.get('/download/:filename', downloadExport);
 
 export default router;
+export { router as exportRoutes };
+

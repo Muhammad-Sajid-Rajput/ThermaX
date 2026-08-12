@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 
-const KARACHI_CENTER = [24.8607, 67.0011];
+const PAKISTAN_CENTER = [30.3753, 69.3451];
 
 const getLatLng = (item) => {
   const lat = Number(item?.lat ?? item?.latitude ?? item?.coordinates?.[0]);
@@ -17,8 +17,8 @@ const getLatLng = (item) => {
 };
 
 const MiniMap = ({
-  center = KARACHI_CENTER,
-  zoom = 13,
+  center = PAKISTAN_CENTER,
+  zoom = 6,
   markers = [],
   reports = [],
   hotspots = [],
