@@ -36,6 +36,19 @@ router.get('/', authorizeAdmin, async (req, res) => {
   }
 });
 
+
+// Governance Audit Log viewer (Admin only) — must be BEFORE /:id
+router.get('/audit-logs', authorizeAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const AuditLog = (await import('../models/AuditLog.js')).default;
+    const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
+    res.json({ logs, count: logs.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch audit logs', message: error.message });
+  }
+});
+
 // Get user by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -140,17 +153,6 @@ router.put('/:id/status', authorizeAdmin, strictLimiter, async (req, res) => {
   }
 });
 
-// Governance Audit Log viewer (Admin only)
-router.get('/audit-logs', authorizeAdmin, async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit, 10) || 50;
-    const AuditLog = (await import('../models/AuditLog.js')).default;
-    const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
-    res.json({ logs, count: logs.length });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch audit logs', message: error.message });
-  }
-});
 
 export { router as userRoutes };
 export default router;

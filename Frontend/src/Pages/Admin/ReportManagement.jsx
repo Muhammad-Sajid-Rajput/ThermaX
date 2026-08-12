@@ -52,96 +52,13 @@ function ReportManagement() {
       setReports(data);
       applyFilters(data);
     } catch (err) {
-      toast.error('Failed to load reports');
-      // Fallback data
-      setReports(mockReports);
-      applyFilters(mockReports);
+      toast.error('Failed to load reports from backend');
+      setReports([]);
+      applyFilters([]);
     } finally {
       setLoading(false);
     }
   };
-  const mockReports = [
-    {
-      id: 'RPT-2026-1552',
-      area: 'Korangi',
-      severity: 5,
-      status: 'pending',
-      user: { name: 'Ahmed Khan', email: 'ahmed@email.com' },
-      timestamp: new Date().toISOString(),
-      description: 'Extreme heat reported in industrial area',
-      location: { lat: 24.8508, lng: 67.0529 },
-    },
-    {
-      id: 'RPT-2026-1551',
-      area: 'Saddar',
-      severity: 4,
-      status: 'pending',
-      user: { name: 'Fatima Ali', email: 'fatima@email.com' },
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      description: 'High temperature in commercial district',
-      location: { lat: 24.8615, lng: 67.0099 },
-    },
-    {
-      id: 'RPT-2026-1550',
-      area: 'Gulshan',
-      severity: 3,
-      status: 'validated',
-      user: { name: 'Omar Hassan', email: 'omar@email.com' },
-      timestamp: new Date(Date.now() - 7200000).toISOString(),
-      description: 'Moderate heat issue in residential area',
-      location: { lat: 24.918, lng: 67.0971 },
-    },
-    {
-      id: 'RPT-2026-1549',
-      area: 'DHA',
-      severity: 4,
-      status: 'pending',
-      user: { name: 'Zara Ahmed', email: 'zara@email.com' },
-      timestamp: new Date(Date.now() - 10800000).toISOString(),
-      description: 'Heat stress reported near park area',
-      location: { lat: 24.8238, lng: 67.0676 },
-    },
-    {
-      id: 'RPT-2026-1548',
-      area: 'Landhi',
-      severity: 5,
-      status: 'rejected',
-      user: { name: 'Bilal Raza', email: 'bilal@email.com' },
-      timestamp: new Date(Date.now() - 14400000).toISOString(),
-      description: 'Critical heat zone identified',
-      location: { lat: 24.8402, lng: 67.1856 },
-    },
-    {
-      id: 'RPT-2026-1547',
-      area: 'Korangi',
-      severity: 3,
-      status: 'validated',
-      user: { name: 'Sana Malik', email: 'sana@email.com' },
-      timestamp: new Date(Date.now() - 18000000).toISOString(),
-      description: 'Heat index elevated',
-      location: { lat: 24.8508, lng: 67.0529 },
-    },
-    {
-      id: 'RPT-2026-1546',
-      area: 'Saddar',
-      severity: 2,
-      status: 'validated',
-      user: { name: 'Hassan Ali', email: 'hassan@email.com' },
-      timestamp: new Date(Date.now() - 21600000).toISOString(),
-      description: 'Minor heat discomfort reported',
-      location: { lat: 24.8615, lng: 67.0099 },
-    },
-    {
-      id: 'RPT-2026-1545',
-      area: 'Gulshan',
-      severity: 4,
-      status: 'pending',
-      user: { name: 'Ayesha Khan', email: 'ayesha@email.com' },
-      timestamp: new Date(Date.now() - 25200000).toISOString(),
-      description: 'Severe heat in market area',
-      location: { lat: 24.918, lng: 67.0971 },
-    },
-  ];
   const applyFilters = (data) => {
     let filtered = data;
     if (filters.search) {

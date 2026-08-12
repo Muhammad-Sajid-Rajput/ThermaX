@@ -115,99 +115,19 @@ function AdminDashboard() {
       }
       // Load pending reports
       const reportsData = await fetchReports({ status: 'pending', limit: 5 });
-      setPendingReports(reportsData?.data?.slice(0, 5) || mockPendingReports);
+      setPendingReports(reportsData?.data?.slice(0, 5) || []);
       // Load recent users
       const usersData = await fetchUsers({ limit: 5 });
-      setRecentUsers(usersData?.slice(0, 5) || mockRecentUsers);
+      setRecentUsers(usersData?.slice(0, 5) || []);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
-      // Use mock data as fallback
-      setPendingReports(mockPendingReports);
-      setRecentUsers(mockRecentUsers);
+      setPendingReports([]);
+      setRecentUsers([]);
     } finally {
       setLoading(false);
     }
   };
-  // Mock data for initial render
-  const mockPendingReports = [
-    {
-      id: 'RPT-2026-1552',
-      area: 'Korangi',
-      severity: 5,
-      user: { name: 'Ahmed Khan' },
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: 'RPT-2026-1551',
-      area: 'Saddar',
-      severity: 4,
-      user: { name: 'Fatima Ali' },
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: 'RPT-2026-1550',
-      area: 'Gulshan',
-      severity: 3,
-      user: { name: 'Omar Hassan' },
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: 'RPT-2026-1549',
-      area: 'DHA',
-      severity: 4,
-      user: { name: 'Zara Ahmed' },
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: 'RPT-2026-1548',
-      area: 'Landhi',
-      severity: 5,
-      user: { name: 'Bilal Raza' },
-      timestamp: new Date().toISOString(),
-    },
-  ];
-  const mockRecentUsers = [
-    {
-      id: 1,
-      name: 'Ahmed Khan',
-      email: 'ahmed@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 12,
-    },
-    {
-      id: 2,
-      name: 'Fatima Ali',
-      email: 'fatima@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 8,
-    },
-    {
-      id: 3,
-      name: 'Omar Hassan',
-      email: 'omar@email.com',
-      role: 'USER',
-      status: 'suspended',
-      reportsSubmitted: 3,
-    },
-    {
-      id: 4,
-      name: 'Zara Ahmed',
-      email: 'zara@email.com',
-      role: 'ADMIN',
-      status: 'active',
-      reportsSubmitted: 25,
-    },
-    {
-      id: 5,
-      name: 'Bilal Raza',
-      email: 'bilal@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 6,
-    },
-  ];
+
   // Actions
   const handleReportAction = async (reportId, action) => {
     try {
