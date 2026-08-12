@@ -241,8 +241,27 @@ export async function enrichAndSaveSnapshot(reportId, lat, lng) {
   }
 }
 
+export async function getWeatherHistory(lat, lng, options = {}) {
+  const WeatherSnapshot = (await import('../models/WeatherSnapshot.js').catch(() => null))?.default;
+  if (!WeatherSnapshot) return [];
+  const { limit = 24 } = options;
+  return WeatherSnapshot.find({ lat, lng }).sort({ recordedAt: -1 }).limit(limit);
+}
+
+export async function getWeatherAnalyticsSummary(options = {}) {
+  const WeatherSnapshot = (await import('../models/WeatherSnapshot.js').catch(() => null))?.default;
+  if (!WeatherSnapshot) return { count: 0, avgTemp: null, avgHeatIndex: null };
+  const [result] = await WeatherSnapshot.aggregate([
+    { $group: { _id: null, count: { $sum: 1 }, avgTemp: { $avg: '$temperature' }, avgHeatIndex: { $avg: '$heatIndex' } } },
+  ]);
+  return result || { count: 0, avgTemp: null, avgHeatIndex: null };
+}
+
 export default {
   getCurrentWeather,
+  getWeatherHistory,
+  getWeatherAnalyticsSummary,
   enrichAndSaveSnapshot,
   calculateHeatIndex,
 };
+
