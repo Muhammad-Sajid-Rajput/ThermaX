@@ -2,36 +2,32 @@ import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
+import useUserLocationStore from '../../stores/userLocationStore';
+import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
 
 const PAKISTAN_CENTER = [30.3753, 69.3451];
-
-const getLatLng = (item) => {
-  const lat = Number(item?.lat ?? item?.latitude ?? item?.coordinates?.[0]);
-  const lng = Number(item?.lng ?? item?.longitude ?? item?.coordinates?.[1]);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-
-  return [lat, lng];
-};
 
 const MiniMap = ({
   center = PAKISTAN_CENTER,
   zoom = 6,
-  markers = [],
   reports = [],
   hotspots = [],
   heatmap = [],
   height = '200px',
+  showUserLocation = true,
 }) => {
+  const userLat = useUserLocationStore((s) => s.lat);
+  const userLng = useUserLocationStore((s) => s.lng);
+  const userCity = useUserLocationStore((s) => s.cityName);
+  const userAccuracy = useUserLocationStore((s) => s.accuracy);
+
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const layersRef = useRef({
-    markers: [],
     reports: [],
     hotspots: [],
     heat: null,
+    userLocationMarker: null,
   });
 
   const clearLayers = useCallback((type) => {
@@ -67,19 +63,16 @@ const MiniMap = ({
         keyboard: false,
       });
 
-      L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        {
-          subdomains: 'abcd',
-          maxZoom: 19,
-        }
-      ).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
 
       mapRef.current = map;
     }
 
     return () => {
       if (mapRef.current) {
+        mapRef.current.stop();
         mapRef.current.remove();
         mapRef.current = null;
       }
@@ -88,12 +81,13 @@ const MiniMap = ({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !map._mapPane) return;
 
     const [lat, lng] = center ?? [];
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    map.setView([lat, lng], zoom);
+    map.stop();
+    map.setView([lat, lng], zoom, { animate: false });
     map.invalidateSize();
   }, [center, zoom]);
 
@@ -131,66 +125,6 @@ const MiniMap = ({
     }
   }, [heatmap, clearLayers]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    clearLayers('markers');
-
-    const newLayers = markers
-      .map((markerConfig) => {
-        const point = getLatLng(markerConfig);
-        if (!point) return null;
-
-        const [lat, lng] = point;
-        const icon = L.divIcon({
-          html: `
-            <div style="
-              width: 26px;
-              height: 36px;
-              filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.22));
-            ">
-              <svg
-                width="26"
-                height="36"
-                viewBox="0 0 34 46"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M17 2C9.26801 2 3 8.26801 3 16C3 26.5 17 44 17 44C17 44 31 26.5 31 16C31 8.26801 24.732 2 17 2Z"
-                  fill="#DC2626"
-                  stroke="white"
-                  stroke-width="2.5"
-                />
-                <circle cx="17" cy="16" r="5.5" fill="white" />
-                <circle cx="17" cy="16" r="2.75" fill="#DC2626" />
-              </svg>
-            </div>`,
-          className: '',
-          iconSize: [26, 36],
-          iconAnchor: [13, 34],
-        });
-
-        const marker = L.marker([lat, lng], { icon });
-        if (markerConfig.popup) marker.bindPopup(markerConfig.popup);
-        if (markerConfig.label) marker.bindTooltip(markerConfig.label);
-
-        marker.addTo(map);
-        return marker;
-      })
-      .filter(Boolean);
-
-    layersRef.current.markers = newLayers;
-
-    if (newLayers.length > 0) {
-      const bounds = L.latLngBounds(newLayers.map((layer) => layer.getLatLng()));
-      map.fitBounds(bounds, {
-        padding: [30, 30],
-        maxZoom: zoom,
-      });
-    }
-  }, [markers, clearLayers, zoom]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -294,6 +228,26 @@ const MiniMap = ({
 
     layersRef.current.hotspots = newLayers;
   }, [hotspots, clearLayers]);
+
+  // User location marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (layersRef.current.userLocationMarker) {
+      map.removeLayer(layersRef.current.userLocationMarker);
+      layersRef.current.userLocationMarker = null;
+    }
+
+    if (showUserLocation && userLat != null && userLng != null) {
+      const marker = createUserLocationMarker(userLat, userLng, {
+        cityName: userCity,
+        accuracy: userAccuracy,
+      });
+      marker.addTo(map);
+      layersRef.current.userLocationMarker = marker;
+    }
+  }, [showUserLocation, userLat, userLng, userCity, userAccuracy]);
 
   return (
     <div

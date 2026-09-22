@@ -7,15 +7,7 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Filter,
-  ShieldCheck,
-  Globe,
-  CheckCircle2,
-  Layers,
-  Activity,
   MapPin,
-  Zap,
-  Settings,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -36,7 +28,6 @@ const VIEWS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'heatmap', label: 'Heat Map', icon: Map },
   { id: 'hotspots', label: 'Hotspots', icon: Flame },
-  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 // ─── Status badge helpers ──────────────────────────────────────────────────
 const STATUS_ICONS = {
@@ -91,13 +82,11 @@ const SaaSDashboard = () => {
     severity: 'all',
     area: 'all',
   });
-  const [displayPrefs, setDisplayPrefs] = useState({
+  const displayPrefs = {
     showKpis: true,
     showHotspots: true,
     showMarkers: true,
-    animations: true,
-    realTime: true,
-  });
+  };
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   // Auth-aware report navigation
@@ -140,11 +129,6 @@ const SaaSDashboard = () => {
         return {
           title: 'Hotspot Analysis',
           desc: 'Identified heat hotspot clusters and severity distribution',
-        };
-      case 'settings':
-        return {
-          title: 'Dashboard Settings',
-          desc: 'Configure preferences and data visualization options',
         };
       default:
         return {
@@ -446,227 +430,6 @@ const SaaSDashboard = () => {
                   );
                 })}
               </div>
-            </div>
-          )}
-          {/* ══ SETTINGS VIEW ═════════════════════════════════════════ */}
-          {currentView === 'settings' && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Dashboard Settings
-                </h2>
-                <p className="text-slate-500">
-                  Configure your data preferences and interface display options.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Data Filters */}
-                <Card className="border-none shadow-sm overflow-hidden">
-                  <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Filter className="w-4 h-4 text-green-600" />
-                      <CardTitle className="text-base">
-                        Data Intelligence Filters
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-6 space-y-5">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <label className="text-sm font-semibold text-slate-700">
-                          Analysis Time Range
-                        </label>
-                      </div>
-                      <select
-                        value={filters.range}
-                        onChange={(e) =>
-                          setFilters((f) => ({ ...f, range: e.target.value }))
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
-                      >
-                        <option value="24h">Past 24 hours (Real-time)</option>
-                        <option value="7d">Past 7 days (Weekly Trend)</option>
-                        <option value="30d">
-                          Past 30 days (Monthly Analysis)
-                        </option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-                        <label className="text-sm font-semibold text-slate-700">
-                          Minimum Severity Threshold
-                        </label>
-                      </div>
-                      <select
-                        value={filters.severity}
-                        onChange={(e) =>
-                          setFilters((f) => ({
-                            ...f,
-                            severity: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
-                      >
-                        <option value="all">All levels (Comprehensive)</option>
-                        <option value="2">S2 and above (Noticeable)</option>
-                        <option value="3">S3 and above (Significant)</option>
-                        <option value="4">S4 and above (Severe)</option>
-                        <option value="5">S5 only (Extreme Emergency)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Globe className="w-3.5 h-3.5 text-slate-400" />
-                        <label className="text-sm font-semibold text-slate-700">
-                          Geographic Focus
-                        </label>
-                      </div>
-                      <select
-                        value={filters.area}
-                        onChange={(e) =>
-                          setFilters((f) => ({ ...f, area: e.target.value }))
-                        }
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all outline-none"
-                      >
-                        <option value="all">All Pakistan Regions</option>
-                        {(snapshot?.availableAreas ?? []).map((a) => (
-                          <option key={a} value={a}>
-                            {a}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        loadSnapshot(true);
-                        setCurrentView('overview');
-                      }}
-                      className="w-full flex items-center justify-center gap-2 theme-btn-primary py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-500/10 hover:shadow-green-500/20 transition-all mt-4"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Update Dashboard View
-                    </button>
-                  </CardContent>
-                </Card>
-
-                {/* Display Preferences */}
-                <Card className="border-none shadow-sm overflow-hidden">
-                  <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-green-600" />
-                      <CardTitle className="text-base">
-                        Interface Customization
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <div className="space-y-1">
-                      {[
-                        {
-                          id: 'showKpis',
-                          label: 'Summary KPI Cards',
-                          desc: 'Display top-level metrics',
-                          icon: Activity,
-                        },
-                        {
-                          id: 'showHotspots',
-                          label: 'Cluster Visualizations',
-                          desc: 'Show identified hotspots',
-                          icon: Flame,
-                        },
-                        {
-                          id: 'showMarkers',
-                          label: 'Detailed Report Markers',
-                          desc: 'Show individual user reports',
-                          icon: MapPin,
-                        },
-                        {
-                          id: 'animations',
-                          label: 'Interactive Animations',
-                          desc: 'Smooth transitions and effects',
-                          icon: RefreshCw,
-                        },
-                        {
-                          id: 'realTime',
-                          label: 'Live Data Polling',
-                          desc: 'Auto-refresh every 5 minutes',
-                          icon: Zap,
-                        },
-                      ].map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-green-600 group-hover:border-green-100 transition-colors shadow-sm">
-                              <item.icon className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-slate-700">
-                                {item.label}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {item.desc}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() =>
-                              setDisplayPrefs((prev) => ({
-                                ...prev,
-                                [item.id]: !prev[item.id],
-                              }))
-                            }
-                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${displayPrefs[item.id] ? 'bg-green-600' : 'bg-slate-200'}`}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${displayPrefs[item.id] ? 'translate-x-5' : 'translate-x-0'}`}
-                            />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="bg-green-600 border-none shadow-lg shadow-green-600/20 overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                  <ShieldCheck className="w-32 h-32 text-white" />
-                </div>
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="text-white">
-                      <h3 className="text-lg font-bold">
-                        Data Privacy &amp; Sync
-                      </h3>
-                      <p className="text-green-100 text-sm max-w-md mt-1">
-                        Your dashboard preferences are saved locally for this
-                        session. Critical alerts are always prioritized
-                        regardless of display settings.
-                      </p>
-                    </div>
-                    <div className="flex gap-3">
-                      <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-semibold transition-colors border border-white/20">
-                        Reset Defaults
-                      </button>
-                      <button
-                        onClick={() => setCurrentView('overview')}
-                        className="px-4 py-2 bg-white text-green-700 hover:bg-green-50 rounded-lg text-sm font-bold transition-colors shadow-sm"
-                      >
-                        Back to Dashboard
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           )}
         </>

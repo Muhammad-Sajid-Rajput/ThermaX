@@ -202,3 +202,39 @@ Unified light theme for both User and Admin
     background-color: var(--border-color-light);
   }
 }
+
+@keyframes userLocationPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.user-location-marker-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.user-location-tooltip {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
+}
+
+.user-location-tooltip::before {
+  border-top-color: #0f172a !important;
+}
+

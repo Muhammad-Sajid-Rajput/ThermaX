@@ -13,6 +13,7 @@ import {
   formatHeatmapPoints,
   HEATMAP_CONFIG,
 } from '../../utils/geo/heatmapLayer';
+import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
 
 // Fix default marker icon paths (Vite asset pipeline issue)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -57,6 +58,7 @@ const LeafletMapInner = ({
   center = PAKISTAN_CENTER,
   zoom = PAKISTAN_ZOOM,
   isFullscreen = false,
+  userLocation = null,
 }) => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -65,6 +67,7 @@ const LeafletMapInner = ({
     heat: null,
     hotspotLayers: [],
     reportMarkers: [],
+    userLocationMarker: null,
   });
 
   // Init map once
@@ -82,15 +85,12 @@ const LeafletMapInner = ({
       keyboard: false,
     });
 
-    // Carto Voyager basemap
-    L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      {
-        attribution: '&copy; CARTO &copy; OSM',
-        subdomains: 'abcd',
-        maxZoom: 19,
-      }
-    ).addTo(map);
+    // OpenStreetMap basemap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map);
 
     mapRef.current = map;
 
@@ -106,8 +106,11 @@ const LeafletMapInner = ({
 
     return () => {
       resizeObserver.disconnect();
-      map.remove();
-      mapRef.current = null;
+      if (mapRef.current) {
+        mapRef.current.stop();
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
     };
   }, []);
 
@@ -298,6 +301,30 @@ const LeafletMapInner = ({
     }
   }, [reportsData, layers.reports, focus]);
 
+  // User location marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (layerRefs.current.userLocationMarker) {
+      map.removeLayer(layerRefs.current.userLocationMarker);
+      layerRefs.current.userLocationMarker = null;
+    }
+
+    if (userLocation?.lat != null && userLocation?.lng != null) {
+      const marker = createUserLocationMarker(
+        userLocation.lat,
+        userLocation.lng,
+        {
+          cityName: userLocation.cityName,
+          accuracy: userLocation.accuracy,
+        }
+      );
+      marker.addTo(map);
+      layerRefs.current.userLocationMarker = marker;
+    }
+  }, [userLocation?.lat, userLocation?.lng, userLocation?.cityName, userLocation?.accuracy]);
+
   // Click interaction (lat/lng popup)
   useEffect(() => {
     const map = mapRef.current;
@@ -326,10 +353,11 @@ const LeafletMapInner = ({
 
   // Dynamic view update when center/zoom changes or reset is triggered
   useEffect(() => {
-    if (mapRef.current && center) {
-      mapRef.current.setView(center, zoom, {
-        animate: true,
-        duration: 0.8,
+    const map = mapRef.current;
+    if (map && map._mapPane && center) {
+      map.stop();
+      map.setView(center, zoom, {
+        animate: false,
       });
     }
   }, [center, zoom, resetTrigger]);
@@ -444,19 +472,24 @@ const MapSection = ({
   showMarkers = true,
 }) => {
   const { isAuthenticated } = useAuth();
-  const { lat, lng, cityName, status: locationStatus, requestLocation } = useUserLocationStore();
+  const { lat, lng, cityName, accuracy, status: locationStatus, requestLocation } = useUserLocationStore();
 
-  const isUserLocated = isAuthenticated && locationStatus === 'ready' && lat != null && lng != null;
+  const isUserLocated = locationStatus === 'ready' && lat != null && lng != null;
+
+  const [centerOverride, setCenterOverride] = useState(null);
+  const [zoomOverride, setZoomOverride] = useState(null);
 
   const mapCenter = useMemo(() => {
+    if (centerOverride) return centerOverride;
     if (isUserLocated) return [lat, lng];
     return PAKISTAN_CENTER;
-  }, [isUserLocated, lat, lng]);
+  }, [centerOverride, isUserLocated, lat, lng]);
 
   const mapZoom = useMemo(() => {
+    if (zoomOverride) return zoomOverride;
     if (isUserLocated) return 12;
     return PAKISTAN_ZOOM;
-  }, [isUserLocated]);
+  }, [zoomOverride, isUserLocated]);
 
   const displayTitle = useMemo(() => {
     if (title && title !== 'Urban Heat Map — Karachi') return title;
@@ -487,7 +520,25 @@ const MapSection = ({
     setLayers((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleLocateMe = () => {
+    if (isUserLocated) {
+      setCenterOverride([lat, lng]);
+      setZoomOverride(13);
+      setResetTrigger((prev) => prev + 1);
+    } else {
+      requestLocation({ force: true }).then((res) => {
+        if (res?.lat && res?.lng) {
+          setCenterOverride([res.lat, res.lng]);
+          setZoomOverride(13);
+          setResetTrigger((prev) => prev + 1);
+        }
+      });
+    }
+  };
+
   const handleResetView = () => {
+    setCenterOverride(null);
+    setZoomOverride(null);
     setResetTrigger((prev) => prev + 1);
   };
 
@@ -541,17 +592,19 @@ const MapSection = ({
             {displayTitle}
           </CardTitle>
           <div className="flex items-center gap-3">
-            {isAuthenticated && (
-              <button
-                type="button"
-                onClick={() => requestLocation({ force: true })}
-                className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-lg border border-green-200 transition-colors"
-                title="Detect your current city/location"
-              >
-                <Navigation className="w-3.5 h-3.5" />
-                {isUserLocated ? cityName || 'My Location' : 'Detect Location'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleLocateMe}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                isUserLocated
+                  ? 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
+                  : 'text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+              }`}
+              title={isUserLocated ? 'Center on your location' : 'Detect your current location'}
+            >
+              <Navigation className={`w-3.5 h-3.5 ${isUserLocated ? 'text-blue-600 fill-blue-600' : 'text-slate-500'}`} />
+              {isUserLocated ? cityName || 'My Location' : 'Locate Me'}
+            </button>
             {!hideControls && (
               <button
                 onClick={() => setShowLegend((v) => !v)}
@@ -630,6 +683,7 @@ const MapSection = ({
           center={mapCenter}
           zoom={mapZoom}
           isFullscreen={isFullscreen}
+          userLocation={isUserLocated ? { lat, lng, cityName, accuracy } : null}
         />
       </CardContent>
     </Card>

@@ -50,8 +50,8 @@ function HeatReport() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
-    latitude: null,
-    longitude: null,
+    latitude: '',
+    longitude: '',
     areaName: '',
     severity: '',
     causes: [],
@@ -69,14 +69,6 @@ function HeatReport() {
       URL.revokeObjectURL(objectUrl);
     };
   }, [selectedFile]);
-  const marker = useMemo(
-    () => ({
-      latitude: Number(form.latitude),
-      longitude: Number(form.longitude),
-      label: form.areaName || 'Report location',
-    }),
-    [form.areaName, form.latitude, form.longitude]
-  );
   const userLat = useUserLocationStore((s) => s.lat);
   const userLng = useUserLocationStore((s) => s.lng);
   const geoStatus = useUserLocationStore((s) => s.status);
@@ -328,7 +320,7 @@ function HeatReport() {
                   </label>
                   <input
                     type="number"
-                    value={form.latitude}
+                    value={form.latitude ?? ''}
                     onChange={(event) =>
                       updateForm({ latitude: event.target.value })
                     }
@@ -343,7 +335,7 @@ function HeatReport() {
                   </label>
                   <input
                     type="number"
-                    value={form.longitude}
+                    value={form.longitude ?? ''}
                     onChange={(event) =>
                       updateForm({ longitude: event.target.value })
                     }
@@ -838,7 +830,7 @@ function HeatReport() {
               <MapPin className="w-5 h-5 text-green-600" />
               Location Preview
             </h3>
-            <MiniMap center={mapCenter} markers={[marker]} />
+            <MiniMap center={mapCenter} />
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">

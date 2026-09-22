@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "forceConsistentCasingInFileNames": false,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "exclude": ["node_modules", "**/node_modules/*"]
+}
