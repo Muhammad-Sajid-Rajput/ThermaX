@@ -116,7 +116,7 @@ const AuthPage = () => {
       if (location.state?.from) {
         navigate(from, { replace: true });
       } else {
-        const userRole = result.user.role;
+        const userRole = String(result.user?.role || '').toUpperCase();
         if (userRole === 'ADMIN') {
           navigate('/admin');
         } else {

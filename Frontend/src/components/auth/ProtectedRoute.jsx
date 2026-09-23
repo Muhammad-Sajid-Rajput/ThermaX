@@ -1,17 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-/**
- * ProtectedRoute Component
- * Wraps routes that require authentication and/or specific role privileges.
- *
- * Props:
- * - children : The component to render if access is granted
- * - adminOnly : If true, requires ADMIN role (shorthand, default: false)
- * - allowedRoles : Array of allowed role strings, e.g. ['ADMIN']. Takes
- * precedence over adminOnly when provided.
- * - redirectTo : Path to redirect to if not authenticated (default:'/login')
- * - unauthorizedTo : Path to redirect to if not authorized (default:'/unauthorized')
- */
+
 function ProtectedRoute({
   children,
   adminOnly = false,
@@ -39,8 +28,12 @@ function ProtectedRoute({
   // - allowedRoles array takes precedence if provided
   // - fall back to adminOnly flag (treats ADMIN as sole allowed role)
   const effectiveRoles = allowedRoles ?? (adminOnly ? ['ADMIN'] : null);
-  // If a role restriction exists, enforce it
-  if (effectiveRoles && !effectiveRoles.includes(user?.role)) {
+  const currentRole = String(user?.role || '').toUpperCase();
+  // If a role restriction exists, enforce it (case-insensitive)
+  if (
+    effectiveRoles &&
+    !effectiveRoles.map((r) => String(r).toUpperCase()).includes(currentRole)
+  ) {
     return <Navigate to={unauthorizedTo} replace />;
   }
   // All checks passed — render the protected content

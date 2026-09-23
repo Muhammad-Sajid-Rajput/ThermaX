@@ -31,7 +31,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
   // Auth-aware Submit Report handler
   const handleSubmitReportClick = () => {
     if (isAuthenticated) {
@@ -114,6 +114,18 @@ const Navbar = () => {
                   <UserIcon className="w-4 h-4" />
                   Profile
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      setIsProfileDropdownOpen(false);
+                      navigate('/admin');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors"
+                  >
+                    <Shield className="w-4 h-4" />
+                    Admin Command
+                  </button>
+                )}
                 <div className="border-t border-slate-100 my-1 pt-1">
                   <button
                     onClick={() => {
