@@ -251,7 +251,61 @@ export async function fetchCurrentWeather(lat, lng) {
 }
 
 export async function detectAreaName(latitude, longitude) {
-  return `Location (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`;
+  if (latitude == null || longitude == null) return '';
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=en`,
+      { headers: { 'User-Agent': 'ThermaX-App' } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const neighborhood =
+        addr.suburb ||
+        addr.neighbourhood ||
+        addr.residential ||
+        addr.quarter ||
+        addr.commercial ||
+        addr.village ||
+        addr.hamlet ||
+        data.name;
+
+      const city =
+        addr.city ||
+        addr.town ||
+        addr.state_district ||
+        addr.county ||
+        addr.state;
+
+      if (neighborhood && city) {
+        if (!neighborhood.toLowerCase().includes(city.toLowerCase())) {
+          return `${neighborhood}, ${city}`;
+        }
+        return neighborhood;
+      }
+      if (neighborhood) return neighborhood;
+      if (city) return city;
+      if (data.display_name) {
+        return data.display_name.split(',').slice(0, 2).map((s) => s.trim()).join(', ');
+      }
+    }
+  } catch (err) {
+    console.warn('Reverse geocoding error:', err);
+  }
+
+  // Fallback defaults for major Pakistan urban areas if network fails
+  if (lat >= 24.7 && lat <= 25.1 && lng >= 66.8 && lng <= 67.3) return 'Karachi Urban';
+  if (lat >= 25.3 && lat <= 25.5 && lng >= 68.3 && lng <= 68.5) return 'Hyderabad Urban';
+  if (lat >= 31.4 && lat <= 31.7 && lng >= 74.2 && lng <= 74.5) return 'Lahore Metro';
+  if (lat >= 33.5 && lat <= 33.8 && lng >= 72.9 && lng <= 73.2) return 'Islamabad / Rawalpindi';
+  if (lat >= 33.9 && lat <= 34.1 && lng >= 71.4 && lng <= 71.7) return 'Peshawar City';
+  if (lat >= 30.1 && lat <= 30.3 && lng >= 66.9 && lng <= 67.1) return 'Quetta City';
+
+  return 'Local Area';
 }
 
 export const getAvailableAreas = () => [];

@@ -18,7 +18,19 @@ import {
   Thermometer,
   FileText,
   Flame,
+  Navigation,
+  Check,
 } from 'lucide-react';
+
+const getLocalDateTimeString = (date = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 const steps = [
   { id: 1, label: 'Location' },
   { id: 2, label: 'Severity' },
@@ -26,12 +38,66 @@ const steps = [
   { id: 4, label: 'Review' },
 ];
 const causes = [
-  'Sparse tree canopy',
-  'Heat-retaining pavement',
-  'Industrial roof reflection',
-  'Crowded transit stop',
-  'Low ventilation corridor',
+  'Lack of trees or shade',
+  'Hot asphalt or paved roads',
+  'Metal roofs reflecting heat',
+  'Crowded bus or transit stop',
+  'Blocked breeze or trapped heat',
 ];
+
+const SEVERITY_LEVELS = [
+  {
+    level: 1,
+    label: 'Mild',
+    emoji: '😌',
+    colorBar: 'bg-emerald-500',
+    activeBorder: 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm',
+    activeBg: 'bg-emerald-50/60',
+    activeTile: 'bg-emerald-100 text-emerald-800',
+    activeText: 'text-emerald-900',
+  },
+  {
+    level: 2,
+    label: 'Moderate',
+    emoji: '😐',
+    colorBar: 'bg-amber-400',
+    activeBorder: 'border-amber-400 ring-2 ring-amber-400/20 shadow-sm',
+    activeBg: 'bg-amber-50/60',
+    activeTile: 'bg-amber-100 text-amber-800',
+    activeText: 'text-amber-900',
+  },
+  {
+    level: 3,
+    label: 'High',
+    emoji: '😰',
+    colorBar: 'bg-amber-500',
+    activeBorder: 'border-amber-500 ring-2 ring-amber-500/20 shadow-sm',
+    activeBg: 'bg-amber-50/70',
+    activeTile: 'bg-amber-100 text-amber-900',
+    activeText: 'text-amber-950',
+  },
+  {
+    level: 4,
+    label: 'Severe',
+    emoji: '🥵',
+    colorBar: 'bg-orange-500',
+    activeBorder: 'border-orange-500 ring-2 ring-orange-500/20 shadow-sm',
+    activeBg: 'bg-orange-50/70',
+    activeTile: 'bg-orange-100 text-orange-950',
+    activeText: 'text-orange-950',
+  },
+  {
+    level: 5,
+    label: 'Extreme',
+    emoji: '🔥',
+    colorBar: 'bg-red-500',
+    activeBorder: 'border-red-500 ring-2 ring-red-500/20 shadow-sm',
+    activeBg: 'bg-red-50/70',
+    activeTile: 'bg-red-100 text-red-950',
+    activeText: 'text-red-950',
+  },
+];
+
 function HeatReport() {
   const { user, isAuthenticated, requireAuth } = useAuth();
   const navigate = useNavigate();
@@ -55,7 +121,7 @@ function HeatReport() {
     areaName: '',
     severity: '',
     causes: [],
-    observedAt: new Date().toISOString().slice(0, 16), // default to current datetime
+    observedAt: getLocalDateTimeString(),
     description: '',
   });
   useEffect(() => {
@@ -143,21 +209,6 @@ function HeatReport() {
     }
     setStep((current) => Math.min(current + 1, 4));
   };
-  const handleAutoDetect = async () => {
-    setIsLocating(true);
-    try {
-      const areaName = await detectAreaName(
-        Number(form.latitude),
-        Number(form.longitude)
-      );
-      updateForm({ areaName });
-      toast.success(`Area detected: ${areaName}`);
-    } catch (err) {
-      toast.error('Failed to detect area');
-    } finally {
-      setIsLocating(false);
-    }
-  };
   const handleGetLocation = async () => {
     setIsLocating(true);
     appliedUserGeo.current = false;
@@ -172,12 +223,25 @@ function HeatReport() {
     try {
       const areaName = await detectAreaName(coords.lat, coords.lng);
       updateForm({ areaName });
-      toast.success('Location updated successfully');
+      toast.success(areaName ? `Location: ${areaName}` : 'Location updated');
     } catch {
-      toast.success('Coordinates updated, but failed to detect area name');
+      toast.success('Coordinates updated');
     } finally {
       setIsLocating(false);
       appliedUserGeo.current = true;
+    }
+  };
+
+  const handleCoordsBlur = async () => {
+    if (form.latitude && form.longitude && !form.areaName) {
+      try {
+        const areaName = await detectAreaName(Number(form.latitude), Number(form.longitude));
+        if (areaName) {
+          updateForm({ areaName });
+        }
+      } catch {
+        /* optional */
+      }
     }
   };
   const handleSubmit = async () => {
@@ -245,17 +309,17 @@ function HeatReport() {
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <div className="relative">
           <div
-            className="absolute inset-0 flex items-center"
+            className="absolute top-5 left-0 right-0 -translate-y-1/2 px-5"
             aria-hidden="true"
           >
-            <div className="w-full border-t border-slate-200"></div>
+            <div className="w-full border-t-2 border-slate-200"></div>
           </div>
           <div className="relative flex justify-between">
             {steps.map((item) => (
               <div key={item.id} className="flex flex-col items-center">
                 <button
                   onClick={() => item.id <= step && setStep(item.id)}
-                  className={`relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
+                  className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
                     item.id === step
                       ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/25'
                       : item.id < step
@@ -308,10 +372,31 @@ function HeatReport() {
         <div className="flex-1 min-w-0 space-y-6">
           {step === 1 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
-              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-green-600" />
-                Location Information
-              </h3>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-green-600" />
+                  Location Information
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleGetLocation}
+                  disabled={isLocating || geoStatus === 'loading'}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-green-50 border border-green-200 px-3.5 py-2 text-xs font-semibold text-green-700 shadow-xs hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                >
+                  {isLocating || geoStatus === 'loading' ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-green-600/30 border-t-green-700 rounded-full animate-spin"></div>
+                      Detecting location...
+                    </>
+                  ) : (
+                    <>
+                      <Navigation className="w-3.5 h-3.5 text-green-600" />
+                      Use My Location
+                    </>
+                  )}
+                </button>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -320,12 +405,14 @@ function HeatReport() {
                   </label>
                   <input
                     type="number"
+                    step="any"
                     value={form.latitude ?? ''}
                     onChange={(event) =>
                       updateForm({ latitude: event.target.value })
                     }
+                    onBlur={handleCoordsBlur}
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
-                    placeholder="24.8607"
+                    placeholder="e.g. 24.8607"
                   />
                 </div>
                 <div className="space-y-2">
@@ -335,15 +422,18 @@ function HeatReport() {
                   </label>
                   <input
                     type="number"
+                    step="any"
                     value={form.longitude ?? ''}
                     onChange={(event) =>
                       updateForm({ longitude: event.target.value })
                     }
+                    onBlur={handleCoordsBlur}
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
-                    placeholder="67.0011"
+                    placeholder="e.g. 67.0011"
                   />
                 </div>
               </div>
+
               {(geoStatus === 'loading' && !form.latitude) && (
                 <p className="text-sm text-slate-500 flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-green-500/30 border-t-green-600 rounded-full animate-spin" />
@@ -362,74 +452,41 @@ function HeatReport() {
                 </div>
               )}
 
-              <div className="flex justify-end mt-2">
-                <button
-                  type="button"
-                  onClick={handleGetLocation}
-                  disabled={isLocating || geoStatus === 'loading'}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isLocating ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-slate-500/30 border-t-slate-700 rounded-full animate-spin"></div>
-                      Getting location...
-                    </>
-                  ) : (
-                    <>
-                      <MapPin className="w-4 h-4" />
-                      Use My Location
-                    </>
-                  )}
-                </button>
-              </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                   <MapPin className="w-4 h-4 text-green-500" />
-                  Area name
+                  Area Name
                 </label>
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    type="text"
-                    value={form.areaName}
-                    onChange={(event) =>
-                      updateForm({ areaName: event.target.value })
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
-                    placeholder="Enter area name"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAutoDetect}
-                    disabled={isLocating}
-                    className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-green-600/25 transition-all hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500/20 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
-                  >
-                    {isLocating ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Detecting...
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="w-4 h-4" />
-                        Auto-detect
-                      </>
-                    )}
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={form.areaName ?? ''}
+                  onChange={(event) =>
+                    updateForm({ areaName: event.target.value })
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+                  placeholder="e.g. Saddar, Latifabad, Gulshan-e-Iqbal"
+                />
+                <p className="text-xs text-slate-400">
+                  Auto-populated with your exact area name, or type to customize.
+                </p>
               </div>
+
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                   <Clock className="w-4 h-4 text-green-500" />
-                  Observation time
+                  Observation Time
                 </label>
                 <input
                   type="datetime-local"
-                  value={form.observedAt}
+                  value={form.observedAt ?? ''}
                   onChange={(event) =>
                     updateForm({ observedAt: event.target.value })
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
                 />
+                <p className="text-xs text-slate-400">
+                  Auto-selected to current date and time. Click to adjust if reporting past observation.
+                </p>
               </div>
             </div>
           ) : null}
@@ -444,48 +501,61 @@ function HeatReport() {
                   Rate the heat intensity on a scale of 1 (mild) to 5 (extreme)
                 </p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-5">
-                {[1, 2, 3, 4, 5].map((severity) => {
-                  const severityColors = {
-                    1: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-                    2: 'bg-green-50 border-green-200 text-green-700',
-                    3: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-                    4: 'bg-green-50 border-green-200 text-green-700',
-                    5: 'bg-red-50 border-red-200 text-red-700',
-                  };
-                  const severityIcons = {
-                    1: '😌',
-                    2: '😐',
-                    3: '😰',
-                    4: '🥵',
-                    5: '🔥',
-                  };
+
+              <div className="grid grid-cols-5 gap-2.5 sm:gap-4">
+                {SEVERITY_LEVELS.map((item) => {
+                  const isSelected = form.severity === String(item.level);
                   return (
                     <button
-                      key={severity}
+                      key={item.level}
                       type="button"
-                      onClick={() => updateForm({ severity: String(severity) })}
-                      className={`relative rounded-xl border-2 p-4 text-center transition-all hover:scale-105 ${
-                        form.severity === String(severity)
-                          ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/25 ring-2 ring-green-500/20'
-                          : severityColors[severity]
+                      onClick={() => updateForm({ severity: String(item.level) })}
+                      className={`group relative flex flex-col items-center justify-between pt-4 pb-3 px-2 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${
+                        isSelected
+                          ? `${item.activeBorder} ${item.activeBg} -translate-y-0.5 shadow-sm`
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs hover:-translate-y-0.5'
                       }`}
                     >
-                      <div className="text-3xl mb-2">
-                        {severityIcons[severity]}
+                      {/* Top colored accent line */}
+                      <div
+                        className={`absolute top-0 inset-x-0 h-1 transition-all ${
+                          isSelected ? item.colorBar : 'bg-transparent group-hover:bg-slate-200'
+                        }`}
+                      />
+
+                      {/* Check badge when selected */}
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-slate-900 text-white flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 stroke-3" />
+                        </div>
+                      )}
+
+                      {/* Emoji Icon Container */}
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl mb-2 transition-transform duration-200 group-hover:scale-110 select-none ${
+                          isSelected ? item.activeTile : 'bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        {item.emoji}
                       </div>
-                      <div className="text-2xl font-bold">{severity}</div>
-                      <div className="text-xs font-semibold mt-1">
-                        {severity === 1
-                          ? 'Mild'
-                          : severity === 2
-                            ? 'Moderate'
-                            : severity === 3
-                              ? 'High'
-                              : severity === 4
-                                ? 'Severe'
-                                : 'Extreme'}
-                      </div>
+
+                      {/* Severity Number */}
+                      <span
+                        className={`text-xl sm:text-2xl font-black tracking-tight leading-none ${
+                          isSelected ? item.activeText : 'text-slate-900'
+                        }`}
+                      >
+                        {item.level}
+                      </span>
+
+                      {/* Severity Label */}
+                      <span
+                        className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                          isSelected ? item.activeText : 'text-slate-500'
+                        }`}
+                      >
+                        {item.label}
+                      </span>
                     </button>
                   );
                 })}
@@ -670,8 +740,14 @@ function HeatReport() {
                     </h4>
                   </div>
                   <div className="space-y-2">
-                    <p className="font-semibold text-slate-900">
-                      Level {form.severity || 'Not set'}
+                    <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                      <span>Level {form.severity || 'Not set'}</span>
+                      {form.severity &&
+                        SEVERITY_LEVELS.find((s) => String(s.level) === String(form.severity)) && (
+                          <span className="text-sm font-medium text-slate-600">
+                            · {SEVERITY_LEVELS.find((s) => String(s.level) === String(form.severity)).label} {SEVERITY_LEVELS.find((s) => String(s.level) === String(form.severity)).emoji}
+                          </span>
+                        )}
                     </p>
                   </div>
                 </div>
