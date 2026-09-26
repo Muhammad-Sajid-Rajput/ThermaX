@@ -28,7 +28,7 @@ const AppLayout = ({ children }) => {
     return <>{children}</>;
   }
   // All other routes: DashboardLayout (Navbar + padded main content)
-  // Includes: /dashboard, /insight, /reports, /report, /my-reports,
+  // Includes: /dashboard, /reports, /report, /my-reports,
   // /admin/*, /report/status, /permission/*, /unauthorized
   return <DashboardLayout>{children}</DashboardLayout>;
 };

@@ -13,7 +13,6 @@ import { useAuth } from '../../context/AuthContext';
 const getNavItems = (isAuthenticated) => {
   const items = [
     { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Insight', href: '/insight' },
     { name: 'Reports', href: '/reports' },
   ];
   // Only show My Reports when authenticated (per spec)

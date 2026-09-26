@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const query = {};
+    const query = { status: { $ne: 'rejected' } };
     if (req.query.city) query.city = req.query.city;
     const reports = await Report.find(query).select('latitude longitude severityLevel status').limit(1000);
     const heatmap = reports.map(r => ({

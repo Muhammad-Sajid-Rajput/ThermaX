@@ -356,9 +356,11 @@ const LeafletMapInner = ({
     const map = mapRef.current;
     if (map && map._mapPane && center) {
       map.stop();
-      map.setView(center, zoom, {
-        animate: false,
-      });
+      if (typeof map.flyTo === 'function') {
+        map.flyTo(center, zoom, { duration: 1.0 });
+      } else {
+        map.setView(center, zoom);
+      }
     }
   }, [center, zoom, resetTrigger]);
 
@@ -440,16 +442,16 @@ const LayerToggle = ({ layers, onChange }) => (
       <button
         key={key}
         onClick={() => onChange(key, !layers[key])}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors font-medium ${
           layers[key]
-            ? `${color} bg-slate-100 font-medium`
+            ? `${color} bg-slate-100`
             : 'text-slate-400 hover:text-slate-600'
         }`}
       >
         {layers[key] ? (
-          <Eye className="w-3 h-3" />
+          <Eye className="w-3.5 h-3.5" />
         ) : (
-          <EyeOff className="w-3 h-3" />
+          <EyeOff className="w-3.5 h-3.5" />
         )}
         {label}
       </button>
@@ -468,8 +470,12 @@ const MapSection = ({
   minPts = 2,
   hideControls = false,
   title = null,
+  showHeatmap = true,
   showHotspots = true,
   showMarkers = true,
+  initialCenter = null,
+  initialZoom = null,
+  disableLegend = false,
 }) => {
   const { isAuthenticated } = useAuth();
   const { lat, lng, cityName, accuracy, status: locationStatus, requestLocation } = useUserLocationStore();
@@ -481,27 +487,28 @@ const MapSection = ({
 
   const mapCenter = useMemo(() => {
     if (centerOverride) return centerOverride;
+    if (initialCenter) return initialCenter;
     if (isUserLocated) return [lat, lng];
     return PAKISTAN_CENTER;
-  }, [centerOverride, isUserLocated, lat, lng]);
+  }, [centerOverride, initialCenter, isUserLocated, lat, lng]);
 
   const mapZoom = useMemo(() => {
     if (zoomOverride) return zoomOverride;
+    if (initialZoom) return initialZoom;
     if (isUserLocated) return 12;
     return PAKISTAN_ZOOM;
-  }, [zoomOverride, isUserLocated]);
+  }, [zoomOverride, initialZoom, isUserLocated]);
 
   const displayTitle = useMemo(() => {
-    if (title && title !== 'Urban Heat Map — Karachi') return title;
-    if (isUserLocated) {
-      return `Urban Heat Map — ${cityName || 'Your Location'}`;
-    }
-    return 'Urban Heat Map — Pakistan';
-  }, [title, isUserLocated, cityName]);
+    if (title) return title;
+    return 'Urban Heat Map — Pakistan (All)';
+  }, [title]);
 
   const [showLegend, setShowLegend] = useState(true);
   const [layers, setLayers] = useState({
-    heat: hideControls ? focus === 'heatmap' : focus === 'heatmap' || !focus,
+    heat: hideControls
+      ? focus === 'heatmap'
+      : showHeatmap && (focus === 'heatmap' || !focus),
     hotspots: hideControls
       ? focus === 'hotspots'
       : showHotspots && (focus === 'hotspots' || !focus),
@@ -509,6 +516,23 @@ const MapSection = ({
       ? !focus || focus === 'reports'
       : showMarkers && !focus,
   });
+
+  useEffect(() => {
+    setLayers((prev) => ({
+      ...prev,
+      ...(showHeatmap !== undefined ? { heat: showHeatmap } : {}),
+      ...(showHotspots !== undefined ? { hotspots: showHotspots } : {}),
+      ...(showMarkers !== undefined ? { reports: showMarkers } : {}),
+    }));
+  }, [showHeatmap, showHotspots, showMarkers]);
+
+  useEffect(() => {
+    if (initialCenter) {
+      setCenterOverride(null);
+      setZoomOverride(null);
+    }
+  }, [initialCenter, initialZoom]);
+
   const mapCardRef = useRef(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen({
     targetRef: mapCardRef,
@@ -588,14 +612,14 @@ const MapSection = ({
       <CardHeader className="pb-3 shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Map className="w-4 h-4 text-green-600" />
+            <Map className="w-5 h-5 text-emerald-600" />
             {displayTitle}
           </CardTitle>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleLocateMe}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all ${
                 isUserLocated
                   ? 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
                   : 'text-slate-700 bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
@@ -605,7 +629,7 @@ const MapSection = ({
               <Navigation className={`w-3.5 h-3.5 ${isUserLocated ? 'text-blue-600 fill-blue-600' : 'text-slate-500'}`} />
               {isUserLocated ? cityName || 'My Location' : 'Locate Me'}
             </button>
-            {!hideControls && (
+            {!hideControls && !disableLegend && (
               <button
                 onClick={() => setShowLegend((v) => !v)}
                 className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors"
@@ -621,7 +645,7 @@ const MapSection = ({
 
             <button
               onClick={toggleFullscreen}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors ml-2"
+              className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium"
             >
               {isFullscreen ? (
                 <Minimize className="w-3.5 h-3.5" />
@@ -633,9 +657,9 @@ const MapSection = ({
             {hideControls && (
               <button
                 onClick={handleResetView}
-                className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600 transition-colors ml-2"
+                className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium"
               >
-                <RotateCcw className="w-3 h-3" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 Reset View
               </button>
             )}
@@ -644,20 +668,20 @@ const MapSection = ({
 
         {/* Layer toggles & Map Controls */}
         {!hideControls && (
-          <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+          <div className="flex items-center justify-between mt-2.5 flex-wrap gap-2">
             <LayerToggle layers={layers} onChange={handleLayerToggle} />
             <button
               onClick={handleResetView}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-green-600 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
               Reset View
             </button>
           </div>
         )}
 
         {/* Legends */}
-        {(showLegend || hideControls) && (
+        {!disableLegend && (showLegend || hideControls) && (
           <div
             className={`flex flex-wrap items-center gap-x-6 gap-y-2 ${hideControls ? 'mt-1' : 'mt-2.5 pt-2 border-t border-slate-100'}`}
           >

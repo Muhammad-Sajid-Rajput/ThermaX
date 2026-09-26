@@ -1,33 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminPanel, StatusBadge } from '../../components/admin';
 import { toast } from 'react-hot-toast';
 import {
   Users,
   Search,
-  Filter,
   Shield,
   UserCheck,
   UserX,
   Eye,
-  MoreHorizontal,
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
   Mail,
   Calendar,
   FileText,
-  Star,
   Ban,
   CheckCircle,
   XCircle,
   UserCog,
+  ChevronLeft,
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   fetchUsers,
   updateUserStatus,
   updateUserRole,
+  formatTimestamp,
 } from '../../services/api';
+
 function UserManagement() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
@@ -35,355 +35,317 @@ function UserManagement() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDetailModal, setShowDetailModal] = useState(null);
+  const [actionInProgress, setActionInProgress] = useState(false);
+
   // Filters
   const [filters, setFilters] = useState({
     role: 'all',
     status: 'all',
     search: '',
   });
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  useEffect(() => {
-    loadUsers();
-  }, [filters.role, filters.status]);
-  const loadUsers = async () => {
+
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchUsers();
       const normalized = (data || []).map((u) => ({
         ...u,
-        status: u.isActive ? 'active' : 'suspended',
-        reportsSubmitted: u.reportsSubmitted || 0,
-        reputation: u.reputation || 0,
-        lastActive: u.lastActive || u.createdAt,
+        id: u._id || u.id,
+        name: u.fullName || u.name || 'ThermaX User',
+        role: (u.role || 'USER').toUpperCase(),
+        status: u.isActive === false ? 'suspended' : 'active',
         joinDate: u.createdAt,
+        lastActive: u.updatedAt || u.createdAt,
       }));
       setUsers(normalized);
       applyFilters(normalized);
     } catch (err) {
-      toast.error('Failed to load users');
-      setUsers(mockUsers);
-      applyFilters(mockUsers);
+      console.error('Failed to load users:', err);
+      toast.error('Failed to fetch real user directory.');
+      setUsers([]);
+      setFilteredUsers([]);
     } finally {
       setLoading(false);
     }
-  };
-  const mockUsers = [
-    {
-      id: 1,
-      name: 'Ahmed Khan',
-      email: 'ahmed@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 12,
-      reputation: 4.5,
-      lastActive: new Date().toISOString(),
-      joinDate: '2025-01-15',
+  }, []);
+
+  const applyFilters = useCallback(
+    (data = users) => {
+      let result = [...data];
+
+      if (filters.role !== 'all') {
+        result = result.filter(
+          (u) => (u.role || '').toUpperCase() === filters.role.toUpperCase()
+        );
+      }
+
+      if (filters.status !== 'all') {
+        result = result.filter((u) => u.status === filters.status);
+      }
+
+      if (filters.search.trim()) {
+        const query = filters.search.toLowerCase().trim();
+        result = result.filter(
+          (u) =>
+            u.name?.toLowerCase().includes(query) ||
+            u.email?.toLowerCase().includes(query) ||
+            u.id?.toLowerCase().includes(query)
+        );
+      }
+
+      setFilteredUsers(result);
+      setCurrentPage(1);
     },
-    {
-      id: 2,
-      name: 'Fatima Ali',
-      email: 'fatima@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 8,
-      reputation: 4.2,
-      lastActive: new Date(Date.now() - 86400000).toISOString(),
-      joinDate: '2025-02-20',
-    },
-    {
-      id: 3,
-      name: 'Omar Hassan',
-      email: 'omar@email.com',
-      role: 'USER',
-      status: 'suspended',
-      reportsSubmitted: 3,
-      reputation: 2.1,
-      lastActive: new Date(Date.now() - 604800000).toISOString(),
-      joinDate: '2025-03-10',
-    },
-    {
-      id: 4,
-      name: 'Zara Ahmed',
-      email: 'zara@email.com',
-      role: 'ADMIN',
-      status: 'active',
-      reportsSubmitted: 25,
-      reputation: 4.8,
-      lastActive: new Date().toISOString(),
-      joinDate: '2024-12-01',
-    },
-    {
-      id: 5,
-      name: 'Bilal Raza',
-      email: 'bilal@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 6,
-      reputation: 3.8,
-      lastActive: new Date(Date.now() - 172800000).toISOString(),
-      joinDate: '2025-04-05',
-    },
-    {
-      id: 6,
-      name: 'Sana Malik',
-      email: 'sana@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 15,
-      reputation: 4.6,
-      lastActive: new Date(Date.now() - 3600000).toISOString(),
-      joinDate: '2025-01-28',
-    },
-    {
-      id: 7,
-      name: 'Hassan Ali',
-      email: 'hassan@email.com',
-      role: 'USER',
-      status: 'inactive',
-      reportsSubmitted: 2,
-      reputation: 3.0,
-      lastActive: new Date(Date.now() - 2592000000).toISOString(),
-      joinDate: '2025-05-12',
-    },
-    {
-      id: 8,
-      name: 'Ayesha Khan',
-      email: 'ayesha@email.com',
-      role: 'USER',
-      status: 'active',
-      reportsSubmitted: 19,
-      reputation: 4.4,
-      lastActive: new Date(Date.now() - 86400000).toISOString(),
-      joinDate: '2025-02-14',
-    },
-  ];
-  const applyFilters = (data) => {
-    let filtered = data;
-    if (filters.role !== 'all') {
-      filtered = filtered.filter((u) => u.role === filters.role);
-    }
-    if (filters.status !== 'all') {
-      filtered = filtered.filter((u) => u.status === filters.status);
-    }
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(
-        (u) =>
-          u.name?.toLowerCase().includes(searchLower) ||
-          u.email?.toLowerCase().includes(searchLower)
-      );
-    }
-    setFilteredUsers(filtered);
-    setCurrentPage(1);
-  };
+    [users, filters]
+  );
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
   useEffect(() => {
     applyFilters(users);
-  }, [filters.search]);
-  const handleUserAction = async (userId, action) => {
+  }, [filters, applyFilters, users]);
+
+  // Actions
+  const handleUserStatusToggle = async (userId, targetActive) => {
     try {
-      const user = users.find((u) => u.id === userId || u._id === userId);
-      if (action === 'suspend' || action === 'activate') {
-        await updateUserStatus(userId, action === 'activate');
-        toast.success(
-          `User ${action === 'activate' ? 'activated' : 'suspended'} successfully`
-        );
-      } else if (action === 'makeAdmin') {
-        await updateUserRole(userId, 'ADMIN');
-        toast.success('User promoted to admin');
+      setActionInProgress(true);
+      await updateUserStatus(userId, targetActive);
+      toast.success(
+        `User ${targetActive ? 'activated' : 'suspended'} successfully.`
+      );
+      await loadUsers();
+      if (showDetailModal && (showDetailModal.id === userId || showDetailModal._id === userId)) {
+        setShowDetailModal((prev) => ({
+          ...prev,
+          status: targetActive ? 'active' : 'suspended',
+          isActive: targetActive,
+        }));
       }
-      loadUsers();
     } catch (err) {
-      toast.error('Action failed. Please try again.');
+      toast.error(err?.response?.data?.message || 'Failed to update user status.');
+    } finally {
+      setActionInProgress(false);
     }
   };
-  const handleBulkAction = async (action) => {
+
+  const handleUserRoleChange = async (userId, targetRole) => {
+    try {
+      setActionInProgress(true);
+      await updateUserRole(userId, targetRole);
+      toast.success(`User role changed to ${targetRole}.`);
+      await loadUsers();
+      if (showDetailModal && (showDetailModal.id === userId || showDetailModal._id === userId)) {
+        setShowDetailModal((prev) => ({
+          ...prev,
+          role: targetRole,
+        }));
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to change user role.');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleBulkAction = async (targetActive) => {
     if (selectedUsers.length === 0) return;
     try {
+      setActionInProgress(true);
       await Promise.all(
-        selectedUsers.map((id) => updateUserStatus(id, action === 'activate'))
+        selectedUsers.map((id) => updateUserStatus(id, targetActive))
       );
       toast.success(
-        `${selectedUsers.length} users ${action === 'activate' ? 'activated' : 'suspended'}`
+        `${selectedUsers.length} user(s) ${targetActive ? 'activated' : 'suspended'}.`
       );
       setSelectedUsers([]);
-      loadUsers();
+      await loadUsers();
     } catch (err) {
-      toast.error('Bulk action failed');
+      toast.error('Bulk update failed.');
+    } finally {
+      setActionInProgress(false);
     }
   };
+
   const toggleUserSelection = (userId) => {
     setSelectedUsers((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
   };
+
   const toggleAllSelection = () => {
     if (selectedUsers.length === currentPageItems.length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(currentPageItems.map((u) => u.id || u._id));
+      setSelectedUsers(currentPageItems.map((u) => u.id));
     }
   };
+
   // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
   const currentPageItems = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
   const stats = {
     total: users.length,
     active: users.filter((u) => u.status === 'active').length,
     suspended: users.filter((u) => u.status === 'suspended').length,
-    flagged: users.filter((u) => u.reputation < 3).length,
+    admins: users.filter((u) => u.role === 'ADMIN').length,
   };
+
   const getRoleBadge = (role) => {
     if (role === 'ADMIN') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          <Shield className="w-3 h-3" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
+          <Shield className="w-3 h-3 text-purple-600" />
           Admin
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-        <UserCheck className="w-3 h-3" />
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+        <UserCheck className="w-3 h-3 text-slate-500" />
         User
       </span>
     );
   };
-  const getLastActiveText = (lastActive) => {
-    const now = new Date();
-    const last = new Date(lastActive);
-    const diff = now - last;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days} days ago`;
-    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
-    return `${Math.floor(days / 30)} months ago`;
-  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-500">
-            User control panel and administration
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-xl font-bold text-slate-900">User Management</h1>
+          </div>
+          <p className="text-xs text-slate-500">
+            Real MongoDB accounts, access roles, and suspension governance
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadUsers}
-            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+
+        <button
+          onClick={loadUsers}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-xs font-semibold shadow-xs disabled:opacity-50 self-start sm:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+          <span>Refresh Users</span>
+        </button>
       </div>
-      {/* Stats */}
+
+      {/* Real Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-          <p className="text-xs text-slate-500 uppercase tracking-wider">
+          <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
             Total Users
           </p>
         </div>
-        <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
-          <p className="text-2xl font-bold text-emerald-400">{stats.active}</p>
-          <p className="text-xs text-emerald-500/70 uppercase tracking-wider">
-            Active
+        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 shadow-xs">
+          <p className="text-2xl font-bold text-emerald-700">{stats.active}</p>
+          <p className="text-[11px] text-emerald-700 font-semibold uppercase tracking-wider mt-0.5">
+            Active Accounts
           </p>
         </div>
-        <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/20">
-          <p className="text-2xl font-bold text-red-400">{stats.suspended}</p>
-          <p className="text-xs text-red-500/70 uppercase tracking-wider">
+        <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 shadow-xs">
+          <p className="text-2xl font-bold text-purple-700">{stats.admins}</p>
+          <p className="text-[11px] text-purple-700 font-semibold uppercase tracking-wider mt-0.5">
+            Administrators
+          </p>
+        </div>
+        <div className="bg-red-50 rounded-xl p-4 border border-red-100 shadow-xs">
+          <p className="text-2xl font-bold text-red-700">{stats.suspended}</p>
+          <p className="text-[11px] text-red-700 font-semibold uppercase tracking-wider mt-0.5">
             Suspended
           </p>
         </div>
-        <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/20">
-          <p className="text-2xl font-bold text-amber-400">{stats.flagged}</p>
-          <p className="text-xs text-amber-500/70 uppercase tracking-wider">
-            Flagged
-          </p>
-        </div>
       </div>
+
       {/* Filters & Bulk Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder="Search by name or email..."
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
               }
-              className="pl-10 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-green-600 transition-colors w-64"
+              className="pl-9 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 transition-colors w-64"
             />
           </div>
+
           {/* Role Filter */}
           <select
             value={filters.role}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, role: e.target.value }))
             }
-            className="px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-green-600 transition-colors"
+            className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600"
           >
             <option value="all">All Roles</option>
-            <option value="USER">User</option>
-            <option value="ADMIN">Admin</option>
+            <option value="USER">Citizens (USER)</option>
+            <option value="ADMIN">Admins (ADMIN)</option>
           </select>
+
           {/* Status Filter */}
           <select
             value={filters.status}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, status: e.target.value }))
             }
-            className="px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-green-600 transition-colors"
+            className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600"
           >
             <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-            <option value="inactive">Inactive</option>
+            <option value="active">Active Only</option>
+            <option value="suspended">Suspended Only</option>
           </select>
         </div>
+
         {/* Bulk Actions */}
         {selectedUsers.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">
+            <span className="text-xs text-slate-500 font-medium">
               {selectedUsers.length} selected
             </span>
             <button
-              onClick={() => handleBulkAction('activate')}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              onClick={() => handleBulkAction(true)}
+              disabled={actionInProgress}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
             >
-              <UserCheck className="w-4 h-4" />
-              Activate
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Activate</span>
             </button>
             <button
-              onClick={() => handleBulkAction('suspend')}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+              onClick={() => handleBulkAction(false)}
+              disabled={actionInProgress}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
-              <UserX className="w-4 h-4" />
-              Suspend
+              <UserX className="w-3.5 h-3.5" />
+              <span>Suspend</span>
             </button>
           </div>
         )}
       </div>
+
       {/* Users Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="py-4 px-4 text-left">
+              <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+                <th className="py-3 px-4 w-10">
                   <input
                     type="checkbox"
                     checked={
@@ -391,329 +353,252 @@ function UserManagement() {
                       currentPageItems.length > 0
                     }
                     onChange={toggleAllSelection}
-                    className="rounded border-slate-300 bg-white text-green-600 focus:ring-green-600"
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
                   />
                 </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  User
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Role
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Status
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Reports
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Reputation
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Last Active
-                </th>
-                <th className="py-4 px-4 text-left text-sm font-semibold text-slate-500">
-                  Actions
-                </th>
+                <th className="py-3 px-4">User</th>
+                <th className="py-3 px-4">Role</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Joined Date</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 [...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td colSpan={8} className="py-4 px-4">
-                      <div className="h-12 bg-slate-50 rounded animate-pulse"></div>
+                  <tr key={i} className="animate-pulse">
+                    <td colSpan={6} className="py-4 px-4">
+                      <div className="h-6 bg-slate-100 rounded"></div>
                     </td>
                   </tr>
                 ))
               ) : currentPageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
-                    <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500 font-bold text-lg">
-                      No users found
-                    </p>
-                    <p className="text-sm text-slate-400 font-medium">
-                      Try adjusting your filters
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                    <p className="font-semibold text-slate-600 text-sm">No users found</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Try resetting your search or role filters.
                     </p>
                   </td>
                 </tr>
               ) : (
-                currentPageItems.map((user) => (
-                  <tr
-                    key={user.id || user._id}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="py-4 px-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedUsers.includes(user.id || user._id)}
-                        onChange={() =>
-                          toggleUserSelection(user.id || user._id)
-                        }
-                        className="rounded border-slate-300 bg-white text-green-600 focus:ring-green-600"
-                      />
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center shadow-sm">
-                          <span className="text-white font-semibold">
-                            {user.name
-                              ?.split('')
-                              .map((n) => n[0])
-                              .join('') || 'U'}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900">
-                            {user.name}
-                          </p>
-                          <p className="text-sm text-slate-500">{user.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">{getRoleBadge(user.role)}</td>
-                    <td className="py-4 px-4">
-                      <StatusBadge
-                        status={user.status}
-                        size="sm"
-                        pulse={user.status === 'active'}
-                      />
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-slate-400" />
-                        <span className="text-slate-700 font-bold">
-                          {user.reportsSubmitted}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-1">
-                        <Star
-                          className={`w-4 h-4 ${user.reputation >= 4 ? 'text-yellow-400' : user.reputation >= 3 ? 'text-gray-400' : 'text-red-400'}`}
+                currentPageItems.map((u) => {
+                  const isCurrentUser = false;
+                  return (
+                    <tr
+                      key={u.id}
+                      className="hover:bg-slate-50/80 transition-colors group"
+                    >
+                      <td className="py-3.5 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(u.id)}
+                          onChange={() => toggleUserSelection(u.id)}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
                         />
-                        <span className="text-slate-900 font-bold">
-                          {user.reputation.toFixed(1)}
-                        </span>
-                        <span className="text-gray-500 text-xs">/5.0</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-slate-500 font-medium">
-                        {getLastActiveText(user.lastActive)}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setShowDetailModal(user)}
-                          className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
-                          title="View Profile"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {user.status === 'active' ? (
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                            {u.name?.charAt(0)?.toUpperCase() || 'U'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 truncate">
+                              {u.name}
+                            </p>
+                            <p className="text-slate-500 font-mono text-[11px] truncate">
+                              {u.email}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">{getRoleBadge(u.role)}</td>
+
+                      <td className="py-3.5 px-4">
+                        <StatusBadge
+                          status={u.status}
+                          size="sm"
+                          pulse={u.status === 'active'}
+                        />
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-500">
+                        {formatTimestamp(u.joinDate)}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="inline-flex items-center gap-1.5">
                           <button
-                            onClick={() =>
-                              handleUserAction(user.id || user._id, 'suspend')
-                            }
-                            className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                            title="Suspend User"
+                            onClick={() => setShowDetailModal(u)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                            title="View Account Details"
                           >
-                            <Ban className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleUserAction(user.id || user._id, 'activate')
-                            }
-                            className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                            title="Activate User"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+
+                          {u.status === 'active' ? (
+                            <button
+                              onClick={() => handleUserStatusToggle(u.id, false)}
+                              disabled={actionInProgress}
+                              className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-colors disabled:opacity-50"
+                              title="Suspend User"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleUserStatusToggle(u.id, true)}
+                              disabled={actionInProgress}
+                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors disabled:opacity-50"
+                              title="Activate User"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
         {/* Pagination */}
-        <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-slate-50/30">
-          <p className="text-sm text-slate-500 font-medium">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
-            {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of{' '}
-            {filteredUsers.length} users
+        <div className="flex items-center justify-between p-3.5 border-t border-slate-200 bg-slate-50/50">
+          <p className="text-xs text-slate-500 font-medium">
+            Showing {filteredUsers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
+            {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
           </p>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-sm text-slate-500 font-medium">
+            <span className="text-xs text-slate-600 font-semibold px-2">
               Page {currentPage} of {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
-      {/* Detail Modal */}
+
+      {/* User Details & Governance Modal */}
       {showDetailModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center shadow-md">
-                  <span className="text-white font-bold text-lg">
-                    {showDetailModal.name
-                      ?.split('')
-                      .map((n) => n[0])
-                      .join('')}
-                  </span>
+                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                  {showDetailModal.name?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900">
+                  <h2 className="text-sm font-bold text-slate-900">
                     {showDetailModal.name}
                   </h2>
-                  <p className="text-slate-500">{showDetailModal.email}</p>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {showDetailModal.email}
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowDetailModal(null)}
-                className="p-2 rounded-lg bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 space-y-6">
-              {/* Status & Role */}
-              <div className="flex items-center gap-4">
-                <StatusBadge
-                  status={showDetailModal.status}
-                  pulse={showDetailModal.status === 'active'}
-                />
-                {getRoleBadge(showDetailModal.role)}
-              </div>
-              {/* Stats Grid */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-100">
-                  <FileText className="w-5 h-5 text-green-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-slate-900">
-                    {showDetailModal.reportsSubmitted}
-                  </p>
-                  <p className="text-xs text-slate-500">Reports</p>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-semibold uppercase">Role</p>
+                  <div className="mt-1">{getRoleBadge(showDetailModal.role)}</div>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-100">
-                  <Star className="w-5 h-5 text-yellow-500 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-slate-900">
-                    {showDetailModal.reputation.toFixed(1)}
-                  </p>
-                  <p className="text-xs text-slate-500">Reputation</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-100">
-                  <Calendar className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-sm font-bold text-slate-900">
-                    {new Date(showDetailModal.joinDate).toLocaleDateString()}
-                  </p>
-                  <p className="text-xs text-slate-500">Joined</p>
+                <div className="text-right">
+                  <p className="text-[11px] text-slate-400 font-semibold uppercase">Status</p>
+                  <div className="mt-1">
+                    <StatusBadge
+                      status={showDetailModal.status}
+                      size="sm"
+                      pulse={showDetailModal.status === 'active'}
+                    />
+                  </div>
                 </div>
               </div>
-              {/* Info */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2 text-slate-500 font-medium">
-                    <Mail className="w-4 h-4" />
-                    <span>Email</span>
-                  </div>
-                  <span className="text-slate-900 font-semibold">
-                    {showDetailModal.email}
-                  </span>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Database ID:</span>
+                  <span className="font-mono text-slate-700">{showDetailModal.id}</span>
                 </div>
-                <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2 text-slate-500 font-medium">
-                    <UserCog className="w-4 h-4" />
-                    <span>Role</span>
-                  </div>
-                  <span className="text-slate-900 font-semibold">
-                    {showDetailModal.role}
-                  </span>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Registered:</span>
+                  <span className="text-slate-700">{formatTimestamp(showDetailModal.joinDate)}</span>
                 </div>
-                <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2 text-slate-500 font-medium">
-                    <Shield className="w-4 h-4" />
-                    <span>Status</span>
-                  </div>
-                  <span className="text-slate-900 font-semibold capitalize">
-                    {showDetailModal.status}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-2 text-slate-500 font-medium">
-                    <Calendar className="w-4 h-4" />
-                    <span>Last Active</span>
-                  </div>
-                  <span className="text-slate-900 font-semibold">
-                    {getLastActiveText(showDetailModal.lastActive)}
-                  </span>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-slate-500">Account Health:</span>
+                  <span className="text-emerald-700 font-semibold">Active & Validated</span>
                 </div>
               </div>
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
-                {showDetailModal.role !== 'ADMIN' && (
+
+              {/* Governance Actions */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Governance Controls
+                </p>
+
+                {showDetailModal.role === 'ADMIN' ? (
                   <button
-                    onClick={() => {
-                      handleUserAction(
-                        showDetailModal.id || showDetailModal._id,
-                        'makeAdmin'
-                      );
-                      setShowDetailModal(null);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-purple-500 text-white font-medium hover:bg-purple-600 transition-colors"
+                    onClick={() => handleUserRoleChange(showDetailModal.id, 'USER')}
+                    disabled={actionInProgress}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-semibold hover:bg-amber-100 transition-colors disabled:opacity-50"
                   >
-                    <Shield className="w-5 h-5" />
-                    Make Admin
-                  </button>
-                )}
-                {showDetailModal.status === 'active' ? (
-                  <button
-                    onClick={() => {
-                      handleUserAction(
-                        showDetailModal.id || showDetailModal._id,
-                        'suspend'
-                      );
-                      setShowDetailModal(null);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
-                  >
-                    <Ban className="w-5 h-5" />
-                    Suspend User
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Demote to Citizen User</span>
                   </button>
                 ) : (
                   <button
-                    onClick={() => {
-                      handleUserAction(
-                        showDetailModal.id || showDetailModal._id,
-                        'activate'
-                      );
-                      setShowDetailModal(null);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors shadow-sm"
+                    onClick={() => handleUserRoleChange(showDetailModal.id, 'ADMIN')}
+                    disabled={actionInProgress}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 font-semibold hover:bg-purple-100 transition-colors disabled:opacity-50"
                   >
-                    <CheckCircle className="w-5 h-5" />
-                    Activate User
+                    <Shield className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Promote to Administrator</span>
+                  </button>
+                )}
+
+                {showDetailModal.status === 'active' ? (
+                  <button
+                    onClick={() => handleUserStatusToggle(showDetailModal.id, false)}
+                    disabled={actionInProgress}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Suspend Account</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleUserStatusToggle(showDetailModal.id, true)}
+                    disabled={actionInProgress}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Re-activate Account</span>
                   </button>
                 )}
               </div>
@@ -724,4 +609,5 @@ function UserManagement() {
     </div>
   );
 }
+
 export default UserManagement;

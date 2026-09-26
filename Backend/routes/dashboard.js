@@ -45,14 +45,4 @@ router.get('/snapshot', optionalAuth, async (req, res) => {
   }
 });
 
-router.get('/insight', optionalAuth, (req, res) => {
-  res.json({
-    explanation: {
-      clustering: 'DBSCAN groups nearby heat reports and satellite anomalies into dense neighborhoods.',
-      noise: 'Points labeled -1 are treated as noise, filtered from cluster analysis.',
-    },
-    lastUpdated: new Date().toISOString(),
-  });
-});
-
 export { router as dashboardRoutes };

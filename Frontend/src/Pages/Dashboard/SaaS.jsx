@@ -238,8 +238,10 @@ const SaaSDashboard = () => {
                   <MapSection
                     heatmap={snapshot?.heatmap ?? []}
                     reports={snapshot?.reports ?? []}
+                    title="Urban Heat Map — Pakistan (All)"
                     showHotspots={displayPrefs.showHotspots}
                     showMarkers={displayPrefs.showMarkers}
+                    disableLegend={true}
                   />
                 </div>
                 {/* Recommendations panel */}

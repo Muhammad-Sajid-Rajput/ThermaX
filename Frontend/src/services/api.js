@@ -166,14 +166,6 @@ export async function fetchDashboard(filters = {}) {
 }
 export const fetchDashboardSnapshot = fetchDashboard;
 
-export async function fetchInsightSnapshot(filters = {}) {
-  const response = await api.get('/api/dashboard/insight', { params: filters });
-  return {
-    ...response.data,
-    source: 'api',
-  };
-}
-
 export async function fetchAdminStats() {
   const response = await api.get('/api/dashboard/snapshot');
   return response.data;

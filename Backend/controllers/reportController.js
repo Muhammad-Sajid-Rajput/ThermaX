@@ -32,12 +32,31 @@ let mockReports = [
 
 export const getReports = async (req, res) => {
   try {
+    const { status, severity, limit, area } = req.query;
+    const filter = {};
+    if (status && status !== 'all') {
+      filter.status = status.toLowerCase();
+    } else if (!req.user || req.user.role !== 'ADMIN') {
+      filter.status = { $ne: 'rejected' };
+    }
+    if (severity && severity !== 'all') {
+      filter.severityLevel = parseInt(severity, 10);
+    }
+    if (area && area !== 'all') {
+      filter.areaName = { $regex: area, $options: 'i' };
+    }
+
+    let query = Report.find(filter).populate('user', 'fullName email').sort({ createdAt: -1 });
+    if (limit) {
+      query = query.limit(parseInt(limit, 10));
+    }
+
     let reports;
     try {
-      reports = await Report.find().sort({ createdAt: -1 });
+      reports = await query;
     } catch (dbError) {
       console.log('DB unavailable, using mock reports');
-      reports = mockReports;
+      reports = mockReports.filter((r) => !status || status === 'all' || r.status === status);
     }
 
     res.json({
@@ -203,6 +222,17 @@ export const updateReportStatus = async (req, res) => {
         { new: true }
       );
       if (!report) return res.status(404).json({ error: 'Report not found' });
+
+      if (req.user) {
+        logAuditEvent({
+          action: 'REPORT_MODERATE',
+          performedBy: req.user._id,
+          targetType: 'Report',
+          targetId: report._id,
+          details: { status: report.status, area: report.areaName },
+        }).catch((err) => console.error('Audit log error:', err));
+      }
+
       res.json({ message: 'Report status updated', report });
     } catch (dbError) {
       const index = mockReports.findIndex((r) => r._id === id || r.id === id);

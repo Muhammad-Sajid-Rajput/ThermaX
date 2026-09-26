@@ -42,7 +42,7 @@ router.get('/audit-logs', authorizeAdmin, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const AuditLog = (await import('../models/AuditLog.js')).default;
-    const logs = await AuditLog.find().sort({ timestamp: -1 }).limit(limit);
+    const logs = await AuditLog.find().populate('performedBy', 'fullName email').sort({ timestamp: -1 }).limit(limit);
     res.json({ logs, count: logs.length });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch audit logs', message: error.message });

@@ -6,7 +6,6 @@ export {
   fetchReports,
   fetchMyReports,
   fetchReportsCenter,
-  fetchInsightSnapshot,
   submitHeatReport,
   generateMitigationReport,
   formatTimestamp,

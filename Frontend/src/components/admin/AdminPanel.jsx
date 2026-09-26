@@ -31,29 +31,33 @@ ${className}`}
       {/* Header */}
       <div
         className={`
-flex items-center justify-between px-6 py-4
+flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4
 border-b border-slate-100 ${headerClassName}`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           {Icon && (
-            <div className={`p-2 rounded-lg ${iconConfig}`}>
+            <div className={`p-2 rounded-lg shrink-0 ${iconConfig}`}>
               <Icon className="w-5 h-5" />
             </div>
           )}
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900 leading-tight truncate">
+              {title}
+            </h3>
             {subtitle && (
-              <p className="text-sm text-slate-500 font-medium">{subtitle}</p>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mt-0.5">
+                {subtitle}
+              </p>
             )}
           </div>
         </div>
         {action && (
           <button
             onClick={onAction}
-            className="flex items-center gap-1 text-sm font-medium text-green-600 hover:text-green-700 transition-colors group"
+            className="shrink-0 whitespace-nowrap inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors group"
           >
-            {actionLabel || 'View All'}
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            <span>{actionLabel || 'View All'}</span>
+            <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:translate-x-0.5 transition-transform" />
           </button>
         )}
       </div>

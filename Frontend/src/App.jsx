@@ -8,7 +8,6 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import LandingPage from './Pages/Landing/LandingPage';
 import AuthPage from './Pages/Auth/AuthPage';
 import SaaS from './Pages/Dashboard/SaaS';
-import InsightPage from './Pages/Insight/InsightPage';
 import HeatReportPage from './Pages/HeatReport/HeatReportPage';
 import MyReportsPage from './Pages/Reports/MyReportsPage';
 import ReportsPage from './Pages/Reports/ReportsPage';
@@ -23,8 +22,6 @@ import UserManagement from './Pages/Admin/UserManagement';
 import ReportManagement from './Pages/Admin/ReportManagement';
 import HeatmapControl from './Pages/Admin/HeatmapControl';
 import Analytics from './Pages/Admin/Analytics';
-import AlertSystem from './Pages/Admin/AlertSystem';
-import SystemSettings from './Pages/Admin/SystemSettings';
 
 // Admin Routes Wrapper - Uses AdminLayout
 function AdminRoutes() {
@@ -37,8 +34,6 @@ function AdminRoutes() {
           <Route path="reports" element={<ReportManagement />} />
           <Route path="heatmap" element={<HeatmapControl />} />
           <Route path="analytics" element={<Analytics />} />
-          <Route path="alerts" element={<AlertSystem />} />
-          <Route path="settings" element={<SystemSettings />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </AdminLayout>
@@ -66,7 +61,7 @@ function App() {
 
                 {/* Public Dashboard Routes (no login required) */}
                 <Route path="/dashboard" element={<SaaS />} />
-                <Route path="/insight" element={<InsightPage />} />
+                <Route path="/insight" element={<Navigate to="/dashboard" replace />} />
 
                 {/* Public Reports Route */}
                 <Route path="/reports" element={<ReportsPage />} />
