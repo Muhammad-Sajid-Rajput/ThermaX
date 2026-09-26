@@ -203,11 +203,10 @@ const SaaSDashboard = () => {
             <button
               key={view.id}
               onClick={() => setCurrentView(view.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
                   ? 'bg-green-600 text-white shadow-md'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4" />
               {view.label}
@@ -216,7 +215,7 @@ const SaaSDashboard = () => {
         })}
       </div>
 
-            {/* ── Loading ────────────────────────────────────────────────────── */}
+      {/* ── Loading ────────────────────────────────────────────────────── */}
       {loading ? (
         <LoadingSkeleton />
       ) : (
@@ -238,7 +237,7 @@ const SaaSDashboard = () => {
                   <MapSection
                     heatmap={snapshot?.heatmap ?? []}
                     reports={snapshot?.reports ?? []}
-                    title="Urban Heat Map — Pakistan (All)"
+                    title="Urban Heat Map"
                     showHotspots={displayPrefs.showHotspots}
                     showMarkers={displayPrefs.showMarkers}
                     disableLegend={true}

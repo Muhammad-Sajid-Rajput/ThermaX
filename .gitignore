@@ -129,6 +129,10 @@ api-keys/
 *.pem
 *.p12
 *.pfx
+*service_account*.json
+gee-key.json
+heatmappingfyp*.json
+service_account.json
 
 # Documentation build
 # -------------------
