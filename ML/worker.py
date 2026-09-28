@@ -1,45 +1,32 @@
-import importlib
+"""Honest background dispatcher: a plain ThreadPoolExecutor.
+
+There is no Celery here anymore (it was never wired up — the broker,
+the task registry, and the worker process were all fictional). Work is
+submitted to a small local thread pool; the APScheduler tick in main.py
+is the real periodic driver.
+"""
 import concurrent.futures
-from config import REDIS_URL
-from tasks import enrich_report_task, run_clustering_task
 
-# Try loading Celery if installed
-celery_app = None
-try:
-    celery_mod = importlib.import_module("celery")
-    celery_app = celery_mod.Celery("thermax_worker", broker=REDIS_URL, backend=REDIS_URL)
-    celery_app.conf.update(
-        task_serializer="json",
-        result_serializer="json",
-        accept_content=["json"],
-        timezone="UTC",
-        enable_utc=True
-    )
-except Exception:
-    celery_app = None
+from tasks import enrich_report_task, run_clustering_task, run_pipeline_tick
 
-# Pure Python ThreadPool Executor fallback for zero-dependency worker execution
 _thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
+
 def dispatch_enrichment(report_id: str):
-    """Queues report enrichment task via Celery or fallback ThreadPool executor."""
-    if celery_app:
-        try:
-            return celery_app.send_task("enrich_report_task", args=[report_id])
-        except Exception:
-            pass
+    """Queue report enrichment without blocking the caller."""
     return _thread_pool.submit(enrich_report_task, report_id)
 
+
 def dispatch_clustering(city: str = "Karachi"):
-    """Queues periodic DBSCAN clustering task via Celery or fallback ThreadPool executor."""
-    if celery_app:
-        try:
-            return celery_app.send_task("run_clustering_task", args=[city])
-        except Exception:
-            pass
+    """Queue a single-city clustering run without blocking the caller."""
     return _thread_pool.submit(run_clustering_task, city)
 
+
+def dispatch_pipeline_tick():
+    """Queue a full scheduled tick (all cities) without blocking."""
+    return _thread_pool.submit(run_pipeline_tick)
+
+
 if __name__ == "__main__":
-    print("[ThermaX Task Worker] Initialized Task Dispatcher & Scheduler Engine.")
-    res = dispatch_clustering("Karachi")
-    print(f"[ThermaX Task Worker] Dispatched periodic clustering for Karachi: {res}")
+    print("[ThermaX Task Worker] ThreadPool dispatcher ready.")
+    print("[ThermaX Task Worker] Periodic ticks run inside the ML service via APScheduler.")

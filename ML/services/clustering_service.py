@@ -38,19 +38,27 @@ def run_dbscan_clustering(report_points: list, eps_km: float = DBSCAN_EPS_KM, mi
     clusters = []
     for label in set(l for l in labels if l != -1):
         members = [report_points[idx] for idx, l in enumerate(labels) if l == label]
-        lats, lngs, temps = [m['lat'] for m in members], [m['lng'] for m in members], [m.get('temp', 40.0) for m in members]
-        peak_temp = max(temps)
+        lats, lngs = [m['lat'] for m in members], [m['lng'] for m in members]
+        # Only real measurements: members without a temperature are excluded
+        # from thermal stats instead of being assigned a fake 40.0.
+        temps = [m.get('temp') for m in members if m.get('temp') is not None]
+        avg_temp = round(sum(temps) / len(temps), 1) if temps else None
+        peak_temp = round(max(temps), 1) if temps else None
+        if peak_temp is None:
+            severity = 'unknown'
+        else:
+            severity = 'critical' if peak_temp >= 43.0 else ('high' if peak_temp >= 40.0 else 'moderate')
         min_lat, max_lat, min_lng, max_lng = min(lats) - 0.005, max(lats) + 0.005, min(lngs) - 0.005, max(lngs) + 0.005
 
         clusters.append({
             "clusterId": f"CL-{label + 1:02d}",
             "centroid": {"lat": round(sum(lats) / len(lats), 4), "lng": round(sum(lngs) / len(lngs), 4)},
             "boundary": {"type": "Polygon", "coordinates": [[[min_lng, min_lat], [max_lng, min_lat], [max_lng, max_lat], [min_lng, max_lat], [min_lng, min_lat]]]},
-            "avgTemp": round(sum(temps) / len(temps), 1),
-            "peakTemp": round(peak_temp, 1),
+            "avgTemp": avg_temp,
+            "peakTemp": peak_temp,
             "reportCount": len(members),
             "memberReportIds": [m['id'] for m in members],
-            "severity": 'critical' if peak_temp >= 43.0 else ('high' if peak_temp >= 40.0 else 'moderate'),
+            "severity": severity,
             "status": "active"
         })
 
