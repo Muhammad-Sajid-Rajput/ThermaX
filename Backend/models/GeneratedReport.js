@@ -23,7 +23,10 @@ const generatedReportSchema = new Schema(
       type: Date,
       required: true,
     },
-    pdfUrl: {
+    // Download path of the generated file. Named exportUrl (not pdfUrl):
+    // only HTML and CSV exports exist — a real PDF engine is parked as
+    // Future Work, and the field must not imply otherwise.
+    exportUrl: {
       type: String,
       required: true,
     },

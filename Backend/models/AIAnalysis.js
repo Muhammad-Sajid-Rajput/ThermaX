@@ -33,6 +33,18 @@ const aiAnalysisSchema = new Schema(
     hotspotConfidence: Number,
     analysisConfidence: Number,
     qualityControlScore: Number,
+    // Phase 3 QC outcome: the structured checks behind qualityControlScore.
+    qcVerdict: {
+      type: String,
+      enum: ['pass', 'suspect'],
+    },
+    qcChecks: [
+      {
+        name: String,
+        result: String,
+        detail: String,
+      },
+    ],
     sources: {
       sensor: { type: Boolean, default: true },
       satellite: String,

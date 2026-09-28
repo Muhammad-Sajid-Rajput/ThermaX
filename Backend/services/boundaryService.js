@@ -1,3 +1,10 @@
+// Phase 5: canonical server-side city resolution.
+//
+// The supported cities (name, boundary polygon, center, timezone) are
+// defined ONCE in Backend/data/cities.json — the same file the ML service
+// reads — so the backend and ML can never disagree about what "Karachi"
+// means. Boundary polygons are OSM administrative relations (simplified),
+// stored per city under Backend/data/boundaries/.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -5,25 +12,49 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let boundaryFeatures = [];
+const DATA_DIR = path.join(__dirname, '../data');
 
-// Load district boundaries
-try {
-  const geojsonPath = path.join(__dirname, '../data/boundaries/pk_districts.geojson');
-  if (fs.existsSync(geojsonPath)) {
-    const raw = fs.readFileSync(geojsonPath, 'utf8');
+let cityDefs = [];
+let cityPolygons = new Map(); // city name -> array of rings [[[lng,lat],...]]
+
+function loadCities() {
+  try {
+    const raw = fs.readFileSync(path.join(DATA_DIR, 'cities.json'), 'utf8');
     const parsed = JSON.parse(raw);
-    boundaryFeatures = parsed.features || [];
+    cityDefs = parsed.cities || [];
+  } catch (err) {
+    console.warn('cities.json loading warning:', err.message);
+    cityDefs = [];
   }
-} catch (err) {
-  console.warn('Boundary GeoJSON loading warning:', err.message);
+  cityPolygons = new Map();
+  for (const city of cityDefs) {
+    try {
+      const geoPath = path.join(DATA_DIR, city.boundaryFile);
+      const gj = JSON.parse(fs.readFileSync(geoPath, 'utf8'));
+      const rings = [];
+      for (const feature of gj.features || []) {
+        const geom = feature.geometry;
+        if (!geom) continue;
+        if (geom.type === 'Polygon') {
+          for (const ring of geom.coordinates) rings.push(ring);
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates)
+            for (const ring of poly) rings.push(ring);
+        }
+      }
+      cityPolygons.set(city.name, rings);
+    } catch (err) {
+      console.warn(`Boundary load warning for ${city.name}:`, err.message);
+    }
+  }
 }
 
+loadCities();
+
 /**
- * Standard Ray-Casting Point-in-Polygon Algorithm
- * Checks if point (lng, lat) is inside polygon coordinates [[lng, lat], ...]
+ * Standard ray-casting point-in-polygon. Point is [lng, lat].
  */
-function isPointInPolygon(point, polygon) {
+export function isPointInPolygon(point, polygon) {
   const [lng, lat] = point;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -37,28 +68,80 @@ function isPointInPolygon(point, polygon) {
 }
 
 /**
- * Server-side District & Area Resolution
+ * Supported city definitions (name, slug, center, bbox, timezone).
  */
-export function resolveDistrictAndCity(lat, lng) {
-  const point = [Number(lng), Number(lat)];
-
-  for (const feature of boundaryFeatures) {
-    const coords = feature.geometry?.coordinates?.[0];
-    if (coords && isPointInPolygon(point, coords)) {
-      return {
-        district: feature.properties?.district || 'Karachi Urban',
-        areaName: feature.properties?.name || 'Karachi Central',
-        city: 'Karachi',
-      };
-    }
-  }
-
-  // Fallback default for points outside exact polygon bounds
-  return {
-    district: 'Karachi Urban',
-    areaName: 'Karachi Metro',
-    city: 'Karachi',
-  };
+export function getCities() {
+  return cityDefs.map((c) => ({
+    name: c.name,
+    slug: c.slug,
+    center: c.center,
+    bbox: c.bbox,
+    timezone: c.timezone,
+  }));
 }
 
-export default { resolveDistrictAndCity };
+/**
+ * Resolve (lat, lng) to a supported city name, or null when the point is
+ * outside every known city boundary. Server-side only — the client never
+ * decides its own city.
+ */
+export function resolveCity(lat, lng) {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (Number.isNaN(latNum) || Number.isNaN(lngNum)) return null;
+  const point = [lngNum, latNum];
+  for (const city of cityDefs) {
+    const rings = cityPolygons.get(city.name) || [];
+    for (const ring of rings) {
+      if (ring.length >= 4 && isPointInPolygon(point, ring)) {
+        return city.name;
+      }
+    }
+  }
+  return null;
+}
+
+export const PAKISTAN_BOUNDS = {
+  minLat: 23.0,
+  maxLat: 37.5,
+  minLng: 60.5,
+  maxLng: 78.0,
+};
+
+export function isLocationInPakistan(lat, lng) {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
+  return (
+    latNum >= PAKISTAN_BOUNDS.minLat &&
+    latNum <= PAKISTAN_BOUNDS.maxLat &&
+    lngNum >= PAKISTAN_BOUNDS.minLng &&
+    lngNum <= PAKISTAN_BOUNDS.maxLng
+  );
+}
+
+/**
+ * Backwards-compatible district/area resolution.
+ */
+export function resolveDistrictAndCity(lat, lng, areaName = null) {
+  const city = resolveCity(lat, lng);
+  if (!city) {
+    const isPk = isLocationInPakistan(lat, lng);
+    return {
+      district: areaName && areaName.includes('Division') ? areaName : null,
+      areaName: areaName || (isPk ? 'Pakistan' : null),
+      city: areaName || (isPk ? 'Pakistan' : null),
+      outsideKnownBoundaries: !isPk,
+    };
+  }
+  return { district: null, areaName: city, city, outsideKnownBoundaries: false };
+}
+
+export default {
+  getCities,
+  resolveCity,
+  resolveDistrictAndCity,
+  isPointInPolygon,
+  isLocationInPakistan,
+  PAKISTAN_BOUNDS,
+};

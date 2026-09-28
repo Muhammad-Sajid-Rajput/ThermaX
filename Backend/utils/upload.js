@@ -1,5 +1,6 @@
 import multer from 'multer';
 import path from 'path';
+import crypto from 'crypto';
 
 // Set up storage engine
 const storage = multer.diskStorage({
@@ -7,7 +8,11 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // Never trust the client-provided filename for storage: strip any path
+    // components and store under a random name to avoid collisions and
+    // path-traversal writes outside uploads/.
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`);
   },
 });
 

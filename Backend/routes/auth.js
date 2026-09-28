@@ -14,10 +14,21 @@ import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email
 
 const router = express.Router();
 
+/**
+ * ─── Session policy (single source of truth) ────────────────────────────────
+ * - No usable session is issued until the email address is verified.
+ * - POST /signup creates the account and sends an OTP; it returns NO tokens.
+ * - POST /login rejects unverified accounts with 403 EMAIL_NOT_VERIFIED.
+ * - POST /verify-email is the only place (besides /refresh) that mints tokens.
+ * - Re-registering an unverified email only resends the OTP: credentials are
+ *   never overwritten and no tokens are issued (account-takeover fix).
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -49,28 +60,36 @@ router.post(
       const normalizedEmail = email.toLowerCase().trim();
 
       const existingUser = await User.findOne({ email: normalizedEmail });
-      if (existingUser && existingUser.isEmailVerified) {
-        return res.status(409).json({
-          error: 'Registration failed',
-          message: 'An account with this email already exists. Please log in instead.',
+      if (existingUser) {
+        if (existingUser.isEmailVerified) {
+          return res.status(409).json({
+            error: 'Registration failed',
+            message: 'An account with this email already exists. Please log in instead.',
+          });
+        }
+        // Unverified re-registration: resend the OTP only. Never overwrite
+        // credentials and never issue tokens (account-takeover fix).
+        const resentOtp = await existingUser.generateOtp();
+        await existingUser.save();
+        try {
+          await sendVerificationEmail(normalizedEmail, existingUser.name, resentOtp);
+        } catch (emailErr) {
+          console.error('[Signup Email Error]:', emailErr.message);
+        }
+        return res.status(200).json({
+          message: 'Account already registered. Verification code resent to email.',
+          email: normalizedEmail,
+          isEmailVerified: false,
         });
       }
 
-      let user = existingUser;
-      if (!user) {
-        user = new User({
-          name,
-          email: normalizedEmail,
-          password,
-          phone,
-          organization,
-        });
-      } else {
-        user.name = name || user.name;
-        user.password = password;
-        user.phone = phone || user.phone;
-        user.organization = organization || user.organization;
-      }
+      const user = new User({
+        name,
+        email: normalizedEmail,
+        password,
+        phone,
+        organization,
+      });
 
       const otp = await user.generateOtp();
       await user.save();
@@ -81,13 +100,9 @@ router.post(
         console.error('[Signup Email Error]:', emailErr.message);
       }
 
-      const accessToken = generateAccessToken(user._id, user.role);
-      await createAndAttachRefreshToken(user, req, res);
-
+      // No tokens here: the session is only issued after email verification.
       res.status(201).json({
         message: 'Account created successfully. Verification code sent to email.',
-        token: accessToken,
-        accessToken,
         user: {
           id: user._id,
           _id: user._id,
@@ -133,8 +148,16 @@ router.post(
         });
       }
 
+      if (!user.isEmailVerified) {
+        return res.status(403).json({
+          error: 'Email not verified',
+          code: 'EMAIL_NOT_VERIFIED',
+          message: 'Please verify your email address before logging in.',
+        });
+      }
+
       const accessToken = generateAccessToken(user._id, user.role);
-      await createAndAttachRefreshToken(user, req, res);
+      const rawRefreshToken = await createAndAttachRefreshToken(user, req, res);
 
       user.lastLoginAt = new Date();
       await user.save();
@@ -143,6 +166,7 @@ router.post(
         message: 'Login successful',
         token: accessToken,
         accessToken,
+        refreshToken: rawRefreshToken,
         user: {
           id: user._id,
           _id: user._id,
@@ -164,7 +188,7 @@ router.post(
 );
 
 // Token Refresh (Token Rotation)
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', authLimiter, async (req, res) => {
   try {
     const rawToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
@@ -177,11 +201,14 @@ router.post('/refresh', async (req, res) => {
 
     const tokenHash = hashToken(rawToken);
 
-    const storedTokenDoc = await RefreshToken.findOne({
-      tokenHash,
-      revoked: false,
-      expiresAt: { $gt: new Date() },
-    }).populate('user');
+    const storedTokenDoc = await RefreshToken.findOneAndUpdate(
+      {
+        tokenHash,
+        revoked: false,
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { revoked: true } }
+    ).populate('user');
 
     if (!storedTokenDoc || !storedTokenDoc.user || !storedTokenDoc.user.isActive) {
       return res.status(401).json({
@@ -190,16 +217,24 @@ router.post('/refresh', async (req, res) => {
       });
     }
 
-    storedTokenDoc.revoked = true;
-    await storedTokenDoc.save();
+    // Defense in depth: a legacy unverified account holding a refresh token
+    // must not be able to mint fresh sessions.
+    if (!storedTokenDoc.user.isEmailVerified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email address before refreshing your session.',
+      });
+    }
 
     const user = storedTokenDoc.user;
     const newAccessToken = generateAccessToken(user._id, user.role);
-    await createAndAttachRefreshToken(user, req, res);
+    const newRefreshToken = await createAndAttachRefreshToken(user, req, res);
 
     res.json({
       message: 'Token rotated successfully',
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     console.error('Refresh token error:', error);
@@ -228,7 +263,7 @@ router.post('/logout', optionalAuth, async (req, res) => {
 });
 
 // Verify Access Token
-router.get('/verify', async (req, res) => {
+router.get('/verify', authLimiter, async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '') || req.cookies?.accessToken;
@@ -242,6 +277,14 @@ router.get('/verify', async (req, res) => {
 
     if (!user || !user.isActive) {
       return res.status(401).json({ error: 'Verification failed', message: 'User inactive or not found' });
+    }
+
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email address first.',
+      });
     }
 
     res.json({
@@ -259,12 +302,9 @@ router.get('/verify', async (req, res) => {
 });
 
 // Verify Email OTP (NovaMind auth pattern)
-router.post('/verify-email', authLimiter, async (req, res) => {
+router.post('/verify-email', authLimiter, validate(schemas.verifyEmail), async (req, res) => {
   try {
     const { email, code } = req.body;
-    if (!email || !code) {
-      return res.status(400).json({ error: 'Please provide both email and 6-digit verification code.' });
-    }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+emailOtp +emailOtpExpiry');
     if (!user) {
@@ -279,12 +319,13 @@ router.post('/verify-email', authLimiter, async (req, res) => {
     await user.save();
 
     const accessToken = generateAccessToken(user._id, user.role);
-    await createAndAttachRefreshToken(user, req, res);
+    const rawRefreshToken = await createAndAttachRefreshToken(user, req, res);
 
     res.json({
       message: 'Email verified successfully.',
       token: accessToken,
       accessToken,
+      refreshToken: rawRefreshToken,
       user: {
         id: user._id,
         _id: user._id,
@@ -292,6 +333,7 @@ router.post('/verify-email', authLimiter, async (req, res) => {
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {
@@ -300,12 +342,9 @@ router.post('/verify-email', authLimiter, async (req, res) => {
 });
 
 // Forgot Password (Sends Resend OTP email)
-router.post('/forgot-password', authLimiter, async (req, res) => {
+router.post('/forgot-password', authLimiter, validate(schemas.forgotPassword), async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Please provide your email address.' });
-    }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
@@ -328,16 +367,10 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
   }
 });
 
-// Reset Password (Verifies OTP & updates password)
-router.post('/reset-password', authLimiter, async (req, res) => {
+// Reset Password (Verifies OTP & updates password with strong password policy)
+router.post('/reset-password', authLimiter, validate(schemas.resetPassword), async (req, res) => {
   try {
     const { email, code, newPassword } = req.body;
-    if (!email || !code || !newPassword) {
-      return res.status(400).json({ error: 'Please provide email, code, and new password.' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
-    }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+emailOtp +emailOtpExpiry');
     if (!user) {
@@ -353,6 +386,10 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     user.passwordChangedAt = new Date();
     await user.save();
 
+    // Revoke every session: refresh tokens issued before the reset must die
+    // with the old password.
+    await RefreshToken.deleteMany({ user: user._id });
+
     res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
   } catch (error) {
     res.status(500).json({ error: 'Reset password failed', message: error.message });
@@ -360,12 +397,9 @@ router.post('/reset-password', authLimiter, async (req, res) => {
 });
 
 // Resend OTP Code
-router.post('/resend-otp', authLimiter, async (req, res) => {
+router.post('/resend-otp', authLimiter, validate(schemas.resendOtp), async (req, res) => {
   try {
     const { email, type = 'verification' } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Please provide your email address.' });
-    }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
@@ -375,7 +409,7 @@ router.post('/resend-otp', authLimiter, async (req, res) => {
     const otp = await user.generateOtp();
     await user.save();
 
-    if (type === 'reset') {
+    if (type === 'reset' || type === 'password_reset') {
       await sendPasswordResetEmail(user.email, user.name, otp);
     } else {
       await sendVerificationEmail(user.email, user.name, otp);

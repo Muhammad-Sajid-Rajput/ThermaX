@@ -1,5 +1,16 @@
 import { rateLimit } from 'express-rate-limit';
 
+/**
+ * DEPLOYMENT POLICY — rate limiting is process-local.
+ *
+ * express-rate-limit's default MemoryStore keeps counters in this Node
+ * process only. That is correct for the FYP deployment model: a single
+ * Node process behind trust-proxy (see app.js `trust proxy`). If ThermaX
+ * is ever scaled to multiple processes/instances, replace the store with
+ * a shared one (e.g. rate-limit-redis) — otherwise an attacker gets
+ * max × Ninstances requests per window.
+ */
+
 const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 
 const isLocalRequest = (req) => {

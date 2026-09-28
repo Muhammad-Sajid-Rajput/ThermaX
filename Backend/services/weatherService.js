@@ -99,14 +99,25 @@ export function fetchFromAPI(lat, lng) {
   const q = `${lat},${lng}`;
   const url = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(q)}`;
 
-  return fetch(url)
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  return fetch(url, { signal: controller.signal })
     .then((res) => {
       if (!res.ok) throw new WeatherApiError('Weather provider request failed', res.status);
       return res.json();
     })
     .catch((err) => {
       if (err instanceof WeatherApiError) throw err;
+      if (err.name === 'AbortError') {
+        const timeoutErr = new WeatherApiError('Weather provider request timed out', 504);
+        timeoutErr.isTimeout = true;
+        throw timeoutErr;
+      }
       throw new WeatherApiError('Failed to reach weather provider');
+    })
+    .finally(() => {
+      clearTimeout(timer);
     });
 }
 
@@ -114,29 +125,41 @@ export function normalize(parsed, lat, lng) {
   const current = parsed.current ?? {};
   const location = parsed.location ?? {};
 
-  const tempC = current.temp_c ?? 38.0;
-  const humidity = current.humidity ?? 55;
+  // Core measurements are required. A provider payload without them is
+  // incomplete — we throw instead of inventing plausible-looking values.
+  const tempC = current.temp_c;
+  const humidity = current.humidity;
+  if (tempC == null || humidity == null) {
+    throw new WeatherApiError('Weather provider returned incomplete data');
+  }
+
   const heatIndex =
     current.heatindex_c ?? current.feelslike_c ?? calculateHeatIndex(tempC, humidity);
 
   const cacheKey = buildCacheKey(lat, lng);
 
+  const observedAt = location.localtime_epoch
+    ? new Date(location.localtime_epoch * 1000).toISOString()
+    : (location.localtime ? new Date(location.localtime).toISOString() : new Date().toISOString());
+
   return {
-    location: location.name ?? 'Karachi',
-    country: location.country ?? 'Pakistan',
+    location: location.name ?? null,
+    country: location.country ?? null,
     temperature: tempC,
     humidity,
     feelsLike: current.feelslike_c ?? tempC,
     heatIndex,
-    uv: current.uv ?? 8,
-    windKph: current.wind_kph ?? 15,
-    condition: current.condition?.text ?? 'Clear & Hot',
+    uv: current.uv ?? null,
+    windKph: current.wind_kph ?? null,
+    condition: current.condition?.text ?? null,
     coordinates: {
       lat: location.lat ?? lat,
       lng: location.lon ?? lng,
     },
-    observedAt: location.localtime ?? new Date().toISOString(),
+    observedAt,
     source: 'weatherapi',
+    isSynthetic: false,
+    status: 'ok',
     cached: false,
     saved: false,
     cacheKey,
@@ -203,18 +226,15 @@ export async function getCurrentWeather(lat, lng, options = {}) {
     if (cached) return cached;
   }
 
-  try {
-    const parsed = await fetchFromAPI(validLat, validLng);
-    const dto = normalize(parsed, validLat, validLng);
-    dto.alerts = buildAlerts(dto.heatIndex);
-    if (save) dto.saved = await saveRecord(dto);
-    setCache(cacheKey, { ...dto, cached: false });
-    return dto;
-  } catch (err) {
-    const fallback = normalize({}, validLat, validLng);
-    fallback.alerts = buildAlerts(fallback.heatIndex);
-    return fallback;
-  }
+  // Any failure (unconfigured key, provider error, incomplete payload)
+  // throws: this service never invents weather data. Callers and the API
+  // surface it as "unavailable" instead.
+  const parsed = await fetchFromAPI(validLat, validLng);
+  const dto = normalize(parsed, validLat, validLng);
+  dto.alerts = buildAlerts(dto.heatIndex);
+  if (save) dto.saved = await saveRecord(dto);
+  setCache(cacheKey, { ...dto, cached: false });
+  return dto;
 }
 
 export async function enrichAndSaveSnapshot(reportId, lat, lng) {
@@ -223,20 +243,51 @@ export async function enrichAndSaveSnapshot(reportId, lat, lng) {
     const heatIndex =
       weatherDto.heatIndex ?? calculateHeatIndex(weatherDto.temperature, weatherDto.humidity);
 
-    const snapshot = await WeatherSnapshot.create({
-      report: reportId,
-      windSpeed: weatherDto.windKph ? Number((weatherDto.windKph / 3.6).toFixed(1)) : 4.1,
-      heatIndex,
-      uvIndex: weatherDto.uv ?? 8,
-      weatherCondition: weatherDto.condition ?? 'Clear & Hot',
-      airQuality: { aqi: 110, source: 'OpenWeatherMap' },
-      source: weatherDto.source || 'WeatherAPI',
-      fetchedAt: new Date(),
-    });
+    // Upsert keyed by report (unique index): the submit path runs weather
+    // enrichment before the ML trigger fires, and reruns must never
+    // create a second snapshot row for the same report.
+    let snapshot;
+    try {
+      snapshot = await WeatherSnapshot.findOneAndUpdate(
+        { report: reportId },
+        {
+          $set: {
+            windSpeed: weatherDto.windKph != null ? Number((weatherDto.windKph / 3.6).toFixed(1)) : null,
+            heatIndex,
+            // Air temperature is stored (not just heat index) so QC can compare
+            // the citizen-measured temperature against the provider reading.
+            temperature: weatherDto.temperature ?? null,
+            uvIndex: weatherDto.uv ?? null,
+            weatherCondition: weatherDto.condition ?? null,
+            source: weatherDto.source || 'weatherapi',
+            isSynthetic: false,
+            fetchedAt: new Date(),
+            // Provider observation time (not our fetch time) — preserved
+            // for QC provenance. Falls back to fetch time only when the
+            // provider supplies none.
+            observedAt: weatherDto.observedAt
+              ? new Date(weatherDto.observedAt)
+              : new Date(),
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
+    } catch (upsertErr) {
+      // Lost the insert race with a parallel enrichment (both upserts found
+      // no row and tried to insert): the unique index kept exactly one row,
+      // so return the winner's snapshot instead of reporting a failure.
+      if (upsertErr?.code === 11000) {
+        return WeatherSnapshot.findOne({ report: reportId });
+      }
+      throw upsertErr;
+    }
 
     return snapshot;
   } catch (err) {
-    console.error('Snapshot enrichment warning:', err.message);
+    // Weather unavailable (no API key, provider down, DB error): persist
+    // nothing. The report simply has no weather snapshot — no fabricated
+    // air-quality, wind, or temperature values are ever stored.
+    console.error('Snapshot enrichment unavailable:', err.message);
     return null;
   }
 }
@@ -244,8 +295,38 @@ export async function enrichAndSaveSnapshot(reportId, lat, lng) {
 export async function getWeatherHistory(lat, lng, options = {}) {
   const WeatherSnapshot = (await import('../models/WeatherSnapshot.js').catch(() => null))?.default;
   if (!WeatherSnapshot) return [];
-  const { limit = 24 } = options;
-  return WeatherSnapshot.find({ lat, lng }).sort({ recordedAt: -1 }).limit(limit);
+  // Snapshots carry no coordinates of their own — each belongs to a report.
+  // Join through the report and filter to a ~5km box around (lat, lng).
+  // (A previous version queried { lat, lng } directly on the snapshot and
+  // always returned [] — the fields don't exist on this model.)
+  const DEG_PER_KM = 1 / 111;
+  const radiusDeg = 5 * DEG_PER_KM;
+  const { limit = 24, from, to } = options;
+  const match = {
+    'reportDoc.latitude': { $gte: lat - radiusDeg, $lte: lat + radiusDeg },
+    'reportDoc.longitude': { $gte: lng - radiusDeg, $lte: lng + radiusDeg },
+  };
+  if (from || to) {
+    match.fetchedAt = {};
+    if (from) match.fetchedAt.$gte = new Date(from);
+    if (to) match.fetchedAt.$lte = new Date(to);
+  }
+  const docs = await WeatherSnapshot.aggregate([
+    {
+      $lookup: {
+        from: 'reports',
+        localField: 'report',
+        foreignField: '_id',
+        as: 'reportDoc',
+      },
+    },
+    { $unwind: '$reportDoc' },
+    { $match: match },
+    { $sort: { fetchedAt: -1 } },
+    { $limit: Math.min(Math.max(Number(limit) || 24, 1), 200) },
+    { $project: { reportDoc: 0 } },
+  ]);
+  return docs;
 }
 
 export async function getWeatherAnalyticsSummary(options = {}) {

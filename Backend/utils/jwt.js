@@ -1,7 +1,9 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { getJwtSecret } from '../config/env.js';
 
-const JWT_SECRET = () => process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'fallback_secret_key_thermax';
+// No fallback default: getJwtSecret() throws if no secret is configured.
+const JWT_SECRET = () => getJwtSecret();
 const JWT_EXPIRES_IN = () => process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 
 /**

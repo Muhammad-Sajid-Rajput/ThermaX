@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const { Schema } = mongoose;
 
@@ -66,6 +67,11 @@ const userSchema = new Schema(
       type: Date,
       select: false,
     },
+    emailOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
     lastLoginAt: {
       type: Date,
     },
@@ -123,22 +129,39 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Generate 6-digit OTP and set 15-minute expiry
+// Generate 6-digit OTP and set 15-minute expiry.
+// Security: CSPRNG via crypto.randomInt (never Math.random — CWE-338), and
+// the OTP is hashed (SHA-256) at rest, so a database read never yields a
+// usable code. The plaintext OTP only ever travels inside the email we send.
 userSchema.methods.generateOtp = async function () {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  this.emailOtp = otp;
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  this.emailOtp = crypto.createHash('sha256').update(otp).digest('hex');
   this.emailOtpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+  this.emailOtpAttempts = 0;
   return otp;
 };
 
-// Verify 6-digit OTP
+// Verify 6-digit OTP (constant-time hash comparison)
 userSchema.methods.verifyOtp = async function (candidateOtp) {
   if (!this.emailOtp || !this.emailOtpExpiry) return false;
   if (new Date() > this.emailOtpExpiry) return false;
-  const isValid = this.emailOtp === candidateOtp;
+  this.emailOtpAttempts = (this.emailOtpAttempts || 0) + 1;
+  if (this.emailOtpAttempts > 5) {
+    this.emailOtp = undefined;
+    this.emailOtpExpiry = undefined;
+    this.emailOtpAttempts = undefined;
+    await this.save();
+    return false;
+  }
+  const candidateHash = crypto.createHash('sha256').update(String(candidateOtp)).digest('hex');
+  const stored = String(this.emailOtp);
+  const isValid =
+    stored.length === candidateHash.length &&
+    crypto.timingSafeEqual(Buffer.from(stored, 'utf8'), Buffer.from(candidateHash, 'utf8'));
   if (isValid) {
     this.emailOtp = undefined;
     this.emailOtpExpiry = undefined;
+    this.emailOtpAttempts = undefined;
     this.isEmailVerified = true;
   }
   return isValid;

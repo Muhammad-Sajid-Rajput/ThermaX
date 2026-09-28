@@ -4,6 +4,24 @@ import zxcvbn from 'zxcvbn';
 // Strong password regex: 8+ chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#()[\]{}_\-+=~|:<>,./]).{8,}$/;
 
+export const passwordSchema = Joi.string()
+  .pattern(PASSWORD_REGEX)
+  .required()
+  .custom((value, helpers) => {
+    const evaluation = zxcvbn(value);
+    if (evaluation.score < 2) {
+      return helpers.message(
+        'Password is too weak. Please use a mix of uppercase, lowercase, numbers, and symbols.'
+      );
+    }
+    return value;
+  })
+  .messages({
+    'string.empty': 'Password is required',
+    'string.pattern.base':
+      'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+  });
+
 // Validation schemas
 export const schemas = {
   // User registration validation
@@ -17,23 +35,7 @@ export const schemas = {
       'string.email': 'Please enter a valid email address',
       'string.empty': 'Email is required',
     }),
-    password: Joi.string()
-      .pattern(PASSWORD_REGEX)
-      .required()
-      .custom((value, helpers) => {
-        const evaluation = zxcvbn(value);
-        if (evaluation.score < 2) {
-          return helpers.message(
-            'Password is too weak. Please use a mix of uppercase, lowercase, numbers, and symbols.'
-          );
-        }
-        return value;
-      })
-      .messages({
-        'string.empty': 'Password is required',
-        'string.pattern.base':
-          'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
-      }),
+    password: passwordSchema,
     phone: Joi.string().trim().optional(),
     organization: Joi.string().trim().optional(),
   }),
@@ -47,6 +49,26 @@ export const schemas = {
     password: Joi.string().required().messages({
       'string.empty': 'Password is required',
     }),
+  }),
+
+  verifyEmail: Joi.object({
+    email: Joi.string().email().lowercase().trim().required(),
+    code: Joi.string().trim().length(6).required(),
+  }),
+
+  forgotPassword: Joi.object({
+    email: Joi.string().email().lowercase().trim().required(),
+  }),
+
+  resetPassword: Joi.object({
+    email: Joi.string().email().lowercase().trim().required(),
+    code: Joi.string().trim().length(6).required(),
+    newPassword: passwordSchema,
+  }),
+
+  resendOtp: Joi.object({
+    email: Joi.string().email().lowercase().trim().required(),
+    type: Joi.string().valid('verification', 'password_reset').optional(),
   }),
 
   weatherCurrent: Joi.object({

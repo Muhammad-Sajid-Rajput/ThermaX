@@ -1,0 +1,58 @@
+{
+  "cities": [
+    {
+      "name": "Karachi",
+      "slug": "karachi",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 24.8607,
+        "lng": 67.0011
+      },
+      "bbox": {
+        "minLng": 66.2862312,
+        "minLat": 24.4273517,
+        "maxLng": 67.5827753,
+        "maxLat": 25.676796
+      },
+      "boundaryFile": "boundaries/karachi.geojson",
+      "popGridFile": "pop_grids/karachi.json",
+      "boundarySource": "OpenStreetMap relation 6080948 (Nominatim simplified polygon, retrieved 2026-09-27)"
+    },
+    {
+      "name": "Lahore",
+      "slug": "lahore",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 31.5204,
+        "lng": 74.3587
+      },
+      "bbox": {
+        "minLng": 74.006849,
+        "minLat": 31.2005939,
+        "maxLng": 74.6546712,
+        "maxLat": 31.7134238
+      },
+      "boundaryFile": "boundaries/lahore.geojson",
+      "popGridFile": "pop_grids/lahore.json",
+      "boundarySource": "OpenStreetMap relation 16117666 (Nominatim simplified polygon, retrieved 2026-09-27)"
+    },
+    {
+      "name": "Islamabad",
+      "slug": "islamabad",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 33.6844,
+        "lng": 73.0479
+      },
+      "bbox": {
+        "minLng": 72.8175952,
+        "minLat": 33.4848225,
+        "maxLng": 73.3748776,
+        "maxLat": 33.8032755
+      },
+      "boundaryFile": "boundaries/islamabad.geojson",
+      "popGridFile": "pop_grids/islamabad.json",
+      "boundarySource": "OpenStreetMap relation 358002 (Nominatim simplified polygon, retrieved 2026-09-27)"
+    }
+  ]
+}

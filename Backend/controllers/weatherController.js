@@ -25,6 +25,12 @@ function handleWeatherError(error, res) {
   }
 
   if (error instanceof WeatherApiError) {
+    if (error.statusCode === 504 || error.isTimeout) {
+      return res.status(504).json({
+        error: 'Gateway timeout',
+        message: 'Weather provider request timed out',
+      });
+    }
     return res.status(502).json({
       error: 'Failed to fetch weather data',
       message: isDev ? error.message : 'Weather provider error',
@@ -50,7 +56,11 @@ export const getCurrent = async (req, res) => {
 
 export const getHistory = async (req, res) => {
   try {
-    const { lat, lng, from, to, limit } = req.validatedQuery;
+    // The query schema accepts `lon` or `lng`; normalize to one name —
+    // the frontend sends `lon`, and an undefined `lng` would silently
+    // match nothing.
+    const { lat, from, to, limit } = req.validatedQuery;
+    const lng = req.validatedQuery.lng ?? req.validatedQuery.lon;
     const records = await getWeatherHistory(lat, lng, { from, to, limit });
     res.json({
       message: 'Weather history retrieved successfully',

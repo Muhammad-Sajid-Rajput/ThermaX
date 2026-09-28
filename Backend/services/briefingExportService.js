@@ -1,14 +1,29 @@
 import fs from 'fs';
 import path from 'path';
 
-export async function generatePDFBuffer(aggregatedData) {
-  // Generates executive briefing report text & structured HTML/PDF stream buffer
+/**
+ * Generates the executive briefing as an HTML buffer.
+ *
+ * NOTE: a real PDF engine is deliberately out of scope (parked in the
+ * implementation plan's Future Work). The export API therefore offers
+ * 'html' and 'csv' formats only — requesting 'pdf' returns an honest 400.
+ */
+export async function generateBriefingHTMLBuffer(aggregatedData) {
+  // Every interpolated value is HTML-escaped: report fields are
+  // citizen-supplied and this file is opened in a browser.
+  const esc = (v) =>
+    String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ThermaX Executive Briefing Report - ${aggregatedData.city}</title>
+  <title>ThermaX Executive Briefing Report - ${esc(aggregatedData.city)}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; background: #fff; }
     .header { border-bottom: 3px solid #ef4444; padding-bottom: 12px; margin-bottom: 24px; }
@@ -27,24 +42,24 @@ export async function generatePDFBuffer(aggregatedData) {
 <body>
   <div class="header">
     <div class="title">THERMAX URBAN HEAT ISLAND EXECUTIVE BRIEFING</div>
-    <div class="subtitle">City: ${aggregatedData.city} | Period: ${new Date(aggregatedData.fromDate).toLocaleDateString()} - ${new Date(aggregatedData.toDate).toLocaleDateString()}</div>
+    <div class="subtitle">City: ${esc(aggregatedData.city)} | Period: ${esc(new Date(aggregatedData.fromDate).toLocaleDateString())} - ${esc(new Date(aggregatedData.toDate).toLocaleDateString())}</div>
   </div>
 
   <div class="kpi-container">
     <div class="kpi-card">
-      <div class="kpi-value">${aggregatedData.totalReports}</div>
+      <div class="kpi-value">${esc(aggregatedData.totalReports)}</div>
       <div class="kpi-label">Citizen Reports</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-value">${aggregatedData.avgTemp}°C</div>
+      <div class="kpi-value">${esc(aggregatedData.avgTemp ?? '—')}°C</div>
       <div class="kpi-label">Avg Temperature</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-value">${aggregatedData.peakTemp}°C</div>
+      <div class="kpi-value">${esc(aggregatedData.peakTemp ?? '—')}°C</div>
       <div class="kpi-label">Peak Temperature</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-value">${aggregatedData.activeHotspotsCount}</div>
+      <div class="kpi-value">${esc(aggregatedData.activeHotspotsCount)}</div>
       <div class="kpi-label">Active Hotspots</div>
     </div>
   </div>
@@ -63,11 +78,11 @@ export async function generatePDFBuffer(aggregatedData) {
     <tbody>
       ${(aggregatedData.reports || []).slice(0, 15).map(r => `
         <tr>
-          <td>${r.reportRef || r._id}</td>
-          <td>${r.district || 'Karachi South'}</td>
-          <td>${r.severityLevel || r.severity || 3}/5</td>
-          <td>${r.ambientTemp || r.temperature || 38.0}°C</td>
-          <td>${r.status || 'pending'}</td>
+          <td>${esc(r.reportRef || r._id)}</td>
+          <td>${esc(r.district ?? '—')}</td>
+          <td>${esc(r.severityLevel ?? r.severity ?? '—')}/5</td>
+          <td>${esc(r.ambientTemp ?? r.temperature ?? '—')}°C</td>
+          <td>${esc(r.status || 'pending')}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -83,4 +98,4 @@ export async function generatePDFBuffer(aggregatedData) {
   return Buffer.from(htmlContent, 'utf-8');
 }
 
-export default { generatePDFBuffer };
+export default { generateBriefingHTMLBuffer };

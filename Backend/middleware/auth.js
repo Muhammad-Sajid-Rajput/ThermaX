@@ -42,6 +42,16 @@ export const authenticate = async (req, res, next) => {
       });
     }
 
+    // Defense in depth: login refuses unverified accounts, but a token minted
+    // before Phase 1 (or by any other path) must not become a usable session.
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email address before using your account.',
+      });
+    }
+
     req.user = user;
     req.token = token;
     next();
@@ -70,7 +80,10 @@ export const optionalAuth = async (req, res, next) => {
       const decoded = verifyAccessToken(token);
       const user = await User.findById(decoded.userId);
 
-      if (user && user.isActive !== false) {
+      // Defense in depth, mirroring `authenticate`: a token minted before
+      // Phase 1 (or by any other path) for an unverified account must not
+      // become an attached session, even on public routes.
+      if (user && user.isActive !== false && user.isEmailVerified) {
         req.user = user;
         req.token = token;
       }

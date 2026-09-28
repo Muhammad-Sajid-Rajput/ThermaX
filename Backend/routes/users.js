@@ -2,6 +2,7 @@ import express from 'express';
 import { User, ROLES } from '../models/User.js';
 import { authenticate, authorizeAdmin } from '../middleware/auth.js';
 import { strictLimiter } from '../middleware/rateLimiters.js';
+import { dbFailureStatus } from '../utils/dbErrors.js';
 
 const router = express.Router();
 
@@ -10,8 +11,8 @@ router.use(authenticate);
 // Get list of users (Admin only)
 router.get('/', authorizeAdmin, async (req, res) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 20), 200);
     const skip = (page - 1) * limit;
 
     const users = await User.find()
@@ -32,7 +33,10 @@ router.get('/', authorizeAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users', message: error.message });
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to fetch users',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred fetching users',
+    });
   }
 });
 
@@ -40,19 +44,23 @@ router.get('/', authorizeAdmin, async (req, res) => {
 // Governance Audit Log viewer (Admin only) — must be BEFORE /:id
 router.get('/audit-logs', authorizeAdmin, async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit, 10) || 50;
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 50), 200);
     const AuditLog = (await import('../models/AuditLog.js')).default;
     const logs = await AuditLog.find().populate('performedBy', 'fullName email').sort({ timestamp: -1 }).limit(limit);
     res.json({ logs, count: logs.length });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch audit logs', message: error.message });
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to fetch audit logs',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred fetching audit logs',
+    });
   }
 });
 
 // Get user by ID
 router.get('/:id', async (req, res) => {
   try {
-    if (req.user._id.toString() !== req.params.id && req.user.role !== ROLES.ADMIN) {
+    const userRole = (req.user?.role ? String(req.user.role).toLowerCase() : '');
+    if (req.user._id.toString() !== req.params.id && userRole !== ROLES.ADMIN) {
       return res.status(403).json({ error: 'Access denied', message: 'Unauthorized' });
     }
 
@@ -63,7 +71,10 @@ router.get('/:id', async (req, res) => {
 
     res.json({ user });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch user', message: error.message });
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to fetch user',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred fetching user',
+    });
   }
 });
 
@@ -110,7 +121,10 @@ router.put('/:id/role', authorizeAdmin, strictLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update user role', message: error.message });
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to update user role',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred updating user role',
+    });
   }
 });
 
@@ -149,7 +163,10 @@ router.put('/:id/status', authorizeAdmin, strictLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update user status', message: error.message });
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to update user status',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred updating user status',
+    });
   }
 });
 

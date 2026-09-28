@@ -86,11 +86,13 @@ test-results/
 .DS_Store
 Thumbs.db
 
-# Temporary folders
-# -----------------
+# Temporary folders & binaries
+# ----------------------------
 tmp/
 temp/
 .tmp/
+mongodb-*/
+*.exe
 
 # ==============================================
 # Backend Specific
@@ -129,7 +131,6 @@ cache/
 
 # API Keys and Secrets
 # --------------------
-config/
 secrets/
 credentials/
 api-keys/
@@ -149,7 +150,6 @@ ecosystem.config.js.backup
 
 # Docker
 # ------
-.dockerignore
 docker-compose.override.yml
 
 # Kubernetes

@@ -19,6 +19,24 @@ const satelliteAnalysisSchema = new Schema(
       type: String,
       default: 'MODIS Terra',
     },
+    // Provenance: 'unavailable' means the provider could not be reached and
+    // NO values were invented. isSynthetic is always false in this system.
+    status: {
+      type: String,
+      enum: ['ok', 'unavailable'],
+      default: 'ok',
+      index: true,
+    },
+    isSynthetic: {
+      type: Boolean,
+      default: false,
+    },
+    // Image acquisition date from the provider (provenance). Null when the
+    // provider is unavailable or does not expose it — never invented.
+    observedAt: {
+      type: Date,
+      default: null,
+    },
     fetchedAt: {
       type: Date,
       default: Date.now,

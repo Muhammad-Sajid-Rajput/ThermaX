@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { REPORT_CATEGORIES } from '../constants/categories.js';
+import { normalizeStatus } from '../utils/reportLifecycle.js';
 
 const { Schema } = mongoose;
 
@@ -32,7 +33,7 @@ const reportSchema = new Schema(
     image: String,
     status: {
       type: String,
-      enum: ['pending', 'verified', 'validated', 'rejected', 'anomaly'],
+      enum: ['pending', 'verified', 'flagged', 'rejected'],
       default: 'pending',
       index: true,
     },
@@ -40,14 +41,29 @@ const reportSchema = new Schema(
     district: String,
     city: {
       type: String,
-      default: 'Karachi',
       index: true,
     },
     category: {
       type: String,
+      enum: Object.values(REPORT_CATEGORIES),
       default: REPORT_CATEGORIES.URBAN_HEAT_ISLAND,
     },
     description: String,
+    // Citizen-supplied context the frontend collects (Phase 3: persisted,
+    // previously dropped on the floor).
+    causes: {
+      type: [String],
+      default: [],
+    },
+    observedAt: {
+      type: Date,
+      default: null,
+    },
+    // Privacy-preserving snapped coordinates (see anonymizationService).
+    snappedLocation: {
+      lat: Number,
+      lng: Number,
+    },
     source: {
       type: String,
       default: 'Citizen',
@@ -74,6 +90,13 @@ const reportSchema = new Schema(
       index: true,
     },
     deviceId: String,
+    // Provenance anchor: this system never writes fabricated measurements,
+    // so this is always false. It exists so the guarantee is queryable.
+    isSynthetic: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -113,7 +136,8 @@ reportSchema
     return this.ambientTemp;
   })
   .set(function (val) {
-    this.ambientTemp = Number(val);
+    // Preserve null/undefined: Number(null) === 0 would fabricate a reading.
+    this.ambientTemp = val == null ? val : Number(val);
   });
 
 reportSchema.virtual('area').get(function () {
@@ -140,6 +164,17 @@ reportSchema.pre('save', function (next) {
   }
   if (!this.ambientTemp && this.temperature) {
     this.ambientTemp = this.temperature;
+  }
+  next();
+});
+
+// Normalize legacy statuses ('validated' → 'verified', 'anomaly' →
+// 'flagged') in pre('validate') so pre-Phase-3 rows pass the new enum and
+// keep working under the lifecycle.
+reportSchema.pre('validate', function (next) {
+  if (this.status) {
+    const normalized = normalizeStatus(this.status);
+    if (normalized !== this.status) this.status = normalized;
   }
   next();
 });

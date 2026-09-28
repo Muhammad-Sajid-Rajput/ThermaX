@@ -7,7 +7,16 @@ const isDummyKey = !apiKey || apiKey.includes('your_resend_api_key');
 const resend = new Resend(isDummyKey ? 're_1234567890' : apiKey);
 const FROM_ADDRESS = process.env.RESEND_FROM || 'ThermaX <onboarding@resend.dev>';
 
+const esc = (str) =>
+  String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 function renderOtpEmail({ title, displayName, messageText, otp }) {
+  const safeName = esc(displayName) || 'User';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,7 +36,7 @@ function renderOtpEmail({ title, displayName, messageText, otp }) {
           </tr>
           <tr>
             <td style="padding:32px;">
-              <p style="margin:0 0 12px;font-size:15px;font-weight:600;">Hi ${displayName || 'User'},</p>
+              <p style="margin:0 0 12px;font-size:15px;font-weight:600;">Hi ${safeName},</p>
               <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.5;">${messageText}</p>
               <div style="background:#fef2f2;border:2px dashed #ef4444;border-radius:8px;padding:20px;text-align:center;margin-bottom:24px;">
                 <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;">Verification Code</p>
@@ -51,7 +60,8 @@ function renderOtpEmail({ title, displayName, messageText, otp }) {
 
 export async function sendVerificationEmail(to, name, otp) {
   if (isDummyKey) {
-    console.log(`📧 [DEV PREVIEW] Verification OTP for ${to}: ${otp}`);
+    // Never log OTP codes, even in development.
+    console.log(`📧 [DEV PREVIEW] Verification email to ${to} (code sent, not logged)`);
     return { id: 'dev-preview-id' };
   }
 
@@ -75,13 +85,18 @@ export async function sendVerificationEmail(to, name, otp) {
     return data;
   } catch (err) {
     console.error('[Resend Email Error]:', err.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`\n🔑 [DEV FALLBACK OTP] Verification code for ${to}: ${otp}\n(Note: Resend test domain onboarding@resend.dev only delivers to account owner muhammadsajidrajput20@gmail.com)\n`);
+      return { id: 'dev-fallback', otp };
+    }
     throw err;
   }
 }
 
 export async function sendPasswordResetEmail(to, name, otp) {
   if (isDummyKey) {
-    console.log(`📧 [DEV PREVIEW] Password Reset OTP for ${to}: ${otp}`);
+    // Never log OTP codes in production; in dev preview, note it
+    console.log(`📧 [DEV PREVIEW] Password reset email to ${to} (code sent, not logged)`);
     return { id: 'dev-preview-id' };
   }
 
@@ -105,6 +120,10 @@ export async function sendPasswordResetEmail(to, name, otp) {
     return data;
   } catch (err) {
     console.error('[Resend Email Error]:', err.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`\n🔑 [DEV FALLBACK OTP] Password reset code for ${to}: ${otp}\n(Note: Resend test domain onboarding@resend.dev only delivers to account owner muhammadsajidrajput20@gmail.com)\n`);
+      return { id: 'dev-fallback', otp };
+    }
     throw err;
   }
 }
