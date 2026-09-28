@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import AdminLayout from './components/admin/AdminLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -13,6 +13,7 @@ import MyReportsPage from './Pages/Reports/MyReportsPage';
 import ReportsPage from './Pages/Reports/ReportsPage';
 import ProfilePage from './Pages/Profile/ProfilePage';
 import PermissionDeniedPage from './Pages/Permission/PermissionDeniedPage';
+import PermissionPage from './Pages/Permission/PermissionPage';
 import UnauthorizedPage from './Pages/Permission/UnauthorizedPage';
 import SubmissionStatusPage from './Pages/HeatReport/SubmissionStatusPage';
 
@@ -41,6 +42,12 @@ function AdminRoutes() {
   );
 }
 
+function CatchAllRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/'} replace />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -59,14 +66,31 @@ function App() {
                 <Route path="/login" element={<AuthPage />} />
                 <Route path="/signup" element={<AuthPage />} />
 
-                {/* Public Dashboard Routes (no login required) */}
-                <Route path="/dashboard" element={<SaaS />} />
-                <Route path="/insight" element={<Navigate to="/dashboard" replace />} />
-
-                {/* Public Reports Route */}
-                <Route path="/reports" element={<ReportsPage />} />
-
                 {/* Protected Routes - Authentication Required */}
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <SaaS />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/insight"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/dashboard" replace />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports"
+                  element={
+                    <ProtectedRoute>
+                      <ReportsPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/report"
                   element={
@@ -102,15 +126,16 @@ function App() {
 
                 {/* Unauthorized/Permission Pages */}
                 <Route path="/unauthorized" element={<UnauthorizedPage />} />
+                <Route path="/permission" element={<PermissionPage />} />
                 <Route
                   path="/permission/denied"
                   element={<PermissionDeniedPage />}
                 />
 
-                {/* Catch all - redirect to dashboard */}
+                {/* Catch all - authenticated to dashboard, unauthenticated to landing */}
                 <Route
                   path="*"
-                  element={<Navigate to="/dashboard" replace />}
+                  element={<CatchAllRoute />}
                 />
               </Routes>
             </AppLayout>

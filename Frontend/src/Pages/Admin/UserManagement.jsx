@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AdminPanel, StatusBadge } from '../../components/admin';
 import { toast } from 'react-hot-toast';
 import {
@@ -27,9 +26,10 @@ import {
   updateUserRole,
   formatTimestamp,
 } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 function UserManagement() {
-  const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -62,7 +62,9 @@ function UserManagement() {
         lastActive: u.updatedAt || u.createdAt,
       }));
       setUsers(normalized);
-      applyFilters(normalized);
+      // Client-side filters are applied by the effect below which watches
+      // `users` — calling applyFilters here directly would capture a stale
+      // closure over `filters` (exhaustive-deps).
     } catch (err) {
       console.error('Failed to load users:', err);
       toast.error('Failed to fetch real user directory.');
@@ -112,7 +114,24 @@ function UserManagement() {
   }, [filters, applyFilters, users]);
 
   // Actions
+  const isCurrentAdmin = (id) => {
+    return Boolean(
+      currentUser &&
+      (id === currentUser._id || id === currentUser.id || id === currentUser.userId)
+    );
+  };
+
   const handleUserStatusToggle = async (userId, targetActive) => {
+    if (!targetActive && isCurrentAdmin(userId)) {
+      toast.error('You cannot suspend your own administrative account.');
+      return;
+    }
+
+    const actionWord = targetActive ? 'activate' : 'suspend';
+    if (!window.confirm(`Are you sure you want to ${actionWord} this account?`)) {
+      return;
+    }
+
     try {
       setActionInProgress(true);
       await updateUserStatus(userId, targetActive);
@@ -135,6 +154,15 @@ function UserManagement() {
   };
 
   const handleUserRoleChange = async (userId, targetRole) => {
+    if (targetRole !== 'ADMIN' && isCurrentAdmin(userId)) {
+      toast.error('You cannot demote your own administrative account.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to change this user's role to ${targetRole}?`)) {
+      return;
+    }
+
     try {
       setActionInProgress(true);
       await updateUserRole(userId, targetRole);
@@ -155,6 +183,17 @@ function UserManagement() {
 
   const handleBulkAction = async (targetActive) => {
     if (selectedUsers.length === 0) return;
+
+    if (!targetActive && selectedUsers.some(isCurrentAdmin)) {
+      toast.error('Your own account is selected. Remove yourself before bulk suspension.');
+      return;
+    }
+
+    const actionWord = targetActive ? 'activate' : 'suspend';
+    if (!window.confirm(`Are you sure you want to ${actionWord} ${selectedUsers.length} selected user(s)?`)) {
+      return;
+    }
+
     try {
       setActionInProgress(true);
       await Promise.all(
@@ -165,7 +204,7 @@ function UserManagement() {
       );
       setSelectedUsers([]);
       await loadUsers();
-    } catch (err) {
+    } catch {
       toast.error('Bulk update failed.');
     } finally {
       setActionInProgress(false);
@@ -384,7 +423,6 @@ function UserManagement() {
                 </tr>
               ) : (
                 currentPageItems.map((u) => {
-                  const isCurrentUser = false;
                   return (
                     <tr
                       key={u.id}
@@ -500,7 +538,7 @@ function UserManagement() {
       {/* User Details & Governance Modal */}
       {showDetailModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-fade-in duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">

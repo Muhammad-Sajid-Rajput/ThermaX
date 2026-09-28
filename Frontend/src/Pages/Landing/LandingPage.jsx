@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowRight,
   Map as MapIcon,
   ShieldAlert,
   Activity,
@@ -14,7 +13,7 @@ import { NavLink } from 'react-router-dom';
 // and has a different visual hierarchy. This header is intentionally minimal.)
 const LandingHeader = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const handleLogout = async () => {
     await logout();
     navigate('/login');
@@ -113,14 +112,6 @@ const LandingPage = () => {
             >
               <ShieldAlert className="w-5 h-5 mr-2 group-hover:animate-pulse" />
               Report Heat
-            </button>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="group inline-flex items-center justify-center px-8 py-4 text-base font-bold rounded-xl text-slate-700 bg-white border-2 border-slate-200 hover:border-green-500 hover:text-green-600 transition-all shadow-md hover:shadow-lg hover:-translate-y-1"
-            >
-              <MapIcon className="w-5 h-5 mr-2" />
-              Dashboard
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
         </div>

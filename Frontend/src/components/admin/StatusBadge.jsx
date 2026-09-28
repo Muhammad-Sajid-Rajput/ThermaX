@@ -48,7 +48,7 @@ const StatusBadge = ({
       dot: 'bg-slate-400',
       label: 'Inactive',
     },
-    // Report status
+    // Report status (Phase 3 lifecycle vocabulary)
     pending: {
       bg: 'bg-amber-100',
       border: 'border-amber-200',
@@ -56,12 +56,27 @@ const StatusBadge = ({
       dot: 'bg-amber-500',
       label: 'Pending',
     },
+    verified: {
+      bg: 'bg-emerald-100',
+      border: 'border-emerald-200',
+      text: 'text-emerald-700',
+      dot: 'bg-emerald-500',
+      label: 'Verified',
+    },
+    // Legacy alias of verified (kept for old records/UIs)
     validated: {
       bg: 'bg-emerald-100',
       border: 'border-emerald-200',
       text: 'text-emerald-700',
       dot: 'bg-emerald-500',
-      label: 'Validated',
+      label: 'Verified',
+    },
+    flagged: {
+      bg: 'bg-amber-100',
+      border: 'border-amber-200',
+      text: 'text-amber-700',
+      dot: 'bg-amber-500',
+      label: 'Flagged',
     },
     rejected: {
       bg: 'bg-red-100',
@@ -71,10 +86,10 @@ const StatusBadge = ({
       label: 'Rejected',
     },
     duplicate: {
-      bg: 'bg-green-100',
-      border: 'border-green-200',
-      text: 'text-green-700',
-      dot: 'bg-green-500',
+      bg: 'bg-slate-100',
+      border: 'border-slate-200',
+      text: 'text-slate-600',
+      dot: 'bg-slate-400',
       label: 'Duplicate',
     },
     // Severity
@@ -107,7 +122,8 @@ const StatusBadge = ({
       label: 'Low',
     },
   };
-  const config = statusConfigs[status.toLowerCase()] || statusConfigs.inactive;
+  const key = status ? String(status).toLowerCase() : '';
+  const config = statusConfigs[key] || statusConfigs.inactive;
   const sizeClasses = {
     sm: 'px-2 py-0.5 text-xs',
     md: 'px-3 py-1 text-sm',

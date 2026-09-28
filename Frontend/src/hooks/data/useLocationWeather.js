@@ -24,7 +24,10 @@ export default function useLocationWeather({
     }
   }, [autoLocate, requestLocation]);
 
-  const hasCoords = lat != null && lon != null;
+  // (0,0) "Null Island" is never a real user location — treat it as
+  // unresolved so no weather call fires for it (see useWeather).
+  const hasCoords =
+    lat != null && lon != null && !(Number(lat) === 0 && Number(lon) === 0);
   const weatherQuery = useWeather(lat, lon, {
     save,
     enabled: enabled && hasCoords,

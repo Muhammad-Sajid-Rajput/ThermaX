@@ -61,7 +61,7 @@ const UnauthorizedPage = () => {
           </button>
           <button
             onClick={() => navigate(-1)}
-            className="w-full py-3 px-4 text-slate-600 font-semibold hover:bg-slate-50 :bg-slate-800 rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
+            className="w-full py-3 px-4 text-slate-600 font-semibold hover:bg-slate-50 rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
           >
             <ArrowLeft className="w-4 h-4" />
             Go Back
@@ -77,7 +77,7 @@ const UnauthorizedPage = () => {
               onClick={() =>
                 navigate('/login', { state: { from: attemptedUrl } })
               }
-              className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 :bg-slate-100 text-white font-semibold rounded-xl transition-colors"
+              className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl transition-colors"
             >
               Log In
             </button>

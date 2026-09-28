@@ -66,6 +66,7 @@ const TrendChart = ({ trend = [], onBarClick }) => {
       <AreaChart
         data={data}
         margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
+        onClick={(state) => state?.activeLabel && onBarClick?.('date', state.activeLabel)}
       >
         <defs>
           <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
@@ -95,7 +96,6 @@ const TrendChart = ({ trend = [], onBarClick }) => {
           strokeWidth={2}
           fill="url(#trendGrad)"
           animationDuration={800}
-          onClick={(data) => onBarClick?.('date', data?.date)}
         />
       </AreaChart>
     </ResponsiveContainer>

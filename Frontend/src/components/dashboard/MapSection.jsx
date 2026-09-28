@@ -4,11 +4,11 @@ import 'leaflet.heat';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Map, Eye, EyeOff, RotateCcw, Maximize, Minimize, Navigation } from 'lucide-react';
 import useFullscreen from '../../hooks/ui/useFullscreen';
-import { useAuth } from '../../context/AuthContext';
 import useUserLocationStore from '../../stores/userLocationStore';
 
 import { runDbscan } from '../../utils/geo/clustering';
 import { processClustersToHotspots } from '../../utils/geo/hotspotUtils';
+import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
 import {
   formatHeatmapPoints,
   HEATMAP_CONFIG,
@@ -26,6 +26,10 @@ L.Icon.Default.mergeOptions({
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
+// Live labels: API priority (Critical|High|Moderate|Low|Unknown, see
+// Backend/routes/hotspots.js toDto) or client-computed severityLabel from
+// utils/geo/hotspotUtils.js (Extreme|High|Moderate|Low|Unknown). `Medium` is
+// a legacy alias the current API never emits; unknown keys fall back to teal.
 const PRIORITY_COLORS = {
   Extreme: '#dc2626',
   Critical: '#dc2626',
@@ -53,7 +57,6 @@ const LeafletMapInner = ({
   reportsData,
   focus,
   layers,
-  onLayersChange,
   resetTrigger,
   center = PAKISTAN_CENTER,
   zoom = PAKISTAN_ZOOM,
@@ -112,6 +115,10 @@ const LeafletMapInner = ({
         mapRef.current = null;
       }
     };
+    // `center`/`zoom` are intentionally init-only here: layer effects below
+    // react to prop changes via setView. Re-running this effect would destroy
+    // and recreate the Leaflet map on every pan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Heatmap layer
@@ -170,30 +177,9 @@ const LeafletMapInner = ({
           const color = PRIORITY_COLORS[priority] ?? '#0f766e';
           let layer;
 
-          const popupContent = `
-          <div style="min-width:200px;font-family:Inter,sans-serif;line-height:1.5">
-            <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#1e293b;">
-              ${hs.area || hs.id || 'Hotspot Area'}
-            </div>
-            <span style="background:${color}22;color:${color};font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;display:inline-block;margin-bottom:8px;">
-              ${priority}
-            </span>
-            <div style="font-size:12px;color:#475569">
-              <div style="display:flex; justify-content:space-between;">
-                <span>Avg Temp:</span> <b>${hs.avgTemp ?? hs.avgTemperature ?? 'N/A'}°C</b>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span>Avg Severity:</span> <b>${(hs.avgSeverity ?? 0).toFixed(1)}</b>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span>Reports:</span> <b>${hs.reportCount ?? 0}</b>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span>Confidence:</span> <b>${hs.confidence > 1 ? hs.confidence : ((hs.confidence ?? 0) * 100).toFixed(0)}%</b>
-              </div>
-            </div>
-          </div>
-        `;
+          // Popup HTML is built by the shared, XSS-hardened builder —
+          // never interpolate API values into a template literal here.
+          const popupContent = buildHotspotPopup(hs, color);
 
           if (hs.geojson) {
             // Render Polygon
@@ -262,10 +248,15 @@ const LeafletMapInner = ({
     if (layers.reports && reportsData?.length > 0) {
       const newMarkers = reportsData
         .map((rpt) => {
-          const [lat, lng] = rpt.coordinates ?? [rpt.lat, rpt.lng];
+          // Public DTO carries the snapped (anonymized) location; admin
+          // documents carry exact coordinates via the `coordinates` virtual.
+          const loc = rpt.location ?? {};
+          const lat = loc.lat ?? rpt.coordinates?.[0] ?? rpt.lat;
+          const lng = loc.lng ?? rpt.coordinates?.[1] ?? rpt.lng;
           if (!lat || !lng) return null;
 
-          const sev = rpt.severity ?? 1;
+          // Coerce: a non-numeric severity must never reach the icon HTML.
+          const sev = Number.isFinite(Number(rpt.severity)) ? Number(rpt.severity) : 1;
           const color = SEVERITY_COLORS[sev] ?? '#94a3b8';
           const size = 10 + sev * 3;
 
@@ -282,15 +273,7 @@ const LeafletMapInner = ({
             iconAnchor: [size, size],
           });
 
-          const marker = L.marker([lat, lng], { icon }).bindPopup(`
-          <div style="min-width:210px;font-family:Inter,sans-serif;line-height:1.5">
-            <div style="font-weight:700;font-size:13px;margin-bottom:1px">${rpt.id || 'Report'}</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:5px">${rpt.area || ''} ${rpt.category ? '· ' + rpt.category : ''}</div>
-            <div style="font-size:12px;color:#334155;margin-bottom:5px">${rpt.description || 'No description provided.'}</div>
-            <div style="font-size:11px;color:#94a3b8">
-              <b>Source:</b> ${rpt.source || 'User'} &nbsp;·&nbsp; <b>Severity:</b> ${rpt.severity}/5
-            </div>
-          </div>`);
+          const marker = L.marker([lat, lng], { icon }).bindPopup(buildReportPopup(rpt));
 
           marker.addTo(map);
           return marker;
@@ -477,7 +460,6 @@ const MapSection = ({
   initialZoom = null,
   disableLegend = false,
 }) => {
-  const { isAuthenticated } = useAuth();
   const { lat, lng, cityName, accuracy, status: locationStatus, requestLocation } = useUserLocationStore();
 
   const isUserLocated = locationStatus === 'ready' && lat != null && lng != null;
@@ -518,13 +500,21 @@ const MapSection = ({
   });
 
   useEffect(() => {
+    if (hideControls) {
+      setLayers({
+        heat: focus === 'heatmap',
+        hotspots: focus === 'hotspots',
+        reports: !focus || focus === 'reports',
+      });
+      return;
+    }
     setLayers((prev) => ({
       ...prev,
-      ...(showHeatmap !== undefined ? { heat: showHeatmap } : {}),
-      ...(showHotspots !== undefined ? { hotspots: showHotspots } : {}),
-      ...(showMarkers !== undefined ? { reports: showMarkers } : {}),
+      ...(showHeatmap !== undefined ? { heat: showHeatmap && (focus === 'heatmap' || !focus) } : {}),
+      ...(showHotspots !== undefined ? { hotspots: showHotspots && (focus === 'hotspots' || !focus) } : {}),
+      ...(showMarkers !== undefined ? { reports: showMarkers && (!focus || focus === 'reports') } : {}),
     }));
-  }, [showHeatmap, showHotspots, showMarkers]);
+  }, [showHeatmap, showHotspots, showMarkers, hideControls, focus]);
 
   useEffect(() => {
     if (initialCenter) {
@@ -566,42 +556,24 @@ const MapSection = ({
     setResetTrigger((prev) => prev + 1);
   };
 
-  // Compute DBSCAN Hotspots if points are provided
+  // Honest data resolution: server-published hotspots only. Never fabricate
+  // client-side clusters as official hotspots when none exist.
   const { finalHeatmap, finalHotspots, finalReports } = useMemo(() => {
-    let finalHeatmap = heatmap;
-    let finalHotspots = hotspots;
-    let finalReports = reports;
+    let finalHeatmap = heatmap || [];
+    let finalHotspots = hotspots || [];
+    let finalReports = reports || [];
 
-    // Use points directly for DBSCAN, or fallback to mapping reports if neither heatmap nor hotspots are provided
-    const sourcePoints =
-      points?.length > 0
-        ? points
-        : reports?.length > 0 && (!hotspots || hotspots.length === 0)
-          ? reports.map((r) => ({
-              lat: r.coordinates?.[0] || r.lat,
-              lng: r.coordinates?.[1] || r.lng,
-              temp: r.temperature || 35 + (r.severity || 1) * 1.5,
-              severity: r.severity || 1,
-            }))
-          : [];
-
-    const validPoints = sourcePoints.filter((p) => p.lat && p.lng);
-
-    if (validPoints.length > 0 && (!hotspots || hotspots.length === 0)) {
-      const rawClusters = runDbscan(validPoints, eps, minPts);
-      finalHotspots = processClustersToHotspots(rawClusters, validPoints);
-      finalHeatmap = formatHeatmapPoints(validPoints);
-      finalReports = validPoints; // map points back as reports so they show as markers
-    } else if (validPoints.length > 0) {
-      finalReports = validPoints;
+    if (points?.length > 0) {
+      finalHeatmap = formatHeatmapPoints(points);
+      finalReports = points;
     }
 
     return {
-      finalHeatmap: finalHeatmap || [],
-      finalHotspots: finalHotspots || [],
-      finalReports: finalReports || [],
+      finalHeatmap,
+      finalHotspots,
+      finalReports,
     };
-  }, [heatmap, hotspots, reports, points, eps, minPts]);
+  }, [heatmap, hotspots, reports, points]);
 
   return (
     <Card

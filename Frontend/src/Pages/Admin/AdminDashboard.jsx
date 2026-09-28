@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import {
   KPICard,
   AdminPanel,
@@ -27,6 +26,9 @@ import {
   fetchAdminStats,
   fetchHeatmap,
   fetchHotspots,
+  fetchEnrichmentFailures,
+  retryEnrichmentFailure,
+  dismissEnrichmentFailure,
   formatTimestamp,
 } from '../../services/api';
 
@@ -58,13 +60,13 @@ const Sparkline = ({ data = [10, 15, 12, 18, 20, 25], color = '#10B981' }) => {
 };
 
 function AdminDashboard() {
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   // Real Stats from Database
   const [stats, setStats] = useState({
     pendingReports: 0,
     criticalHotspots: 0,
+    criticalRiskTierHotspots: 0,
     activeHotspots: 0,
     totalReports: 0,
     approvedReports: 0,
@@ -77,23 +79,26 @@ function AdminDashboard() {
 
   // Data states
   const [pendingReports, setPendingReports] = useState([]);
-  const [recentUsers, setRecentUsers] = useState([]);
   const [mapHotspots, setMapHotspots] = useState([]);
   const [mapReports, setMapReports] = useState([]);
+  const [unlocatableReports, setUnlocatableReports] = useState(0);
   const [mapHeatmap, setMapHeatmap] = useState([]);
+  const [enrichmentFailures, setEnrichmentFailures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsData, reportsData, usersData, hotspotsData, heatmapData] = await Promise.all([
+      const [statsData, reportsData, usersData, hotspotsData, heatmapData, failuresData] = await Promise.all([
         fetchAdminStats().catch(() => null),
         fetchReports({ status: 'pending', limit: 6 }).catch(() => ({ data: [] })),
         fetchUsers().catch(() => []),
         fetchHotspots().catch(() => ({ data: [] })),
         fetchHeatmap().catch(() => ({ data: [] })),
+        fetchEnrichmentFailures().catch(() => []),
       ]);
+      setEnrichmentFailures(Array.isArray(failuresData) ? failuresData : []);
 
       const usersList = Array.isArray(usersData) ? usersData : [];
       const totalUsers = usersList.length;
@@ -113,23 +118,31 @@ function AdminDashboard() {
       const formattedReports = rawReports.map((r) => ({
         ...r,
         id: r._id || r.id,
-        area: r.areaName || r.area || 'Karachi Urban',
+        area: r.areaName || r.area || 'Unknown area',
         severity: r.severityLevel || r.severity || 3,
         coordinates: [
-          r.latitude || r.location?.lat || 24.8607,
-          r.longitude || r.location?.lng || 67.0011,
+          r.latitude ?? r.location?.lat ?? null,
+          r.longitude ?? r.location?.lng ?? null,
         ],
       }));
+      // Never pin reports without coordinates at a fabricated city center:
+      // only reports with real coordinates are plotted on the map.
+      const locatableReports = formattedReports.filter(
+        (r) =>
+          Number.isFinite(r.coordinates[0]) && Number.isFinite(r.coordinates[1])
+      );
+      const unlocatableCount = formattedReports.length - locatableReports.length;
 
       setPendingReports(pReports.slice(0, 5));
-      setRecentUsers(usersList.slice(0, 5));
       setMapHotspots(hSpots);
       setMapHeatmap(hPoints);
-      setMapReports(formattedReports);
+      setMapReports(locatableReports);
+      setUnlocatableReports(unlocatableCount);
 
       setStats({
         pendingReports: statsData?.pendingReports ?? pReports.length,
         criticalHotspots: statsData?.criticalHotspots ?? hSpots.filter((h) => (h.priority || '').toLowerCase() === 'critical' || (h.severity && h.severity >= 4)).length,
+        criticalRiskTierHotspots: statsData?.criticalRiskTierHotspots ?? hSpots.filter((h) => (h.riskTier || '').toLowerCase() === 'critical').length,
         activeHotspots: statsData?.activeHotspots ?? hSpots.length,
         totalReports: statsData?.totalReports ?? 0,
         approvedReports: statsData?.approvedReports ?? 0,
@@ -155,7 +168,7 @@ function AdminDashboard() {
   const handleReportAction = async (reportId, action) => {
     try {
       setActionLoadingId(reportId);
-      const newStatus = action === 'approve' ? 'validated' : 'rejected';
+      const newStatus = action === 'approve' ? 'verified' : 'rejected';
 
       // Optimistic update: immediately remove from pending queue in UI
       setPendingReports((prev) =>
@@ -173,13 +186,40 @@ function AdminDashboard() {
       await updateModerationStatus(reportId, newStatus);
       toast.success(
         action === 'approve'
-          ? 'Report approved & validated'
+          ? 'Report approved & verified'
           : 'Report rejected'
       );
       await loadDashboardData();
-    } catch (err) {
+    } catch {
       toast.error('Action failed. Please try again.');
       await loadDashboardData();
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Phase 4: enrichment dead letters — retry or dismiss, then refresh.
+  const handleFailureRetry = async (failureId) => {
+    try {
+      setActionLoadingId(failureId);
+      await retryEnrichmentFailure(failureId);
+      toast.success('Enrichment re-queued');
+      await loadDashboardData();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Retry failed. Please try again.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleFailureDismiss = async (failureId) => {
+    try {
+      setActionLoadingId(failureId);
+      await dismissEnrichmentFailure(failureId);
+      toast.success('Failure dismissed');
+      await loadDashboardData();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Dismiss failed. Please try again.');
     } finally {
       setActionLoadingId(null);
     }
@@ -231,9 +271,9 @@ function AdminDashboard() {
         </KPICard>
 
         <KPICard
-          title="CRITICAL HOTSPOTS"
+          title="CRITICAL HOTSPOTS (TEMP-SEVERITY)"
           value={stats.criticalHotspots}
-          change={`${stats.activeHotspots} total active`}
+          change={`${stats.activeHotspots} total active · ${stats.criticalRiskTierHotspots ?? 0} TVI-critical`}
           changeType="neutral"
           trend="spatial clusters"
           icon={Flame}
@@ -258,7 +298,7 @@ function AdminDashboard() {
         <KPICard
           title="TOTAL CITIZEN REPORTS"
           value={stats.totalReports}
-          change={`${stats.approvedReports} validated`}
+          change={`${stats.approvedReports} verified`}
           changeType="up"
           trend="all time"
           icon={Activity}
@@ -284,6 +324,12 @@ function AdminDashboard() {
             showMarkers={true}
             disableLegend={true}
           />
+          {unlocatableReports > 0 && (
+            <p className="px-4 py-2 text-[11px] text-slate-400 bg-white border-t border-slate-100">
+              {unlocatableReports} report{unlocatableReports === 1 ? '' : 's'} without
+              location data {unlocatableReports === 1 ? 'is' : 'are'} not shown on the map.
+            </p>
+          )}
         </div>
 
         {/* Hotspots Feed Panel (1 Col) - Perfectly Aligned Height */}
@@ -346,19 +392,13 @@ function AdminDashboard() {
                         <div className="bg-slate-50 rounded-lg py-1 px-1">
                           <span className="text-[10px] text-slate-400 font-medium block">Avg Temp</span>
                           <span className="text-xs font-bold font-mono text-slate-800">
-                            {hs.avgTemperature || hs.avgTemp ? `${hs.avgTemperature || hs.avgTemp}°C` : 'Elevated'}
+                            {(hs.avgTemperature ?? hs.avgTemp) != null ? `${hs.avgTemperature ?? hs.avgTemp}°C` : 'N/A'}
                           </span>
                         </div>
                         <div className="bg-slate-50 rounded-lg py-1 px-1">
                           <span className="text-[10px] text-slate-400 font-medium block">Reports</span>
                           <span className="text-xs font-bold font-mono text-slate-800">
-                            {hs.reportCount || 1}
-                          </span>
-                        </div>
-                        <div className="bg-slate-50 rounded-lg py-1 px-1">
-                          <span className="text-[10px] text-slate-400 font-medium block">Confidence</span>
-                          <span className="text-xs font-bold font-mono text-emerald-600">
-                            {Math.round((hs.confidence || 0.85) * 100)}%
+                            {hs.reportCount ?? 0}
                           </span>
                         </div>
                       </div>
@@ -385,6 +425,49 @@ function AdminDashboard() {
       </div>
 
       {/* Row 3: Operational Governance (Moderation Queue + User Governance & Diagnostics) */}
+      {/* Phase 4: enrichment dead letters — only rendered when failures exist. */}
+      {enrichmentFailures.length > 0 && (
+        <AdminPanel
+          title={`ML Enrichment Failures (${enrichmentFailures.length})`}
+          subtitle="Reports whose enrichment trigger failed after 3 retries. The ML scheduler will pick up pending reports on its next tick; retry now or dismiss."
+          icon={AlertTriangle}
+          iconColor="yellow"
+        >
+          <div className="space-y-3">
+            {enrichmentFailures.map((f) => (
+              <div
+                key={f._id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {f.report?.reportRef || 'Report'} · {f.report?.city || 'Unknown city'}
+                  </p>
+                  <p className="text-xs text-slate-600 truncate">
+                    {f.attempts} attempts · {f.lastError} · {formatTimestamp(f.lastAttemptAt)}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleFailureRetry(f._id)}
+                    disabled={actionLoadingId === f._id}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={() => handleFailureDismiss(f._id)}
+                    disabled={actionLoadingId === f._id}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminPanel>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Moderation Queue Panel */}
         <AdminPanel
@@ -415,7 +498,7 @@ function AdminDashboard() {
               {pendingReports.map((report) => {
                 const rId = report._id || report.id;
                 const severity = report.severityLevel || report.severity || 3;
-                const area = report.areaName || report.area || 'Karachi Urban';
+                const area = report.areaName || report.area || 'Unknown area';
                 const userName = report.user?.fullName || report.userName || 'Citizen';
 
                 return (

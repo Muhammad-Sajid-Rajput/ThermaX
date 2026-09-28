@@ -3,6 +3,9 @@ import { fetchHeatmap } from '../../services/api';
 /**
  * Thin wrapper around fetchHeatmap using the same pattern as useHotspots/useReports.
  * Returns { data, loading, error, reload }.
+ *
+ * `params` is usually an inline object literal — the effect keys on its
+ * serialization so identical filter values don't refetch in a loop.
  */
 const useHeatmap = (params = {}) => {
   const [state, setState] = useState({
@@ -10,6 +13,7 @@ const useHeatmap = (params = {}) => {
     loading: true,
     error: null,
   });
+  const paramsKey = JSON.stringify(params ?? {});
   const load = () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     fetchHeatmap(params)
@@ -26,7 +30,10 @@ const useHeatmap = (params = {}) => {
   };
   useEffect(() => {
     load();
-  }, [JSON.stringify(params)]);
+    // `load` is intentionally not in deps: it closes over `params`, and the
+    // serialized `paramsKey` is the stable signal for "filters changed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
   return { ...state, reload: load };
 };
 export default useHeatmap;

@@ -7,11 +7,21 @@
 export const formatHeatmapPoints = (points) => {
   if (!points || points.length === 0) return [];
 
-  return points.map((p) => {
-    // Convert severity (1-5) into heat intensity (0-1)
-    const intensity = p.severity ? p.severity / 5 : 0.5;
-    return [p.lat, p.lng, intensity];
-  });
+  return points
+    .filter((p) => p && p.lat != null && p.lng != null)
+    .map((p) => {
+      let intensity;
+      if (typeof p.intensity === 'number' && Number.isFinite(p.intensity)) {
+        intensity = Math.max(0, Math.min(1, p.intensity));
+      } else if (typeof p.severity === 'number' && Number.isFinite(p.severity)) {
+        intensity = Math.max(0, Math.min(1, p.severity / 5));
+      } else if (typeof p.severityLevel === 'number' && Number.isFinite(p.severityLevel)) {
+        intensity = Math.max(0, Math.min(1, p.severityLevel / 5));
+      } else {
+        intensity = 0.5;
+      }
+      return [p.lat, p.lng, intensity];
+    });
 };
 
 /**

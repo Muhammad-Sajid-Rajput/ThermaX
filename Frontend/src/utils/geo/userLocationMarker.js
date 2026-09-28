@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { escapeHtml } from '../escapeHtml';
 
 // Creates a Leaflet DivIcon representing the user's current GPS location
 export const createUserLocationIcon = () => {
@@ -51,7 +52,7 @@ export const createUserLocationMarker = (lat, lng, options = {}) => {
     title: 'Your Location',
   });
 
-  const cityLine = cityName ? `<div style="font-size:12px;font-weight:600;color:#334155;margin-bottom:3px;">${cityName}</div>` : '';
+  const cityLine = cityName ? `<div style="font-size:12px;font-weight:600;color:#334155;margin-bottom:3px;">${escapeHtml(cityName)}</div>` : '';
   const accuracyLine = accuracy ? `<div style="font-size:10px;color:#94a3b8;margin-top:3px;">Accuracy: ±${Math.round(accuracy)}m</div>` : '';
 
   marker.bindPopup(`

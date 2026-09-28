@@ -25,6 +25,7 @@ export default function Analytics() {
     rejectedReports: 0,
     activeHotspots: 0,
     criticalHotspots: 0,
+    criticalRiskTierHotspots: 0,
     totalUsers: 0,
     activeUsers: 0,
   });
@@ -49,10 +50,14 @@ export default function Analytics() {
       setStats({
         totalReports: adminStats?.totalReports ?? rList.length,
         pendingReports: adminStats?.pendingReports ?? rList.filter((r) => r.status === 'pending').length,
-        approvedReports: adminStats?.approvedReports ?? rList.filter((r) => r.status === 'validated' || r.status === 'verified').length,
+        approvedReports: adminStats?.approvedReports ?? rList.filter((r) => {
+          const s = String(r.status || '').toLowerCase();
+          return s === 'verified' || s === 'validated'; // validated = legacy alias
+        }).length,
         rejectedReports: adminStats?.rejectedReports ?? rList.filter((r) => r.status === 'rejected').length,
         activeHotspots: adminStats?.activeHotspots ?? hList.length,
         criticalHotspots: adminStats?.criticalHotspots ?? 0,
+        criticalRiskTierHotspots: adminStats?.criticalRiskTierHotspots ?? 0,
         totalUsers: uList.length,
         activeUsers: uList.filter((u) => u.isActive !== false).length,
       });
@@ -68,16 +73,19 @@ export default function Analytics() {
     loadAnalytics();
   }, [loadAnalytics]);
 
-  // Compute Severity Breakdown (Level 1 to 5)
+  // Compute Severity Breakdown (Level 1 to 5) — only for reports with valid severity
   const severityDistribution = useMemo(() => {
     const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let validReportsCount = 0;
     reports.forEach((r) => {
-      const s = r.severityLevel || r.severity || 3;
-      if (counts[s] !== undefined) counts[s]++;
-      else counts[3]++;
+      const s = r.severityLevel ?? r.severity;
+      if (s != null && counts[s] !== undefined) {
+        counts[s]++;
+        validReportsCount++;
+      }
     });
 
-    const total = reports.length || 1;
+    const total = validReportsCount || 1;
     return [
       { label: 'Level 5 (Critical)', count: counts[5], pct: Math.round((counts[5] / total) * 100), color: '#dc2626' },
       { label: 'Level 4 (Severe)', count: counts[4], pct: Math.round((counts[4] / total) * 100), color: '#ea580c' },
@@ -91,7 +99,7 @@ export default function Analytics() {
   const topAreas = useMemo(() => {
     const areaMap = {};
     reports.forEach((r) => {
-      const area = r.areaName || r.area || r.district || 'Karachi Urban';
+      const area = r.areaName || r.area || r.district || 'Unknown area';
       areaMap[area] = (areaMap[area] || 0) + 1;
     });
 
@@ -100,11 +108,18 @@ export default function Analytics() {
       .slice(0, 6);
   }, [reports]);
 
-  // Compute Average Severity
+  // Compute Average Severity — only over reports that actually have one.
+  // Reports without a severity are excluded, never defaulted to 3.
   const avgSeverity = useMemo(() => {
-    if (reports.length === 0) return '0.0';
-    const sum = reports.reduce((acc, r) => acc + (r.severityLevel || r.severity || 3), 0);
-    return (sum / reports.length).toFixed(1);
+    const withSev = reports.filter(
+      (r) => (r.severityLevel ?? r.severity) != null
+    );
+    if (withSev.length === 0) return 'N/A';
+    const sum = withSev.reduce(
+      (acc, r) => acc + Number(r.severityLevel ?? r.severity),
+      0
+    );
+    return (sum / withSev.length).toFixed(1);
   }, [reports]);
 
   return (
@@ -142,7 +157,7 @@ export default function Analytics() {
           </div>
           <p className="text-2xl font-bold text-slate-900">{stats.totalReports}</p>
           <p className="text-[11px] text-slate-400 mt-1">
-            {stats.approvedReports} validated in system
+            {stats.approvedReports} verified in system
           </p>
         </div>
 
@@ -166,7 +181,7 @@ export default function Analytics() {
           </div>
           <p className="text-2xl font-bold text-slate-900">{stats.activeHotspots}</p>
           <p className="text-[11px] text-slate-400 mt-1">
-            {stats.criticalHotspots} critical priority
+            {stats.criticalHotspots} temp-severity critical · {stats.criticalRiskTierHotspots ?? 0} TVI-critical
           </p>
         </div>
 
@@ -233,7 +248,7 @@ export default function Analytics() {
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
               <p className="text-xl font-bold text-emerald-700">{stats.approvedReports}</p>
               <p className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider mt-0.5">
-                Validated
+                Verified
               </p>
             </div>
             <div className="p-3.5 rounded-xl bg-red-50 border border-red-100 text-center">

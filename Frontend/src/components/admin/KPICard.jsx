@@ -36,12 +36,12 @@ const KPICard = ({
       glow: 'shadow-lg shadow-green-500/10',
     },
     blue: {
-      bg: 'bg-green-50',
-      border: 'border-green-200',
-      iconBg: 'bg-green-100',
-      iconColor: 'text-green-600',
-      text: 'text-green-600',
-      glow: 'shadow-lg shadow-green-500/10',
+      bg: 'bg-blue-50',
+      border: 'border-blue-200',
+      iconBg: 'bg-blue-100',
+      iconColor: 'text-blue-600',
+      text: 'text-blue-600',
+      glow: 'shadow-lg shadow-blue-500/10',
     },
     purple: {
       bg: 'bg-purple-50',

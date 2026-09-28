@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import {
   CheckCircle,
   Clock,
@@ -10,6 +9,7 @@ import {
   Map,
   BarChart3,
 } from 'lucide-react';
+import { checkHealth } from '../../services/api';
 
 const PAGE_TITLES = {
   '/admin': { title: 'Command Center', icon: LayoutDashboard },
@@ -20,13 +20,24 @@ const PAGE_TITLES = {
 };
 
 const AdminHeader = () => {
-  const { user } = useAuth();
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+    const runCheck = async () => {
+      const ok = await checkHealth();
+      if (mounted) setIsOnline(ok);
+    };
+    runCheck();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const healthInterval = setInterval(runCheck, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+      clearInterval(healthInterval);
+    };
   }, []);
 
   const pageInfo = PAGE_TITLES[location.pathname] || {
@@ -55,9 +66,19 @@ const AdminHeader = () => {
       {/* Right - Live Status & Clock */}
       <div className="flex items-center gap-3">
         {/* System Online Badge */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-xs font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>API Connected</span>
+        <div
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+            isOnline
+              ? 'bg-emerald-50 border border-emerald-200/60 text-emerald-800'
+              : 'bg-red-50 border border-red-200/60 text-red-800'
+          }`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+            }`}
+          />
+          <span>{isOnline ? 'API Connected' : 'API Offline'}</span>
         </div>
 
         {/* Live Clock */}

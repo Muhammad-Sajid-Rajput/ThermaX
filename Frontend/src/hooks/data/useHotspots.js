@@ -1,18 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchHotspots } from '../../services/api.js';
+
+/**
+ * `filters` defaults to `{}` — a fresh object every render. Depending on it
+ * directly (e.g. `useCallback(..., [filters])`) would change the callback
+ * identity every render and re-fire the fetch effect in a loop. Instead the
+ * effect keys on the serialized filters and the loader reads them via ref.
+ */
+function useFiltersRef(filters) {
+  const key = JSON.stringify(filters ?? {});
+  const ref = useRef(filters);
+  ref.current = filters;
+  return { key, ref };
+}
 
 export function useHotspots(filters = {}) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const { key: filtersKey, ref: filtersRef } = useFiltersRef(filters);
 
   const loadHotspots = useCallback(
     async (newFilters = {}) => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetchHotspots({ ...filters, ...newFilters });
+        const response = await fetchHotspots({ ...filtersRef.current, ...newFilters });
         setData(response.data || []);
         setLastUpdated(response.lastUpdated);
       } catch (err) {
@@ -22,7 +36,7 @@ export function useHotspots(filters = {}) {
         setLoading(false);
       }
     },
-    [filters]
+    [filtersRef]
   );
 
   const refresh = useCallback(() => loadHotspots(), [loadHotspots]);
@@ -30,7 +44,7 @@ export function useHotspots(filters = {}) {
 
   useEffect(() => {
     loadHotspots();
-  }, [loadHotspots]);
+  }, [loadHotspots, filtersKey]);
 
   return {
     data,
@@ -47,12 +61,13 @@ export function useHotspotsStats(filters = {}) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { key: filtersKey, ref: filtersRef } = useFiltersRef(filters);
 
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetchHotspots(filters);
+      const response = await fetchHotspots(filtersRef.current);
       const items = response.data || [];
       setStats({
         totalHotspots: items.length,
@@ -65,11 +80,11 @@ export function useHotspotsStats(filters = {}) {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filtersRef]);
 
   useEffect(() => {
     loadStats();
-  }, [loadStats]);
+  }, [loadStats, filtersKey]);
 
   return { stats, loading, error, refresh: loadStats };
 }

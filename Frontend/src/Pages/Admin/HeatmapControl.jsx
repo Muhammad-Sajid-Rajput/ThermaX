@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { AdminPanel } from '../../components/admin';
+import { AdminPanel, HotspotDetailPanel } from '../../components/admin';
 import MapSection from '../../components/dashboard/MapSection';
 import { toast } from 'react-hot-toast';
 import {
@@ -12,16 +12,10 @@ import {
 } from 'lucide-react';
 import { fetchHeatmap, fetchHotspots, fetchReports } from '../../services/api';
 
-function HeatmapControl() {
-  const [selectedProvince, setSelectedProvince] = useState('all');
-  const [customCenter, setCustomCenter] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const [heatmapData, setHeatmapData] = useState([]);
-  const [hotspotsData, setHotspotsData] = useState([]);
-  const [reportsData, setReportsData] = useState([]);
-
-  const provinces = [
+// Static province list — module-level so its identity is stable across
+// renders. (Defined inside the component it would be a fresh array every
+// render, defeating the useMemo hooks that depend on it.)
+const PROVINCES = [
     {
       id: 'all',
       name: 'Pakistan (All)',
@@ -78,7 +72,21 @@ function HeatmapControl() {
       zoom: 8,
       bounds: { minLat: 32.9, maxLat: 35.1, minLng: 73.4, maxLng: 75.3 },
     },
-  ];
+];
+
+function HeatmapControl() {
+  const [selectedProvince, setSelectedProvince] = useState('all');
+  const [customCenter, setCustomCenter] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const [heatmapData, setHeatmapData] = useState([]);
+  const [hotspotsData, setHotspotsData] = useState([]);
+  const [reportsData, setReportsData] = useState([]);
+  // Phase 6: which hotspot's TVI + directive detail is expanded in the feed.
+  const [expandedHotspotId, setExpandedHotspotId] = useState(null);
+
+  // Stable identity (module-level PROVINCES) so dependent useMemos work.
+  const provinces = PROVINCES;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -113,17 +121,26 @@ function HeatmapControl() {
   }, [selectedProvince, provinces]);
 
   const formattedReports = useMemo(() => {
-    return reportsData.map((r) => ({
-      ...r,
-      id: r._id || r.id || 'Report',
-      area: r.areaName || r.area || 'Karachi Urban',
-      severity: r.severityLevel || r.severity || 3,
-      coordinates: [
-        r.latitude || r.location?.lat || 24.8607,
-        r.longitude || r.location?.lng || 67.0011,
-      ],
-    }));
+    return reportsData
+      .map((r) => ({
+        ...r,
+        id: r._id || r.id || 'Report',
+        area: r.areaName || r.area || 'Unknown area',
+        severity: r.severityLevel || r.severity || 3,
+        coordinates: [
+          r.latitude ?? r.location?.lat ?? null,
+          r.longitude ?? r.location?.lng ?? null,
+        ],
+      }))
+      // Never pin reports without coordinates at a fabricated city center:
+      // they are not plotted on the map at all.
+      .filter(
+        (r) =>
+          Number.isFinite(r.coordinates[0]) && Number.isFinite(r.coordinates[1])
+      );
   }, [reportsData]);
+
+  const unlocatableReports = reportsData.length - formattedReports.length;
 
   // Spatial filters according to selected province bounds
   const filteredHotspots = useMemo(() => {
@@ -244,6 +261,12 @@ function HeatmapControl() {
             showMarkers={true}
             disableLegend={true}
           />
+          {unlocatableReports > 0 && (
+            <p className="px-4 py-2 text-[11px] text-slate-400 bg-white border-t border-slate-100">
+              {unlocatableReports} report{unlocatableReports === 1 ? '' : 's'} without
+              location data {unlocatableReports === 1 ? 'is' : 'are'} not shown on the map.
+            </p>
+          )}
         </div>
 
         {/* Hotspots Feed Panel */}
@@ -268,10 +291,15 @@ function HeatmapControl() {
                     : priority === 'High'
                     ? 'bg-orange-50 text-orange-700 border-orange-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200';
+                const hsKey = hs.id || hs._id || idx;
+                const isExpanded = expandedHotspotId === hsKey;
                 return (
                   <div
-                    key={hs.id || hs._id || idx}
-                    onClick={() => handleFocusHotspot(hs)}
+                    key={hsKey}
+                    onClick={() => {
+                      handleFocusHotspot(hs);
+                      setExpandedHotspotId(isExpanded ? null : hsKey);
+                    }}
                     className="p-3.5 rounded-xl border border-slate-200 hover:border-emerald-300 bg-white hover:bg-slate-50/50 transition-all duration-150 cursor-pointer shadow-2xs group"
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -288,6 +316,8 @@ function HeatmapControl() {
                         {hs.avgTemp ?? hs.avgTemperature ? `${hs.avgTemp ?? hs.avgTemperature}°C` : 'Elevated'}
                       </span>
                     </div>
+                    {/* Phase 6: TVI breakdown + directive checklist */}
+                    {isExpanded && <HotspotDetailPanel hotspot={hs} />}
                   </div>
                 );
               })

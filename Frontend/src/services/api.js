@@ -15,7 +15,61 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for automatic 401 Access Token refresh
+// Response interceptor for automatic 401 Access Token refresh.
+// Parallel 401s share a single in-flight refresh (refreshPromise) so N
+// simultaneous failures don't fire N refresh calls and race the token.
+let refreshPromise = null;
+
+// Token-refresh listeners: the axios layer owns the refresh, but React
+// state (AuthContext) also caches the token. Without this bridge the
+// context keeps the pre-refresh token and its persist effect would write
+// the stale token back over the fresh one in storage.
+const tokenRefreshListeners = new Set();
+export function onTokenRefresh(listener) {
+  tokenRefreshListeners.add(listener);
+  return () => {
+    tokenRefreshListeners.delete(listener);
+  };
+}
+function notifyTokenRefresh(newAccessToken) {
+  tokenRefreshListeners.forEach((listener) => {
+    try {
+      listener(newAccessToken);
+    } catch {
+      // A listener must never break the refresh for everyone else.
+    }
+  });
+}
+
+function doRefresh() {
+  if (!refreshPromise) {
+    const storedRefreshToken = authStorage.getRefreshToken();
+    refreshPromise = axios
+      .post(
+        `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/auth/refresh`,
+        storedRefreshToken ? { refreshToken: storedRefreshToken } : {},
+        { withCredentials: true }
+      )
+      .then((refreshRes) => {
+        const newAccessToken = refreshRes.data?.accessToken;
+        const newRefreshToken = refreshRes.data?.refreshToken;
+        if (!newAccessToken) {
+          throw new Error('Refresh did not return an access token');
+        }
+        authStorage.setToken(newAccessToken);
+        if (newRefreshToken) {
+          authStorage.setRefreshToken(newRefreshToken);
+        }
+        notifyTokenRefresh(newAccessToken);
+        return newAccessToken;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -29,17 +83,9 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const refreshRes = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL ?? ''}/api/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
-        const newAccessToken = refreshRes.data?.accessToken;
-        if (newAccessToken) {
-          authStorage.setToken(newAccessToken);
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-          return api(originalRequest);
-        }
+        const newAccessToken = await doRefresh();
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
       } catch (refreshErr) {
         authStorage.clearAuth();
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
@@ -77,11 +123,41 @@ export function formatTimestamp(isoString) {
 // ─── AUTHENTICATION API ───────────────────────────────────────────────────────
 export async function authenticateUser(payload) {
   const response = await api.post('/api/auth/login', payload);
+  if (response.data?.token || response.data?.accessToken) {
+    authStorage.setToken(response.data.accessToken || response.data.token);
+  }
+  if (response.data?.refreshToken) {
+    authStorage.setRefreshToken(response.data.refreshToken);
+  }
   return response.data;
+}
+
+export async function registerUser(payload) {
+  const response = await api.post('/api/auth/signup', payload);
+  return response.data;
+}
+
+export async function logoutUser() {
+  const storedRefreshToken = authStorage.getRefreshToken();
+  try {
+    const response = await api.post(
+      '/api/auth/logout',
+      storedRefreshToken ? { refreshToken: storedRefreshToken } : {}
+    );
+    return response.data;
+  } finally {
+    authStorage.clearAuth();
+  }
 }
 
 export async function verifyEmail(email, code) {
   const response = await api.post('/api/auth/verify-email', { email, code });
+  if (response.data?.token || response.data?.accessToken) {
+    authStorage.setToken(response.data.accessToken || response.data.token);
+  }
+  if (response.data?.refreshToken) {
+    authStorage.setRefreshToken(response.data.refreshToken);
+  }
   return response.data;
 }
 
@@ -123,11 +199,77 @@ export async function fetchMyReports() {
   };
 }
 
-export async function submitHeatReport(payload) {
+/**
+ * Build the multipart body for report submission.
+ *
+ * The backend route uses `upload.single('image')` and reads the report
+ * fields from the `reportData` JSON field. A File placed inside a plain
+ * JSON object would serialize to `{}` and silently drop the photo, so the
+ * file must travel as its own multipart part.
+ */
+export function buildReportFormData(payload, imageFile) {
+  const body = new FormData();
+  body.append('reportData', JSON.stringify(payload));
+  if (imageFile) {
+    body.append('image', imageFile);
+  }
+  return body;
+}
+
+/**
+ * Validate the stored access token against the backend.
+ * Returns the current user on success, null when the session is dead
+ * (callers should clear storage and send the user to /login).
+ */
+export async function fetchCurrentUser() {
+  const response = await api.get('/api/auth/me');
+  return response.data?.user ?? null;
+}
+
+/**
+ * Safe, meaningful message for a failed report submission — mirrors the
+ * getWeatherErrorMessage style in services/weatherService.js.
+ *
+ * Distinguishes: no response (network failure), 5xx (server error, status
+ * code only), and 4xx (validation error with the server's message). Only
+ * the status code and a server-provided message *string* ever reach the
+ * UI — never stack traces or raw error objects.
+ */
+export function getSubmissionErrorMessage(err) {
+  const status = err?.response?.status;
+  const serverMessage =
+    typeof err?.response?.data?.message === 'string'
+      ? err.response.data.message
+      : null;
+  if (status != null) {
+    if (status >= 500) {
+      return `Server error (${status}). Please try again later.`;
+    }
+    if (status >= 400) {
+      return (
+        serverMessage ||
+        `Submission rejected (${status}). Please check the form and try again.`
+      );
+    }
+    return serverMessage || `Submission failed (${status}).`;
+  }
+  if (err?.request) {
+    return 'Network error: the server did not respond. Check your connection and try again.';
+  }
+  return 'Submission failed. Please try again.';
+}
+
+export async function submitHeatReport(payload, { onUploadProgress } = {}) {
   let response;
   if (payload instanceof FormData) {
+    // Never set Content-Type manually here: the browser must append the
+    // multipart boundary itself. A boundary-less 'multipart/form-data'
+    // header makes multer reject the upload ("Boundary not found") and the
+    // photo is silently discarded.
     response = await api.post('/api/report', payload, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Axios upload progress (bytes sent / total). Only fires for the
+      // multipart path — JSON payloads are tiny and don't need it.
+      ...(typeof onUploadProgress === 'function' ? { onUploadProgress } : {}),
     });
   } else {
     response = await api.post('/api/report', payload);
@@ -136,8 +278,14 @@ export async function submitHeatReport(payload) {
 }
 
 export async function deleteMyReport(reportId) {
-  const response = await api.delete(`/api/report/${reportId}`);
-  return response.data;
+  try {
+    const response = await api.delete(`/api/report/${reportId}`);
+    return response.data;
+  } catch (error) {
+    // Surface the backend's friendly message (e.g. pending-only delete rule)
+    // instead of a raw "Request failed with status code 400".
+    throw new Error(error.response?.data?.message || 'Delete failed');
+  }
 }
 
 // ─── HEATMAP & HOTSPOTS API ───────────────────────────────────────────────────
@@ -209,14 +357,49 @@ export async function fetchModerationQueue() {
   };
 }
 
+// Phase 3 report-lifecycle vocabulary: 'pending' | 'verified' | 'flagged' | 'rejected'.
+const MODERATION_DECISIONS = ['verified', 'flagged', 'rejected'];
+const MODERATION_DECISION_ALIASES = {
+  validated: 'verified',
+  anomaly: 'flagged',
+  approve: 'verified',
+};
+
+// Pure helper: resolves an admin decision to the real lifecycle vocabulary.
+// Throws on anything else so an invalid decision can never be silently mapped.
+export function normalizeModerationDecision(decision) {
+  const key = String(decision || '').toLowerCase();
+  if (MODERATION_DECISIONS.includes(key)) return key;
+  if (MODERATION_DECISION_ALIASES[key]) return MODERATION_DECISION_ALIASES[key];
+  throw new Error(`Invalid moderation decision: ${decision}`);
+}
+
 export async function updateModerationStatus(reportId, decision) {
-  const status = decision === 'validated' || decision === 'approve' ? 'validated' : 'rejected';
+  const status = normalizeModerationDecision(decision);
   const response = await api.patch(`/api/report/${reportId}/moderate`, { status });
   return response.data;
 }
 
 export async function fetchAuditLogs(limit = 50) {
   const response = await api.get(`/api/users/audit-logs?limit=${limit}`);
+  return response.data;
+}
+
+// ─── PHASE 4: ENRICHMENT DEAD LETTERS (ADMIN) ───────────────────────────────
+// Reports whose ML enrichment trigger failed after all retries. Surfaced
+// here instead of being swallowed.
+export async function fetchEnrichmentFailures() {
+  const response = await api.get('/api/admin/enrichment-failures');
+  return response.data?.failures || [];
+}
+
+export async function retryEnrichmentFailure(failureId) {
+  const response = await api.post(`/api/admin/enrichment-failures/${failureId}/retry`);
+  return response.data;
+}
+
+export async function dismissEnrichmentFailure(failureId) {
+  const response = await api.post(`/api/admin/enrichment-failures/${failureId}/dismiss`);
   return response.data;
 }
 
@@ -289,15 +472,18 @@ export async function detectAreaName(latitude, longitude) {
     console.warn('Reverse geocoding error:', err);
   }
 
-  // Fallback defaults for major Pakistan urban areas if network fails
-  if (lat >= 24.7 && lat <= 25.1 && lng >= 66.8 && lng <= 67.3) return 'Karachi Urban';
-  if (lat >= 25.3 && lat <= 25.5 && lng >= 68.3 && lng <= 68.5) return 'Hyderabad Urban';
-  if (lat >= 31.4 && lat <= 31.7 && lng >= 74.2 && lng <= 74.5) return 'Lahore Metro';
-  if (lat >= 33.5 && lat <= 33.8 && lng >= 72.9 && lng <= 73.2) return 'Islamabad / Rawalpindi';
-  if (lat >= 33.9 && lat <= 34.1 && lng >= 71.4 && lng <= 71.7) return 'Peshawar City';
-  if (lat >= 30.1 && lat <= 30.3 && lng >= 66.9 && lng <= 67.1) return 'Quetta City';
+  // No fabricated fallback: if reverse-geocoding fails we return null and the
+  // caller shows "Unknown area" instead of inventing a city label.
+  return null;
+}
 
-  return 'Local Area';
+export async function checkHealth() {
+  try {
+    const response = await api.get('/api/health');
+    return response.data?.status === 'OK';
+  } catch {
+    return false;
+  }
 }
 
 export const getAvailableAreas = () => [];

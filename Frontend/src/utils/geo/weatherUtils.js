@@ -39,10 +39,14 @@ export function enrichPointsWithWeather(points, weatherByKey = new Map()) {
  * Score a cluster by average heat index (for hotspot priority).
  */
 export function scoreClusterByHeatIndex(clusterPoints) {
-  if (!clusterPoints?.length) return 0;
-  const sum = clusterPoints.reduce(
-    (acc, p) => acc + (p.heatIndex ?? p.temperature ?? 0),
+  if (!clusterPoints?.length) return null;
+  const withTemp = clusterPoints.filter(
+    (p) => (p.heatIndex ?? p.temperature) != null && !Number.isNaN(Number(p.heatIndex ?? p.temperature))
+  );
+  if (!withTemp.length) return null;
+  const sum = withTemp.reduce(
+    (acc, p) => acc + Number(p.heatIndex ?? p.temperature),
     0
   );
-  return Number((sum / clusterPoints.length).toFixed(1));
+  return Number((sum / withTemp.length).toFixed(1));
 }

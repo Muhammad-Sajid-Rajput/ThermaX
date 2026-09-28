@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AdminPanel, StatusBadge } from '../../components/admin';
 import { toast } from 'react-hot-toast';
 import {
@@ -20,9 +19,9 @@ import {
   Tag,
 } from 'lucide-react';
 import { fetchReports, updateModerationStatus, formatTimestamp } from '../../services/api';
+import { csvCell } from '../../utils/csv';
 
 function ReportManagement() {
-  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [selectedReports, setSelectedReports] = useState([]);
@@ -54,7 +53,7 @@ function ReportManagement() {
       const normalized = raw.map((r) => ({
         ...r,
         id: r._id || r.id,
-        area: r.areaName || r.area || r.district || 'Karachi Urban',
+        area: r.areaName || r.area || r.district || 'Unknown area',
         severity: r.severityLevel || r.severity || 3,
         status: (r.status || 'pending').toLowerCase(),
         submittedAt: r.createdAt || r.timestamp,
@@ -65,7 +64,9 @@ function ReportManagement() {
       }));
 
       setReports(normalized);
-      applyFilters(normalized);
+      // Client-side filters (search/area) are applied by the effect below
+      // which watches `reports` — calling applyFilters here directly would
+      // capture a stale closure over `filters` (exhaustive-deps).
     } catch (err) {
       console.error('Failed to load reports:', err);
       toast.error('Failed to load real reports from database.');
@@ -134,7 +135,9 @@ function ReportManagement() {
   const handleReportAction = async (reportId, action) => {
     try {
       setActionLoadingId(reportId);
-      const decision = action === 'approve' ? 'validated' : 'rejected';
+      // Phase 3 lifecycle vocabulary: verified | flagged | rejected.
+      const decision =
+        action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
 
       // If rejected, immediately remove from active list in UI
       if (decision === 'rejected') {
@@ -152,14 +155,16 @@ function ReportManagement() {
       await updateModerationStatus(reportId, decision);
       toast.success(
         action === 'approve'
-          ? 'Report validated & published'
-          : 'Report rejected and removed from active list'
+          ? 'Report verified & published'
+          : action === 'flag'
+            ? 'Report flagged for review'
+            : 'Report rejected and removed from active list'
       );
       await loadReports();
       if (showDetailModal && showDetailModal.id === reportId) {
         setShowDetailModal((prev) => ({ ...prev, status: decision }));
       }
-    } catch (err) {
+    } catch {
       toast.error('Moderation action failed. Please try again.');
       await loadReports();
     } finally {
@@ -171,12 +176,15 @@ function ReportManagement() {
     if (selectedReports.length === 0) return;
     try {
       setActionLoadingId('bulk');
-      const decision = action === 'approve' ? 'validated' : 'rejected';
+      const decision =
+        action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
       await Promise.all(selectedReports.map((id) => updateModerationStatus(id, decision)));
-      toast.success(`${selectedReports.length} report(s) ${action === 'approve' ? 'validated' : 'rejected'}`);
+      const label =
+        action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
+      toast.success(`${selectedReports.length} report(s) ${label}`);
       setSelectedReports([]);
       await loadReports();
-    } catch (err) {
+    } catch {
       toast.error('Bulk moderation failed.');
     } finally {
       setActionLoadingId(null);
@@ -197,7 +205,7 @@ function ReportManagement() {
     }
   };
 
-  // Export CSV
+  // Export CSV (formula-injection guard lives in utils/csv.js — tested).
   const handleExportCSV = () => {
     if (filteredReports.length === 0) {
       toast.error('No reports to export');
@@ -205,13 +213,13 @@ function ReportManagement() {
     }
     const headers = ['ID', 'Area', 'Severity', 'Status', 'User', 'Email', 'SubmittedAt'];
     const rows = filteredReports.map((r) => [
-      `"${r.id}"`,
-      `"${r.area}"`,
-      r.severity,
-      `"${r.status}"`,
-      `"${r.userName}"`,
-      `"${r.userEmail}"`,
-      `"${r.submittedAt || ''}"`,
+      csvCell(r.id),
+      csvCell(r.area),
+      r.severity ?? '',
+      csvCell(r.status),
+      csvCell(r.userName),
+      csvCell(r.userEmail),
+      csvCell(r.submittedAt),
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -234,7 +242,8 @@ function ReportManagement() {
   const stats = {
     total: reports.length,
     pending: reports.filter((r) => r.status === 'pending').length,
-    validated: reports.filter((r) => r.status === 'validated' || r.status === 'verified').length,
+    validated: reports.filter((r) => r.status === 'verified').length,
+    flagged: reports.filter((r) => r.status === 'flagged').length,
     rejected: reports.filter((r) => r.status === 'rejected').length,
   };
 
@@ -272,7 +281,7 @@ function ReportManagement() {
       </div>
 
       {/* Real Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5 sm:gap-4">
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs">
           <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
           <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">
@@ -288,7 +297,13 @@ function ReportManagement() {
         <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 shadow-xs">
           <p className="text-2xl font-bold text-emerald-700">{stats.validated}</p>
           <p className="text-[11px] text-emerald-700 font-semibold uppercase tracking-wider mt-0.5">
-            Validated
+            Verified
+          </p>
+        </div>
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 shadow-xs">
+          <p className="text-2xl font-bold text-amber-700">{stats.flagged}</p>
+          <p className="text-[11px] text-amber-700 font-semibold uppercase tracking-wider mt-0.5">
+            Flagged
           </p>
         </div>
         <div className="bg-red-50 rounded-xl p-4 border border-red-100 shadow-xs">
@@ -324,9 +339,10 @@ function ReportManagement() {
             }
             className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600"
           >
-            <option value="all">Active Queue (Pending & Validated)</option>
+            <option value="all">Active Queue (Pending, Verified & Flagged)</option>
             <option value="pending">Pending Review Only</option>
-            <option value="validated">Validated Only</option>
+            <option value="verified">Verified Only</option>
+            <option value="flagged">Flagged Only</option>
             <option value="rejected">Archived / Rejected</option>
           </select>
 
@@ -496,14 +512,25 @@ function ReportManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {r.status !== 'validated' && (
+                          {r.status !== 'verified' && (
                             <button
                               onClick={() => handleReportAction(r.id, 'approve')}
                               disabled={actionLoadingId === r.id}
                               className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors disabled:opacity-50"
-                              title="Approve Report"
+                              title="Verify Report"
                             >
                               <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {r.status !== 'flagged' && r.status !== 'rejected' && (
+                            <button
+                              onClick={() => handleReportAction(r.id, 'flag')}
+                              disabled={actionLoadingId === r.id}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 transition-colors disabled:opacity-50"
+                              title="Flag for Review"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -559,7 +586,7 @@ function ReportManagement() {
       {/* Real Report Detail Modal */}
       {showDetailModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-fade-in duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">

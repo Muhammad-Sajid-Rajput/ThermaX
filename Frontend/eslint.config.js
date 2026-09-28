@@ -30,7 +30,16 @@ export default [
         "warn",
         { allowConstantExport: true },
       ],
-      "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]" }],
+      "no-unused-vars": [
+        "error",
+        {
+          varsIgnorePattern: "^[A-Z_]",
+          // Destructured props/args (e.g. `icon: Icon` rendered as <Icon/>)
+          // are "args", not "vars" — allow the same PascalCase convention.
+          argsIgnorePattern: "^[A-Z_]",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
 ];

@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import useUserLocationStore from '../../stores/userLocationStore';
+import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
 import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
 
 const PAKISTAN_CENTER = [30.3753, 69.3451];
@@ -77,6 +78,10 @@ const MiniMap = ({
         mapRef.current = null;
       }
     };
+    // `center`/`zoom` are intentionally init-only here: a dedicated effect
+    // below calls map.setView() when they change. Re-running this effect
+    // would destroy and recreate the Leaflet map on every pan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -142,10 +147,14 @@ const MiniMap = ({
 
     const newLayers = reports
       .map((report) => {
-        const [lat, lng] = report.coordinates ?? [];
+        // Public DTO carries the snapped (anonymized) location.
+        const loc = report.location ?? {};
+        const lat = loc.lat ?? report.coordinates?.[0];
+        const lng = loc.lng ?? report.coordinates?.[1];
         if (!lat || !lng) return null;
 
-        const severity = report.severity ?? 1;
+        // Coerce: a non-numeric severity must never reach the icon HTML.
+        const severity = Number.isFinite(Number(report.severity)) ? Number(report.severity) : 1;
         const color = SEVERITY_COLORS[severity] ?? '#94a3b8';
         const size = 10 + severity * 3;
 
@@ -162,15 +171,8 @@ const MiniMap = ({
           iconAnchor: [size, size],
         });
 
-        const marker = L.marker([lat, lng], { icon }).bindPopup(`
-        <div style="min-width:210px;font-family:Inter,sans-serif;line-height:1.5">
-          <div style="font-weight:700;font-size:13px;margin-bottom:1px">${report.id || ''}</div>
-          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${report.area || ''} · ${report.category || ''}</div>
-          <div style="font-size:12px;color:#334155;margin-bottom:5px">${report.description || ''}</div>
-          <div style="font-size:11px;color:#94a3b8">
-            <b>Source:</b> ${report.source || ''} &nbsp;·&nbsp; <b>Severity:</b> ${report.severity}/5
-          </div>
-        </div>`);
+        // Popup HTML comes from the shared XSS-hardened builder.
+        const marker = L.marker([lat, lng], { icon }).bindPopup(buildReportPopup(report));
 
         marker.addTo(map);
         return marker;
@@ -186,9 +188,16 @@ const MiniMap = ({
 
     clearLayers('hotspots');
 
+    // Live API priorities (Backend/routes/hotspots.js toDto): Critical |
+    // High | Moderate | Low | Unknown. `Medium` is a legacy alias kept for
+    // older cached payloads — the current API never emits it. `Extreme`
+    // covers client-computed severityLabel values (utils/geo/hotspotUtils.js).
+    // Anything else falls back to teal instead of crashing.
     const PRIORITY_COLORS = {
       Critical: '#dc2626',
+      Extreme: '#dc2626',
       High: '#f97316',
+      Moderate: '#facc15',
       Medium: '#facc15',
       Low: '#65a30d',
     };
@@ -206,20 +215,7 @@ const MiniMap = ({
             fillOpacity: 0.14,
             dashArray: '5 4',
           },
-        }).bindPopup(`
-        <div style="min-width:190px;font-family:Inter,sans-serif;line-height:1.5">
-          <div style="font-weight:700;font-size:13px;margin-bottom:3px">${hotspot.area}</div>
-          <span style="
-            background:${color}22;color:${color};
-            font-size:11px;font-weight:600;
-            padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:6px">${hotspot.priority}</span>
-          <div style="font-size:12px;color:#475569">
-            <div>Avg temp: <b>${hotspot.avgTemperature ?? 'N/A'}°C</b></div>
-            <div>Avg severity: <b>${hotspot.avgSeverity?.toFixed(1) ?? 'N/A'}</b></div>
-            <div>Reports: <b>${hotspot.reportCount ?? 0}</b></div>
-            <div>Confidence: <b>${((hotspot.confidence ?? 0) * 100).toFixed(0)}%</b></div>
-          </div>
-        </div>`);
+        }).bindPopup(buildHotspotPopup(hotspot, color));
 
         layer.addTo(map);
         return layer;

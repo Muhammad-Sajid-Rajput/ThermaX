@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import MiniMap from './MiniMap';
-import { detectAreaName, submitHeatReport } from '../../services/api';
+import { detectAreaName, submitHeatReport, buildReportFormData, getSubmissionErrorMessage } from '../../services/api';
+import UploadProgress from '../../components/ui/UploadProgress';
 import { fetchCurrentWeather } from '../../services/weatherService';
 import useWeather from '../../hooks/data/useWeather';
 import useUserLocationStore from '../../stores/userLocationStore';
@@ -21,6 +22,7 @@ import {
   Navigation,
   Check,
 } from 'lucide-react';
+import { isLocationInPakistan } from '../../utils/city';
 
 const getLocalDateTimeString = (date = new Date()) => {
   const pad = (n) => String(n).padStart(2, '0');
@@ -99,18 +101,20 @@ const SEVERITY_LEVELS = [
 ];
 
 function HeatReport() {
-  const { user, isAuthenticated, requireAuth } = useAuth();
+  const { isAuthenticated, requireAuth } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   // Check if user is authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      requireAuth('/auth');
+      requireAuth('/login');
       return;
     }
   }, [isAuthenticated, requireAuth]);
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // 0..100 while the photo uploads
+  const [uploadError, setUploadError] = useState(null); // safe message string after a failed submission
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -149,11 +153,18 @@ function HeatReport() {
     [form.latitude, form.longitude, userLat, userLng]
   );
 
+  const isInPakistan = useMemo(
+    () => isLocationInPakistan(form.latitude, form.longitude),
+    [form.latitude, form.longitude]
+  );
+
   const validateStep = (currentStep) => {
     const nextErrors = {};
     if (currentStep === 1) {
       if (!form.latitude || !form.longitude) {
         nextErrors.location = 'Latitude and longitude are required.';
+      } else if (!isLocationInPakistan(form.latitude, form.longitude)) {
+        nextErrors.location = 'Report location must be within Pakistan.';
       }
     }
     if (currentStep === 2) {
@@ -189,7 +200,9 @@ function HeatReport() {
       updateForm({ latitude: userLat, longitude: userLng });
       try {
         const areaName = await detectAreaName(userLat, userLng);
-        updateForm({ areaName });
+        if (areaName) {
+          updateForm({ areaName });
+        }
       } catch {
         /* area name optional */
       }
@@ -222,7 +235,9 @@ function HeatReport() {
     updateForm({ latitude: coords.lat, longitude: coords.lng });
     try {
       const areaName = await detectAreaName(coords.lat, coords.lng);
-      updateForm({ areaName });
+      if (areaName) {
+        updateForm({ areaName });
+      }
       toast.success(areaName ? `Location: ${areaName}` : 'Location updated');
     } catch {
       toast.success('Coordinates updated');
@@ -250,6 +265,7 @@ function HeatReport() {
       return;
     }
     setIsSubmitting(true);
+    setUploadError(null);
     try {
       let temperature;
       try {
@@ -263,23 +279,41 @@ function HeatReport() {
         temperature = ambientWeather?.heatIndex ?? ambientWeather?.temperature;
       }
 
-      const result = await submitHeatReport({
+      // The backend expects multipart form data: `reportData` (JSON) plus the
+      // `image` file via upload.single('image'). Sending the File inside a
+      // plain JSON object would serialize it to {} and silently drop the photo.
+      const reportPayload = {
         ...form,
-        image: selectedFile,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
         temperature,
+      };
+      const body = buildReportFormData(reportPayload, selectedFile);
+
+      setUploadProgress(selectedFile ? 0 : null);
+      await submitHeatReport(body, {
+        onUploadProgress: (event) => {
+          if (event.total) {
+            setUploadProgress(Math.round((event.loaded * 100) / event.total));
+          }
+        },
       });
+      setUploadProgress(null);
       setShowSuccessModal(true);
       setTimeout(() => {
         navigate('/my-reports');
       }, 3000);
     } catch (err) {
-      toast.error('Submission failed');
+      // Distinguish network failure / server error / validation error with
+      // safe, meaningful text — only the status code and a server-provided
+      // message string ever reach the UI (see getSubmissionErrorMessage).
+      const message = getSubmissionErrorMessage(err);
+      setUploadError(message);
+      toast.error(message);
+      setUploadProgress(null);
       setIsSubmitting(false);
     }
   };
-  const activeStep = steps.find((item) => item.id === step);
   return (
     <div className="w-full space-y-6 pb-12">
       {/* Header */}
@@ -352,9 +386,9 @@ function HeatReport() {
       </div>
       {/* Error Display */}
       {errors.location || errors.severity || errors.description ? (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-green-700">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-red-700">
             <p className="font-semibold mb-1">
               Please complete the required fields:
             </p>
@@ -396,6 +430,20 @@ function HeatReport() {
                   )}
                 </button>
               </div>
+
+              {form.latitude && form.longitude && !isInPakistan && (
+                <div className="rounded-xl border border-red-300 bg-red-50/90 p-3.5 text-xs text-red-900 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-red-900">
+                      Coordinates are outside Pakistan
+                    </p>
+                    <p className="mt-0.5 text-red-800 leading-relaxed">
+                      ThermaX covers all locations across Pakistan. Please provide coordinates within Pakistan.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -445,9 +493,11 @@ function HeatReport() {
                 <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
                   <p className="font-semibold">Live weather at your location</p>
                   <p className="mt-1">
-                    {ambientWeather.temperature}°C · heat index{' '}
-                    {ambientWeather.heatIndex}°C · {ambientWeather.humidity}%
-                    humidity · {ambientWeather.condition}
+                    {ambientWeather.temperature}°C
+                    {ambientWeather.heatIndex != null && (
+                      <> · heat index {ambientWeather.heatIndex}°C</>
+                    )}{' '}
+                    · {ambientWeather.humidity}% humidity · {ambientWeather.condition}
                   </p>
                 </div>
               )}
@@ -671,7 +721,7 @@ function HeatReport() {
                         : 'Click to upload or drag and drop'}
                     </span>
                     <span className="text-xs text-slate-500">
-                      PNG, JPG, GIF up to 10MB
+                      PNG, JPG, GIF up to 5MB
                     </span>
                   </label>
                 </div>
@@ -730,6 +780,15 @@ function HeatReport() {
                     <p className="text-sm text-slate-600 font-mono">
                       {form.latitude}, {form.longitude}
                     </p>
+                    {isInPakistan ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        <CheckCircle className="w-3 h-3" /> {form.areaName || 'Pakistan Verified'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                        <AlertTriangle className="w-3 h-3" /> Outside Pakistan
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 border border-green-200 p-5">
@@ -897,6 +956,8 @@ function HeatReport() {
                 </button>
               )}
             </div>
+            {/* Upload progress + failure — visible while the photo is being sent */}
+            <UploadProgress progress={uploadProgress} error={uploadError} />
           </div>
         </div>
         {/* Sidebar Map Section — sticky on desktop */}
@@ -931,7 +992,7 @@ function HeatReport() {
       {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-fade-in duration-300">
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />

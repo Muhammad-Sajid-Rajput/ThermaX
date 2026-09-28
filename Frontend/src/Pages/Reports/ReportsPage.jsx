@@ -5,7 +5,7 @@ import Badge from '../../components/ui/Badge';
 import { ErrorState, SkeletonBlocks } from '../../components/ui/DataState';
 import Panel from '../../components/ui/Panel';
 import SectionHeading from '../../components/ui/SectionHeading';
-import { fetchDashboardSnapshot, formatTimestamp } from '../../services/api';
+import { fetchReportsCenter, formatTimestamp } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import {
   Flame,
@@ -13,28 +13,44 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  XCircle,
   ArrowRight,
   ThermometerSun,
   FileText,
 } from 'lucide-react';
 // ── Priority helpers ──────────────────────────────────────────────────────────
+// Keyed by the backend hotspot DTO's `priority` vocabulary
+// (Critical | High | Moderate | Low | Unknown). 'Medium' is kept only as a
+// legacy alias — the current API never emits it.
 const PRIORITY_BADGE = {
-  Critical: 'danger',
-  High: 'warning',
-  Medium: 'info',
-  Low: 'success',
+  Critical: 'critical',
+  High: 'high',
+  Moderate: 'moderate',
+  Medium: 'moderate',
+  Low: 'safe',
+  Unknown: 'gray',
 };
 const PRIORITY_BORDER = {
   Critical: 'border-l-red-500 bg-red-50',
   High: 'border-l-orange-500 bg-orange-50',
+  Moderate: 'border-l-amber-400 bg-amber-50',
   Medium: 'border-l-amber-400 bg-amber-50',
   Low: 'border-l-green-500 bg-green-50',
+  Unknown: 'border-l-slate-400 bg-slate-50',
 };
-// ── Status helpers ────────────────────────────────────────────────────────────
-const STATUS_ICON = { Validated: CheckCircle, 'Pending review': Clock };
+// ── Status helpers (keyed by the Phase 3 lifecycle vocabulary; status is
+// stored lowercase on the backend, so normalize + legacy alias here) ─────────
+const LEGACY_STATUS_ALIASES = { validated: 'verified', anomaly: 'flagged' };
+const canonicalStatus = (s) => {
+  const key = String(s || '').toLowerCase();
+  return LEGACY_STATUS_ALIASES[key] || key;
+};
+const STATUS_ICON = { verified: CheckCircle, pending: Clock, flagged: AlertTriangle, rejected: XCircle };
 const STATUS_COLOR = {
-  Validated: 'text-green-600',
-  'Pending review': 'text-amber-500',
+  verified: 'text-green-600',
+  pending: 'text-amber-500',
+  flagged: 'text-orange-600',
+  rejected: 'text-red-600',
 };
 // ── Stat bubble ───────────────────────────────────────────────────────────────
 const StatBubble = ({ label, value, icon: Icon, color = 'text-slate-700' }) => (
@@ -51,13 +67,11 @@ function ReportsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  // Use the PUBLIC dashboard snapshot — no admin privileges required.
-  // fetchReportsCenter is admin-only and must NOT be called from this page.
+
   useEffect(() => {
-    fetchDashboardSnapshot({ range: '7d', severity: 'all', area: 'all' })
+    fetchReportsCenter()
       .then((result) => {
-        // fetchDashboardSnapshot resolves to { data, source, lastUpdated } or raw snapshot
-        setData(result?.data ?? result);
+        setData(result);
         setLoading(false);
       })
       .catch(() => {
@@ -150,6 +164,7 @@ function ReportsPage() {
               <div className="h-[60vh] min-h-125 flex flex-col">
                 <MapSection
                   reports={data.reports ?? []}
+                  hotspots={data.hotspots ?? []}
                   hideControls={true}
                   title="Report Map"
                 />
@@ -166,21 +181,21 @@ function ReportsPage() {
                 {(data.hotspots ?? []).map((hotspot) => (
                   <div
                     key={hotspot.clusterId ?? hotspot.id}
-                    className={`border-l-4 rounded-r-xl p-3 ${PRIORITY_BORDER[hotspot.priority] ?? PRIORITY_BORDER.Medium}`}
+                    className={`border-l-4 rounded-r-xl p-3 ${PRIORITY_BORDER[hotspot.priority] ?? PRIORITY_BORDER.Unknown}`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <p className="font-semibold text-slate-900 text-sm">
                         {hotspot.area}
                       </p>
-                      <Badge tone={PRIORITY_BADGE[hotspot.priority] ?? 'info'}>
+                      <Badge variant={PRIORITY_BADGE[hotspot.priority] ?? 'info'}>
                         {hotspot.priority}
                       </Badge>
                     </div>
                     <p className="text-xs text-slate-500">
-                      {hotspot.reportCount} reports&nbsp;&bull;&nbsp;
-                      {hotspot.avgTemperature}°C avg&nbsp;&bull;&nbsp;
-                      {Math.round((hotspot.confidence ?? 0.8) * 100)}%
-                      confidence
+                      {hotspot.reportCount ?? 0} reports&nbsp;&bull;&nbsp;
+                      {(hotspot.avgTemperature ?? hotspot.avgTemp) != null
+                        ? `${hotspot.avgTemperature ?? hotspot.avgTemp}°C avg`
+                        : 'avg temp N/A'}
                     </p>
                   </div>
                 ))}
@@ -196,7 +211,8 @@ function ReportsPage() {
             />
             <div className="space-y-3">
               {(data.reports ?? []).slice(0, 8).map((rpt) => {
-                const SIcon = STATUS_ICON[rpt.status] ?? Clock;
+                const statusKey = canonicalStatus(rpt.status);
+                const SIcon = STATUS_ICON[statusKey] ?? Clock;
                 return (
                   <div
                     key={rpt.id}
@@ -239,10 +255,10 @@ function ReportsPage() {
                         S{rpt.severity}
                       </span>
                       <span
-                        className={`text-[11px] flex items-center gap-1 ${STATUS_COLOR[rpt.status] ?? 'text-slate-500'}`}
+                        className={`text-[11px] flex items-center gap-1 ${STATUS_COLOR[statusKey] ?? 'text-slate-500'}`}
                       >
                         <SIcon className="w-3 h-3" />
-                        {rpt.status}
+                        {statusKey}
                       </span>
                     </div>
                   </div>

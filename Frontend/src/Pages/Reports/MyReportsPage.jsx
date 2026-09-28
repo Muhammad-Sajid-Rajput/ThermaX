@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   XCircle,
   ShieldAlert,
+  Flag,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -26,15 +27,6 @@ function MyReports() {
     reportId: null,
     reportArea: '',
   });
-
-  // Check if report is within 24 hours
-  const isWithin24Hours = (timestamp) => {
-    if (!timestamp) return false;
-    const reportTime = new Date(timestamp).getTime();
-    const now = Date.now();
-    const hoursDiff = (now - reportTime) / (1000 * 60 * 60);
-    return hoursDiff <= 24;
-  };
 
   const openDeleteModal = (report) => {
     setDeleteModal({
@@ -69,7 +61,7 @@ function MyReports() {
     return rawList.map((r) => ({
       ...r,
       id: r._id || r.id,
-      area: r.areaName || r.area || 'Karachi Urban',
+      area: r.areaName || r.area || 'Unknown area',
       severity: r.severityLevel || r.severity || 3,
       status: (r.status || 'pending').toLowerCase(),
       timestamp: r.createdAt || r.timestamp,
@@ -79,10 +71,12 @@ function MyReports() {
   const statusCounts = useMemo(() => {
     return {
       all: normalizedReports.length,
-      validated: normalizedReports.filter(
-        (r) => r.status === 'validated' || r.status === 'verified'
+      // 'validated' kept as a legacy alias of 'verified' for old records
+      verified: normalizedReports.filter(
+        (r) => r.status === 'verified' || r.status === 'validated'
       ).length,
       pending: normalizedReports.filter((r) => r.status === 'pending').length,
+      flagged: normalizedReports.filter((r) => r.status === 'flagged').length,
       rejected: normalizedReports.filter((r) => r.status === 'rejected').length,
     };
   }, [normalizedReports]);
@@ -90,8 +84,10 @@ function MyReports() {
   const filteredReports = useMemo(() => {
     return normalizedReports.filter((r) => {
       if (filter === 'all') return true;
-      if (filter === 'validated') return r.status === 'validated' || r.status === 'verified';
+      if (filter === 'verified')
+        return r.status === 'verified' || r.status === 'validated';
       if (filter === 'pending') return r.status === 'pending';
+      if (filter === 'flagged') return r.status === 'flagged';
       if (filter === 'rejected') return r.status === 'rejected';
       return true;
     });
@@ -104,11 +100,19 @@ function MyReports() {
   };
 
   const renderStatusBadge = (status) => {
-    if (status === 'validated' || status === 'verified') {
+    if (status === 'verified' || status === 'validated') {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
           <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-          Validated
+          Verified
+        </span>
+      );
+    }
+    if (status === 'flagged') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+          <Flag className="w-3.5 h-3.5 text-amber-600" />
+          Flagged
         </span>
       );
     }
@@ -179,11 +183,18 @@ function MyReports() {
                 activeColor: 'bg-amber-600 text-white',
               },
               {
-                key: 'validated',
-                label: 'Validated',
-                count: statusCounts.validated,
+                key: 'verified',
+                label: 'Verified',
+                count: statusCounts.verified,
                 icon: CheckCircle,
                 activeColor: 'bg-emerald-600 text-white',
+              },
+              {
+                key: 'flagged',
+                label: 'Flagged',
+                count: statusCounts.flagged,
+                icon: Flag,
+                activeColor: 'bg-amber-500 text-white',
               },
               {
                 key: 'rejected',
@@ -205,7 +216,7 @@ function MyReports() {
                 <Icon className="w-3.5 h-3.5" />
                 <span>{label}</span>
                 <span
-                  className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
+                  className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
                     filter === key ? 'bg-white/20' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
@@ -270,12 +281,13 @@ function MyReports() {
                   <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
                     {renderStatusBadge(report.status)}
 
-                    {isWithin24Hours(report.timestamp) && (
+                    {/* Only pending reports can be deleted by the owner (backend policy) */}
+                    {report.status === 'pending' && (
                       <button
                         onClick={() => openDeleteModal(report)}
                         disabled={deletingId === report.id}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50"
-                        title="Delete report (available for 24 hours)"
+                        title="Delete report (only pending reports can be deleted)"
                       >
                         {deletingId === report.id ? (
                           <div className="w-3 h-3 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin" />
@@ -295,7 +307,7 @@ function MyReports() {
                 <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="font-semibold text-slate-700 text-sm">No reports in this category</p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Try switching between All, Under Review, Validated, or Rejected filters.
+                  Try switching between All, Under Review, Verified, Flagged, or Rejected filters.
                 </p>
               </div>
             )}
@@ -306,7 +318,7 @@ function MyReports() {
       {/* Delete Confirmation Modal */}
       {deleteModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-fade-in duration-150">
             <div className="flex flex-col items-center text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3">
                 <Trash2 className="w-6 h-6 text-red-600" />
@@ -315,7 +327,7 @@ function MyReports() {
                 Delete Heat Report?
               </h3>
               <p className="text-xs text-slate-600 mb-4">
-                Are you sure you want to remove your submission for <span className="font-bold text-slate-800">{deleteModal.reportArea}</span>?
+                Are you sure you want to remove your submission for <span className="font-bold text-slate-800">{deleteModal.reportArea}</span>? Only pending reports can be deleted.
               </p>
               <div className="flex gap-2.5 w-full">
                 <button

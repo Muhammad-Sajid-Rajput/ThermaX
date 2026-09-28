@@ -7,6 +7,7 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  XCircle,
   MapPin,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -20,23 +21,39 @@ import {
   CardTitle,
   CardContent,
 } from '../../components/ui/Card';
-import { fetchDashboardSnapshot } from '../../services/api.js';
+import {
+  fetchDashboardSnapshot,
+  fetchHotspots,
+  fetchHeatmap,
+  fetchReports,
+} from '../../services/api.js';
 import toast from 'react-hot-toast';
 import LiveWeatherCard from '../../components/weather/LiveWeatherCard';
+import AdvisoryBanner from '../../components/advisory/AdvisoryBanner';
 // ─── View navigation config ────────────────────────────────────────────────
 const VIEWS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'heatmap', label: 'Heat Map', icon: Map },
   { id: 'hotspots', label: 'Hotspots', icon: Flame },
 ];
-// ─── Status badge helpers ──────────────────────────────────────────────────
+// ─── Status badge helpers (keyed by the Phase 3 lifecycle vocabulary;
+// rpt.status is the lowercase backend status) ────────────────────────────
+const LEGACY_STATUS_ALIASES = { validated: 'verified', anomaly: 'flagged' };
+const canonicalStatus = (s) => {
+  const key = String(s || '').toLowerCase();
+  return LEGACY_STATUS_ALIASES[key] || key;
+};
 const STATUS_ICONS = {
-  Validated: CheckCircle,
-  'Pending review': Clock,
+  verified: CheckCircle,
+  pending: Clock,
+  flagged: AlertCircle,
+  rejected: XCircle,
 };
 const STATUS_COLORS = {
-  Validated: 'text-green-600 bg-green-50 border-green-200',
-  'Pending review': 'text-amber-600 bg-amber-50 border-amber-200',
+  verified: 'text-green-600 bg-green-50 border-green-200',
+  pending: 'text-amber-600 bg-amber-50 border-amber-200',
+  flagged: 'text-orange-600 bg-orange-50 border-orange-200',
+  rejected: 'text-red-600 bg-red-50 border-red-200',
 };
 const SEVERITY_BG = {
   5: 'bg-red-500',
@@ -74,8 +91,11 @@ const LoadingSkeleton = () => (
 const SaaSDashboard = () => {
   const [currentView, setCurrentView] = useState('overview');
   const [snapshot, setSnapshot] = useState(null);
+  const [hotspots, setHotspots] = useState([]);
+  const [heatmap, setHeatmap] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     range: '7d',
@@ -103,9 +123,20 @@ const SaaSDashboard = () => {
         if (showRefreshing) setRefreshing(true);
         else setLoading(true);
         setError(null);
-        const data = await fetchDashboardSnapshot(filters);
-        setSnapshot(data);
-      } catch (err) {
+        const [snapshotData, hsData, hmData, rptsData] = await Promise.all([
+          fetchDashboardSnapshot(filters).catch(() => null),
+          fetchHotspots().catch(() => ({ data: [] })),
+          fetchHeatmap().catch(() => ({ data: [] })),
+          fetchReports().catch(() => ({ data: [] })),
+        ]);
+        if (!snapshotData) {
+          throw new Error('Failed to load dashboard data');
+        }
+        setSnapshot(snapshotData);
+        setHotspots(hsData?.data || []);
+        setHeatmap(hmData?.data || []);
+        setReports(rptsData?.data || []);
+      } catch {
         setError('Failed to load dashboard data. Please try again.');
       } finally {
         setLoading(false);
@@ -160,6 +191,17 @@ const SaaSDashboard = () => {
       </div>
     );
   }
+
+  const priorityActions = (hotspots || []).flatMap((hs) =>
+    (hs.directives || []).map((d, idx) => ({
+      id: d.id || `${hs.clusterId || 'HS'}-${idx + 1}`,
+      area: hs.city ? `${hs.city} Hotspot (${hs.clusterId || hs.name || 'Zone'})` : 'Active Hotspot Zone',
+      action: d.directive || d.action || d.text || hs.advisory?.headline || 'Implement targeted cooling measures',
+      priority: hs.priority || 'High',
+    }))
+  ).slice(0, 5);
+  const displayRecommendations = priorityActions.length > 0 ? priorityActions : (snapshot?.recommendations ?? []);
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -203,10 +245,11 @@ const SaaSDashboard = () => {
             <button
               key={view.id}
               onClick={() => setCurrentView(view.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                isActive
                   ? 'bg-green-600 text-white shadow-md'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+              }`}
             >
               <Icon className="w-4 h-4" />
               {view.label}
@@ -215,7 +258,7 @@ const SaaSDashboard = () => {
         })}
       </div>
 
-      {/* ── Loading ────────────────────────────────────────────────────── */}
+            {/* ── Loading ────────────────────────────────────────────────────── */}
       {loading ? (
         <LoadingSkeleton />
       ) : (
@@ -223,6 +266,8 @@ const SaaSDashboard = () => {
           {/* ══ OVERVIEW ═══════════════════════════════════════════════ */}
           {currentView === 'overview' && (
             <div className="space-y-6">
+              {/* Phase 6: citizen heat advisory for the user's city */}
+              <AdvisoryBanner />
               {/* KPI Row */}
               {displayPrefs.showKpis && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -235,9 +280,10 @@ const SaaSDashboard = () => {
                 {/* Map */}
                 <div className="lg:col-span-2 h-[60vh] lg:h-[75vh] min-h-125 flex flex-col overflow-hidden">
                   <MapSection
-                    heatmap={snapshot?.heatmap ?? []}
-                    reports={snapshot?.reports ?? []}
-                    title="Urban Heat Map"
+                    heatmap={heatmap}
+                    reports={reports}
+                    hotspots={hotspots}
+                    title="Urban Heat Map — Pakistan (All)"
                     showHotspots={displayPrefs.showHotspots}
                     showMarkers={displayPrefs.showMarkers}
                     disableLegend={true}
@@ -253,11 +299,12 @@ const SaaSDashboard = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-4 space-y-3 flex-1 overflow-y-auto min-h-0">
-                      {(snapshot?.recommendations ?? []).map((rec) => {
+                      {displayRecommendations.map((rec) => {
                         const priorityColor =
                           {
                             Critical: 'border-l-red-500 bg-red-50',
                             High: 'border-l-orange-500 bg-orange-50',
+                            Moderate: 'border-l-amber-400 bg-amber-50',
                             Medium: 'border-l-amber-400 bg-amber-50',
                             Low: 'border-l-green-500 bg-green-50',
                           }[rec.priority] ?? 'border-l-slate-400 bg-slate-50';
@@ -280,7 +327,7 @@ const SaaSDashboard = () => {
                           </div>
                         );
                       })}
-                      {!snapshot?.recommendations?.length && (
+                      {!displayRecommendations.length && (
                         <p className="text-sm text-slate-400 text-center py-4">
                           No recommendations available.
                         </p>
@@ -295,8 +342,9 @@ const SaaSDashboard = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-4 space-y-3 flex-1 overflow-y-auto min-h-0">
-                      {(snapshot?.reports ?? []).slice(0, 5).map((rpt) => {
-                        const StatusIcon = STATUS_ICONS[rpt.status] ?? Clock;
+                      {((reports.length ? reports : snapshot?.reports) ?? []).slice(0, 5).map((rpt) => {
+                        const statusKey = canonicalStatus(rpt.status);
+                        const StatusIcon = STATUS_ICONS[statusKey] ?? Clock;
                         return (
                           <div
                             key={rpt.id}
@@ -314,7 +362,7 @@ const SaaSDashboard = () => {
                               </p>
                             </div>
                             <span
-                              className={`text-[10px] font-medium px-2 py-1 rounded-md border ${STATUS_COLORS[rpt.status] ?? 'text-slate-500 bg-slate-50 border-slate-200'}`}
+                              className={`text-[10px] font-medium px-2 py-1 rounded-md border ${STATUS_COLORS[statusKey] ?? 'text-slate-500 bg-slate-50 border-slate-200'}`}
                             >
                               S{rpt.severity}
                             </span>
@@ -346,6 +394,7 @@ const SaaSDashboard = () => {
               <MapSection
                 heatmap={snapshot?.heatmap ?? []}
                 reports={snapshot?.reports ?? []}
+                hotspots={hotspots}
                 focus="heatmap"
                 hideControls={true}
                 title="District Heat Intensity"
@@ -359,19 +408,22 @@ const SaaSDashboard = () => {
                 <MapSection
                   heatmap={snapshot?.heatmap ?? []}
                   reports={snapshot?.reports ?? []}
+                  hotspots={hotspots}
                   focus="hotspots"
                   hideControls={true}
                   title="Hotspot Analytics Map"
                 />
               </div>
               <div className="xl:col-span-4 h-[60vh] xl:h-[75vh] min-h-125 grid grid-cols-2 gap-4 pr-2 content-start">
-                {(snapshot?.hotspots ?? []).map((hs) => {
+                {hotspots.map((hs) => {
                   const color =
                     {
                       Critical: '#dc2626',
                       High: '#f97316',
+                      Moderate: '#facc15',
                       Medium: '#facc15',
                       Low: '#65a30d',
+                      Unknown: '#94a3b8',
                     }[hs.priority] ?? '#0f766e';
                   return (
                     <Card key={hs.id}>
@@ -394,8 +446,12 @@ const SaaSDashboard = () => {
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-center">
                           {[
-                            ['Temp', `${hs.avgTemperature}°C`],
-                            ['Severity', hs.avgSeverity.toFixed(1)],
+                            // avgTemperature / avgSeverity are null when the
+                            // backend has no measured value (unknown
+                            // severity is withheld, never zeroed) — never
+                            // call .toFixed on them unguarded.
+                            ['Temp', hs.avgTemperature != null ? `${hs.avgTemperature}°C` : 'N/A'],
+                            ['Severity', hs.avgSeverity != null ? hs.avgSeverity.toFixed(1) : 'N/A'],
                             ['Reports', hs.reportCount],
                           ].map(([label, val]) => (
                             <div
@@ -411,7 +467,8 @@ const SaaSDashboard = () => {
                             </div>
                           ))}
                         </div>
-                        {/* NDVI */}
+                        {/* NDVI — only when the backend actually provides it */}
+                        {hs.ndvi != null && (
                         <div className="mt-2">
                           <div className="flex justify-between text-xs text-slate-500 mb-0.5">
                             <span>NDVI (Vegetation)</span>
@@ -426,6 +483,7 @@ const SaaSDashboard = () => {
                             />
                           </div>
                         </div>
+                        )}
                       </CardContent>
                     </Card>
                   );

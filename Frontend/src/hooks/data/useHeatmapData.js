@@ -1,18 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchHeatmap } from '../../services/api.js';
+
+/**
+ * `filters` defaults to `{}` — a fresh object every render. Depending on it
+ * directly (e.g. `useCallback(..., [filters])`) would change the callback
+ * identity every render and re-fire the fetch effect in a loop. Instead the
+ * effect keys on the serialized filters and the loader reads them via ref.
+ */
+function useFiltersRef(filters) {
+  const key = JSON.stringify(filters ?? {});
+  const ref = useRef(filters);
+  ref.current = filters;
+  return { key, ref };
+}
 
 export function useHeatmapData(filters = {}) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const { key: filtersKey, ref: filtersRef } = useFiltersRef(filters);
 
   const loadHeatmapData = useCallback(
     async (newFilters = {}) => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetchHeatmap({ ...filters, ...newFilters });
+        const response = await fetchHeatmap({ ...filtersRef.current, ...newFilters });
         setData(response.data || []);
         setLastUpdated(response.lastUpdated);
       } catch (err) {
@@ -22,7 +36,7 @@ export function useHeatmapData(filters = {}) {
         setLoading(false);
       }
     },
-    [filters]
+    [filtersRef]
   );
 
   const refresh = useCallback(() => loadHeatmapData(), [loadHeatmapData]);
@@ -30,7 +44,7 @@ export function useHeatmapData(filters = {}) {
 
   useEffect(() => {
     loadHeatmapData();
-  }, [loadHeatmapData]);
+  }, [loadHeatmapData, filtersKey]);
 
   return {
     data,
@@ -47,18 +61,20 @@ export function useHeatmapStats(filters = {}) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { key: filtersKey, ref: filtersRef } = useFiltersRef(filters);
 
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetchHeatmap(filters);
-      const points = response.data || [];
+      const response = await fetchHeatmap(filtersRef.current);
+      const points = response.heatmap || response.data || [];
+      const intensities = points.map((p) => p.intensity ?? 0);
       setStats({
         totalPoints: points.length,
-        avgIntensity: points.reduce((sum, p) => sum + (p.intensity || 0), 0) / (points.length || 1),
-        maxIntensity: Math.max(...points.map((p) => p.intensity || 0), 0),
-        minIntensity: Math.min(...points.map((p) => p.intensity || 0), 1),
+        avgIntensity: points.length > 0 ? intensities.reduce((sum, val) => sum + val, 0) / points.length : 0,
+        maxIntensity: points.length > 0 ? Math.max(...intensities) : 0,
+        minIntensity: points.length > 0 ? Math.min(...intensities) : 0,
       });
     } catch (err) {
       setError(err.message);
@@ -66,11 +82,11 @@ export function useHeatmapStats(filters = {}) {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filtersRef]);
 
   useEffect(() => {
     loadStats();
-  }, [loadStats]);
+  }, [loadStats, filtersKey]);
 
   return { stats, loading, error, refresh: loadStats };
 }

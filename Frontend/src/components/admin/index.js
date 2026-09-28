@@ -5,3 +5,4 @@ export { default as AdminLayout } from './AdminLayout';
 export { default as KPICard } from './KPICard';
 export { default as AdminPanel } from './AdminPanel';
 export { default as StatusBadge } from './StatusBadge';
+export { default as HotspotDetailPanel } from './HotspotDetailPanel';

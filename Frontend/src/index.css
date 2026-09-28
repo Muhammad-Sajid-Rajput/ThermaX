@@ -1,4 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
 @import 'tailwindcss';
+/* Tailwind v4 ignores tailwind.config.js unless it is loaded explicitly.
+   @config wires the legacy config (primary/secondary/accent palettes,
+   fontFamily, spacing, animations) back in so classes like bg-primary-600
+   used by Button/Card/Input actually generate. */
+@config "../tailwind.config.js";
 /* ============================================
 ThermaX Light Theme System
 ============================================

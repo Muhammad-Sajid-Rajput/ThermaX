@@ -9,17 +9,14 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-// Base navigation items — visible to all users
+// Navigation items — visible only to authenticated users
 const getNavItems = (isAuthenticated) => {
-  const items = [
+  if (!isAuthenticated) return [];
+  return [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Reports', href: '/reports' },
+    { name: 'My Reports', href: '/my-reports' },
   ];
-  // Only show My Reports when authenticated (per spec)
-  if (isAuthenticated) {
-    items.push({ name: 'My Reports', href: '/my-reports' });
-  }
-  return items;
 };
 // Separate Submit Report button with auth-aware behavior
 const SUBMIT_REPORT_ITEM = { name: 'Submit Report', href: '/report' };
@@ -90,12 +87,12 @@ const Navbar = () => {
             </div>
             <div className="hidden sm:block text-left">
               <p className="text-sm font-bold text-slate-900 leading-none">
-                {user?.name?.split('')[0] ?? 'User'}
+                {user?.name?.split(' ')[0] ?? 'User'}
               </p>
             </div>
           </button>
           {isProfileDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 origin-top-right duration-200">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 animate-fade-in origin-top-right duration-200">
               <div className="px-4 py-2 mb-2 border-b border-slate-100/50">
                 <p className="text-sm font-bold text-slate-900 truncate">
                   {user?.name}
@@ -151,7 +148,7 @@ const Navbar = () => {
           <div className="flex items-center h-full gap-4">
             {/* Logo - Left */}
             <NavLink
-              to="/dashboard"
+              to={isAuthenticated ? '/dashboard' : '/'}
               className="flex items-center gap-2.5 outline-none shrink-0"
             >
               <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
@@ -187,17 +184,19 @@ const Navbar = () => {
                   );
                 })}
                 {/* Auth-aware Submit Report Button */}
-                <button
-                  onClick={handleSubmitReportClick}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
-                    location.pathname === '/report'
-                      ? 'text-white bg-green-600 shadow-sm'
-                      : 'text-green-600 hover:text-white hover:bg-green-600 bg-green-50'
-                  }`}
-                >
-                  <Flame className="w-4 h-4" />
-                  {SUBMIT_REPORT_ITEM.name}
-                </button>
+                {isAuthenticated && (
+                  <button
+                    onClick={handleSubmitReportClick}
+                    className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
+                      location.pathname === '/report'
+                        ? 'text-white bg-green-600 shadow-sm'
+                        : 'text-green-600 hover:text-white hover:bg-green-600 bg-green-50'
+                    }`}
+                  >
+                    <Flame className="w-4 h-4" />
+                    {SUBMIT_REPORT_ITEM.name}
+                  </button>
+                )}
                 {isAdmin && (
                   <NavLink
                     to="/admin"
@@ -258,17 +257,19 @@ const Navbar = () => {
                 );
               })}
               {/* Auth-aware Submit Report Button - Mobile */}
-              <button
-                onClick={handleSubmitReportClick}
-                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${
-                  location.pathname === '/report'
-                    ? 'text-white bg-green-600 shadow-sm'
-                    : 'text-green-600 hover:text-white hover:bg-green-600 bg-green-50'
-                }`}
-              >
-                <Flame className="w-4 h-4" />
-                {SUBMIT_REPORT_ITEM.name}
-              </button>
+              {isAuthenticated && (
+                <button
+                  onClick={handleSubmitReportClick}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${
+                    location.pathname === '/report'
+                      ? 'text-white bg-green-600 shadow-sm'
+                      : 'text-green-600 hover:text-white hover:bg-green-600 bg-green-50'
+                  }`}
+                >
+                  <Flame className="w-4 h-4" />
+                  {SUBMIT_REPORT_ITEM.name}
+                </button>
+              )}
               {isAdmin && (
                 <NavLink
                   to="/admin"

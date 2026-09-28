@@ -1,16 +1,11 @@
-import axios from 'axios';
-
-const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
-  timeout: 10000,
-});
+import api from './api';
 
 /**
  * @param {number} lat
  * @param {number} lon - longitude (sent as `lon` query param per API contract)
  */
 export async function fetchCurrentWeather(lat, lon, { save = false } = {}) {
-  const { data } = await client.get('/api/weather/current', {
+  const { data } = await api.get('/api/weather/current', {
     params: {
       lat,
       lon,
@@ -21,7 +16,7 @@ export async function fetchCurrentWeather(lat, lon, { save = false } = {}) {
 }
 
 export async function fetchWeatherHistory(lat, lon, params = {}) {
-  const { data } = await client.get('/api/weather/history', {
+  const { data } = await api.get('/api/weather/history', {
     params: { lat, lon, ...params },
   });
   return data;

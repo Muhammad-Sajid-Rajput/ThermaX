@@ -49,9 +49,9 @@ const useUserLocationStore = create((set, get) => ({
               data.address?.county ||
               data.address?.state_district ||
               data.address?.state ||
-              'Your City';
+              null;
           } catch {
-            cityName = 'Your City';
+            cityName = null;
           }
 
           set({
@@ -71,8 +71,9 @@ const useUserLocationStore = create((set, get) => ({
               : err.code === 2
                 ? 'Location unavailable'
                 : err.message || 'Failed to get location';
+          const status = err.code === 1 ? 'denied' : 'unavailable';
           set({
-            status: 'denied',
+            status,
             error: message,
           });
           resolve(null);

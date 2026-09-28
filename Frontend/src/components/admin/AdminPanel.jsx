@@ -1,3 +1,4 @@
+import React from 'react';
 import { ChevronRight } from 'lucide-react';
 const AdminPanel = ({
   title,
@@ -15,8 +16,8 @@ const AdminPanel = ({
     red: 'text-red-600 bg-red-100',
     orange: 'text-orange-600 bg-orange-100',
     green: 'text-green-700 bg-green-50',
-    blue: 'text-green-600 bg-green-100',
-    purple: 'text-green-600 bg-green-100',
+    blue: 'text-blue-600 bg-blue-100',
+    purple: 'text-purple-600 bg-purple-100',
     yellow: 'text-amber-600 bg-amber-100',
   };
   const iconConfig = colorConfigs[iconColor] || colorConfigs.blue;
@@ -37,7 +38,7 @@ border-b border-slate-100 ${headerClassName}`}
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           {Icon && (
             <div className={`p-2 rounded-lg shrink-0 ${iconConfig}`}>
-              <Icon className="w-5 h-5" />
+              {React.isValidElement(Icon) ? Icon : <Icon className="w-5 h-5" />}
             </div>
           )}
           <div className="min-w-0 flex-1">

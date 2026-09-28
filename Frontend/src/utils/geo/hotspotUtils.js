@@ -13,59 +13,56 @@ export const processClustersToHotspots = (clusters, points) => {
     let sumLng = 0;
     let sumTemp = 0;
     let sumSev = 0;
+    let sevCount = 0;
 
     const numReports = clusterIndices.length;
 
-    // Collect all temperatures to calculate variance later
+    // Real temperatures only — a missing reading is excluded, never 0.
     const temps = [];
 
     clusterIndices.forEach((idx) => {
       const p = points[idx];
       sumLat += p.lat;
       sumLng += p.lng;
-      sumTemp += p.temp || 0;
-      sumSev += p.severity || 1;
-      temps.push(p.temp || 0);
+      // Only real measurements: a missing temperature is excluded from the
+      // average — never treated as 0°C and never invented.
+      const t = Number(p.temp);
+      if (p.temp != null && !Number.isNaN(t)) {
+        temps.push(t);
+        sumTemp += t;
+      }
+      const s = Number(p.severity);
+      if (p.severity != null && !Number.isNaN(s)) {
+        sumSev += s;
+        sevCount += 1;
+      }
     });
 
     const avgLat = sumLat / numReports;
     const avgLng = sumLng / numReports;
-    const avgTemp = sumTemp / numReports;
-    const avgSev = sumSev / numReports;
+    const avgTemp = temps.length > 0 ? sumTemp / temps.length : null;
+    const avgSev = sevCount > 0 ? sumSev / sevCount : null;
 
-    // Calculate temperature variance
-    const tempVariance =
-      temps.reduce((acc, val) => acc + Math.pow(val - avgTemp, 2), 0) /
-      numReports;
-
-    // Confidence Calculation:
-    // More reports = higher confidence
-    // Lower variance = higher confidence
-    // We normalize this to a 0-1 score (or 0-100%).
-
-    // Base confidence from reports (cap at 10 reports for max base confidence of 80%)
-    const reportConfidence = Math.min(numReports / 10, 1.0) * 0.8;
-
-    // Variance confidence (max 20% if variance is very low)
-    // Assuming variance of 0 is perfect (+0.2), variance of > 5 is bad (+0.0)
-    const varianceConfidence = Math.max(0, (5 - tempVariance) / 5) * 0.2;
-
-    const confidenceScore = (reportConfidence + varianceConfidence) * 100;
+    // NOTE: no confidence score is computed here. The backend deliberately
+    // sends no confidence (no model emits one), so the UI must not invent
+    // one from report counts or variance and present it as a model output.
 
     // Severity classification
-    let severityLabel = 'Low';
-    if (avgSev >= 4.5) severityLabel = 'Extreme';
-    else if (avgSev >= 3.5) severityLabel = 'High';
-    else if (avgSev >= 2.5) severityLabel = 'Moderate';
+    let severityLabel = 'Unknown';
+    if (avgSev != null) {
+      if (avgSev >= 4.5) severityLabel = 'Extreme';
+      else if (avgSev >= 3.5) severityLabel = 'High';
+      else if (avgSev >= 2.5) severityLabel = 'Moderate';
+      else severityLabel = 'Low';
+    }
 
     return {
       id: `HS-${index + 1}`,
       centroid: { lat: avgLat, lng: avgLng },
-      avgTemp: Number(avgTemp.toFixed(1)),
-      avgSeverity: Number(avgSev.toFixed(1)),
+      avgTemp: avgTemp != null ? Number(avgTemp.toFixed(1)) : null,
+      avgSeverity: avgSev != null ? Number(avgSev.toFixed(1)) : null,
       severityLabel,
       reportCount: numReports,
-      confidence: Number(confidenceScore.toFixed(0)),
     };
   });
 };

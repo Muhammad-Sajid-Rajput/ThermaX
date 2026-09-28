@@ -1,45 +1,17 @@
-import { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authenticateUser } from '../services/api';
+import {
+  authenticateUser,
+  registerUser,
+  logoutUser,
+  fetchCurrentUser,
+  onTokenRefresh,
+  verifyEmail,
+  resendOtp,
+} from '../services/api';
 import { authStorage } from '../services/localStorageService';
 import useUserLocationStore from '../stores/userLocationStore';
-
-// Role definitions
-export const ROLES = {
-  USER: 'USER',
-  ADMIN: 'ADMIN',
-};
-
-// Permission levels
-export const PERMISSIONS = {
-  VIEW_DASHBOARD: 'view_dashboard',
-  SUBMIT_REPORTS: 'submit_reports',
-  VIEW_REPORTS: 'view_reports',
-  MANAGE_REPORTS: 'manage_reports',
-  MANAGE_USERS: 'manage_users',
-  VIEW_ANALYTICS: 'view_analytics',
-  MANAGE_SYSTEM: 'manage_system',
-  BROADCAST_ALERTS: 'broadcast_alerts',
-};
-
-const ROLE_PERMISSIONS = {
-  [ROLES.USER]: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.SUBMIT_REPORTS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.VIEW_ANALYTICS,
-  ],
-  [ROLES.ADMIN]: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.SUBMIT_REPORTS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.MANAGE_REPORTS,
-    PERMISSIONS.MANAGE_USERS,
-    PERMISSIONS.VIEW_ANALYTICS,
-    PERMISSIONS.MANAGE_SYSTEM,
-    PERMISSIONS.BROADCAST_ALERTS,
-  ],
-};
+import { ROLES, PERMISSIONS, ROLE_PERMISSIONS } from './authPermissions';
 
 const initialState = {
   user: null,
@@ -58,6 +30,7 @@ const AUTH_ACTIONS = {
   LOGOUT: 'LOGOUT',
   CLEAR_ERROR: 'CLEAR_ERROR',
   UPDATE_USER: 'UPDATE_USER',
+  TOKEN_REFRESHED: 'TOKEN_REFRESHED',
 };
 
 const authReducer = (state, action) => {
@@ -65,12 +38,12 @@ const authReducer = (state, action) => {
     case AUTH_ACTIONS.LOGIN_START:
       return { ...state, isLoading: true, error: null };
     case AUTH_ACTIONS.LOGIN_SUCCESS: {
-      const userRole = (action.payload.user.role || 'USER').toUpperCase();
+      const userRole = (action.payload?.user?.role || 'USER').toUpperCase();
       return {
         ...state,
-        user: action.payload.user,
-        token: action.payload.token || action.payload.accessToken,
-        isAuthenticated: true,
+        user: action.payload?.user || null,
+        token: action.payload?.token || action.payload?.accessToken || null,
+        isAuthenticated: Boolean(action.payload?.user),
         isLoading: false,
         permissions: ROLE_PERMISSIONS[userRole] || [],
         role: userRole,
@@ -92,33 +65,63 @@ const authReducer = (state, action) => {
       return { ...initialState, isLoading: false };
     case AUTH_ACTIONS.UPDATE_USER:
       return { ...state, user: action.payload };
+    case AUTH_ACTIONS.TOKEN_REFRESHED:
+      return { ...state, token: action.payload };
     case AUTH_ACTIONS.CLEAR_ERROR:
+      if (state.error === null) return state;
       return { ...state, error: null };
     default:
       return state;
   }
 };
 
-const AuthContext = createContext();
+const AuthContext = (globalThis.__THERMAX_AUTH_CONTEXT__ ??= createContext(null));
 
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
 
-  // Restore session from localStorage on mount
+  // Restore session on mount: a token in storage is only a *claim*.
+  // Validate it against GET /api/auth/me before treating the user as
+  // authenticated — a stale or revoked token must not resurrect a session.
   useEffect(() => {
-    const token = authStorage.getToken();
-    const user = authStorage.getCurrentUser();
-    if (token && user) {
+    let cancelled = false;
+    (async () => {
+      const token = authStorage.getToken();
+      if (!token) {
+        dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+        return;
+      }
       try {
-        dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user, token } });
+        const user = await fetchCurrentUser();
+        if (cancelled) return;
+        if (user) {
+          authStorage.setCurrentUser(user);
+          const currentToken = authStorage.getToken() || token;
+          dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user, token: currentToken } });
+        } else {
+          authStorage.clearAuth();
+          dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+        }
       } catch {
+        if (cancelled) return;
         authStorage.clearAuth();
         dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
       }
-    } else {
-      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keep the cached token in sync with silent refreshes: the axios
+  // interceptor writes the fresh token to storage AND notifies here, so
+  // the persist effect below never writes a stale token back over it.
+  useEffect(() => {
+    const unsubscribe = onTokenRefresh((newAccessToken) => {
+      dispatch({ type: AUTH_ACTIONS.TOKEN_REFRESHED, payload: newAccessToken });
+    });
+    return unsubscribe;
   }, []);
 
   // Persist session & prompt for location on login
@@ -128,76 +131,139 @@ export const AuthProvider = ({ children }) => {
       authStorage.setCurrentUser(state.user);
       // Immediately prompt for location after login
       useUserLocationStore.getState().requestLocation({ force: true });
-    } else if (!state.isAuthenticated) {
+    } else if (!state.isAuthenticated && !state.isLoading) {
       authStorage.clearAuth();
     }
-  }, [state.isAuthenticated, state.token, state.user]);
+  }, [state.isAuthenticated, state.isLoading, state.token, state.user]);
 
-  const login = async (credentials) => {
+  const login = useCallback(async (credentials) => {
     dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     try {
       const data = await authenticateUser(credentials);
+      if (!data?.user) {
+        throw new Error(data?.message || 'Login failed: Invalid server response');
+      }
       dispatch({
         type: AUTH_ACTIONS.LOGIN_SUCCESS,
         payload: { user: data.user, token: data.token || data.accessToken },
       });
       return { success: true, user: data.user };
     } catch (error) {
-      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: error.message });
-      return { success: false, error: error.message };
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        'Login failed';
+      const code = error?.response?.data?.code;
+      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: errorMessage });
+      return {
+        success: false,
+        error: errorMessage,
+        code,
+      };
     }
-  };
+  }, []);
 
-  const signup = async (userData) => {
+  const signup = useCallback(async (userData) => {
     dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/auth/signup`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userData),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Signup failed');
+      const data = await registerUser(userData);
+      dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
+      return {
+        success: true,
+        user: data.user,
+        message: data.message,
+        isEmailVerified: Boolean(data.user?.isEmailVerified),
+      };
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        'Signup failed';
+      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
+  const verifyEmailOtp = useCallback(async (email, code) => {
+    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
+    try {
+      const data = await verifyEmail(email, code);
+      if (!data?.user) {
+        throw new Error(data?.message || 'Verification failed');
+      }
       dispatch({
         type: AUTH_ACTIONS.LOGIN_SUCCESS,
         payload: { user: data.user, token: data.token || data.accessToken },
       });
-      return { success: true, user: data.user };
+      return { success: true, user: data.user, message: data.message };
     } catch (error) {
-      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: error.message });
-      return { success: false, error: error.message };
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        'Verification failed';
+      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: errorMessage });
+      return { success: false, error: errorMessage };
     }
-  };
+  }, []);
 
-  const logout = () => {
-    authStorage.clearAuth();
-    dispatch({ type: AUTH_ACTIONS.LOGOUT });
-    navigate('/login');
-  };
+  const resendVerificationOtp = useCallback(async (email) => {
+    try {
+      const data = await resendOtp(email, 'verification');
+      return { success: true, message: data?.message || 'OTP resent successfully.' };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Failed to resend OTP',
+      };
+    }
+  }, []);
 
-  const hasPermission = (permission) => state.permissions.includes(permission);
-  const hasRole = (role) => state.role === role;
-  const isAdmin = () => state.role === ROLES.ADMIN;
+  const logout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // Server-side revocation best effort
+    } finally {
+      authStorage.clearAuth();
+      dispatch({ type: AUTH_ACTIONS.LOGOUT });
+      navigate('/login');
+    }
+  }, [navigate]);
 
-  const requireAuth = (redirectTo = '/auth') => {
+  const clearError = useCallback(() => {
+    dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
+  }, []);
+
+  const hasPermission = useCallback((permission) => state.permissions.includes(permission), [state.permissions]);
+  const hasRole = useCallback((role) => state.role === role, [state.role]);
+  const isAdmin = useCallback(() => state.role === ROLES.ADMIN, [state.role]);
+
+  const requireAuth = useCallback((redirectTo = '/login') => {
     if (!state.isAuthenticated) { navigate(redirectTo); return false; }
     return true;
-  };
+  }, [state.isAuthenticated, navigate]);
 
-  const requireRole = (requiredRole, redirectTo = '/dashboard') => {
-    if (!state.isAuthenticated) { navigate('/auth'); return false; }
+  const requireRole = useCallback((requiredRole, redirectTo = '/dashboard') => {
+    if (!state.isAuthenticated) { navigate('/login'); return false; }
     if (requiredRole && !hasRole(requiredRole)) { navigate(redirectTo); return false; }
     return true;
-  };
+  }, [state.isAuthenticated, hasRole, navigate]);
 
-  const value = {
+  const value = useMemo(() => ({
     ...state,
     login,
     signup,
+    verifyEmailOtp,
+    resendVerificationOtp,
     logout,
+    clearError,
     hasPermission,
     hasRole,
     isAdmin,
@@ -205,17 +271,62 @@ export const AuthProvider = ({ children }) => {
     requireRole,
     ROLES,
     PERMISSIONS,
-  };
+  }), [
+    state,
+    login,
+    signup,
+    verifyEmailOtp,
+    resendVerificationOtp,
+    logout,
+    clearError,
+    hasPermission,
+    hasRole,
+    isAdmin,
+    requireAuth,
+    requireRole,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// useAuth is a custom hook and withAuth is a higher-order component — both
+// are fast-refresh-safe in practice. The react-refresh plugin flags them
+// because it only statically recognizes components; splitting them into
+// another file would churn every importer for no runtime benefit.
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    if (typeof window !== 'undefined' && (import.meta.env?.DEV || process.env.NODE_ENV !== 'production')) {
+      console.warn('useAuth was called outside of an active AuthProvider or during HMR reload');
+      return {
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+        permissions: [],
+        role: null,
+        error: null,
+        login: async () => ({ success: false }),
+        signup: async () => ({ success: false }),
+        verifyEmailOtp: async () => ({ success: false }),
+        resendVerificationOtp: async () => ({ success: false }),
+        logout: async () => {},
+        clearError: () => {},
+        hasPermission: () => false,
+        hasRole: () => false,
+        isAdmin: () => false,
+        requireAuth: () => false,
+        requireRole: () => false,
+        ROLES: { CITIZEN: 'USER', USER: 'USER', ADMIN: 'ADMIN', MODERATOR: 'MODERATOR' },
+        PERMISSIONS: {},
+      };
+    }
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const withAuth = (Component, requiredRole = null) => {
   return function AuthenticatedComponent(props) {
     const { isAuthenticated, user } = useAuth();
