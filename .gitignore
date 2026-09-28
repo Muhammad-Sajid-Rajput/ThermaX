@@ -72,17 +72,23 @@ test-results.xml
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+env/
+ENV/
 
 # Logs
 # ----
 logs/
 *.log
 
-# Database files
-# ---------------
+# Database files & binaries
+# -------------------------
 *.db
 *.sqlite
 *.sqlite3
+mongodb-*/
+*.exe
 
 # Editor & IDE
 # ------------
@@ -130,8 +136,6 @@ api-keys/
 *.p12
 *.pfx
 *service_account*.json
-gee-key.json
-heatmappingfyp*.json
 service_account.json
 
 # Documentation build
@@ -146,7 +150,6 @@ docs/build/
 .terraform/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 
 # Kubernetes

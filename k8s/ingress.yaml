@@ -23,3 +23,10 @@ spec:
                 name: thermax-ml-service
                 port:
                   number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: thermax-frontend-service
+                port:
+                  number: 80

@@ -5,7 +5,12 @@ metadata:
   labels:
     app: thermax-backend
 spec:
-  replicas: 2
+  # replicas: 1 is deliberate, not a placeholder. The backend rate limiter
+  # is process-local (express-rate-limit MemoryStore — see
+  # Backend/middleware/rateLimiters.js). Scaling past 1 without a shared
+  # store (e.g. rate-limit-redis) would multiply every rate limit by the
+  # replica count.
+  replicas: 1
   selector:
     matchLabels:
       app: thermax-backend
@@ -19,6 +24,9 @@ spec:
           image: thermaxacr.azurecr.io/thermax-backend:latest
           ports:
             - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: thermax-secrets
           livenessProbe:
             httpGet:
               path: /api/v1/health

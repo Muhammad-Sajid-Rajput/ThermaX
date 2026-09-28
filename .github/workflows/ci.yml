@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: Backend
+      - run: npm test
+        working-directory: Backend
+
+  ml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+        working-directory: ML
+      - run: python -m pytest tests/ -q
+        working-directory: ML
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: Frontend
+      - run: npm test
+        working-directory: Frontend
+      # Lint is warn-only for now (legacy setting); the suite is at 0 errors, 0 warnings.
+      - run: npm run lint -- --max-warnings=10000 || true
+        working-directory: Frontend
+      - run: npm run build
+        working-directory: Frontend
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:5000

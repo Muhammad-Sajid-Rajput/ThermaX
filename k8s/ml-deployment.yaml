@@ -5,7 +5,11 @@ metadata:
   labels:
     app: thermax-ml
 spec:
-  replicas: 2
+  # replicas: 1 is deliberate. The ML service runs its enrichment /
+  # clustering tick on an in-process APScheduler (see ML/main.py); a
+  # second replica would fire the same tick twice per interval. Scale-out
+  # needs a distributed scheduler lock first.
+  replicas: 1
   selector:
     matchLabels:
       app: thermax-ml
@@ -19,6 +23,9 @@ spec:
           image: thermaxacr.azurecr.io/thermax-ml:latest
           ports:
             - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: thermax-secrets
           livenessProbe:
             httpGet:
               path: /health

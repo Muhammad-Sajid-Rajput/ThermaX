@@ -1,24 +1,48 @@
 version: '3.8'
 
 services:
+  mongo:
+    image: mongo:7
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
   backend:
     build: ./Backend
     ports:
       - "5000:5000"
-    env_file: ./Backend/.env
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/thermax
+    env_file:
+      - path: ./Backend/.env
+        required: false
     restart: always
 
   ml:
     build: ./ML
     ports:
       - "8000:8000"
-    env_file: ./ML/.env
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/thermax
+    env_file:
+      - path: ./ML/.env
+        required: false
     restart: always
 
   frontend:
-    build: ./Frontend
+    build:
+      context: ./Frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:5000
+      - "5173:80"
     restart: always
+
+volumes:
+  mongo_data:
