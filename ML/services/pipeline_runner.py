@@ -47,6 +47,27 @@ def _coords(report):
     return lat, lng
 
 
+def _record_admin_notification(db, report_id, notif_type, reason, qc_score=None):
+    if db is None or not report_id:
+        return
+    try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        doc = {
+            "reportId": report_id,
+            "type": notif_type,
+            "reason": str(reason) if reason is not None else "",
+            "qcScore": qc_score,
+            "createdAt": now,
+            "readAt": None,
+            "readBy": None,
+        }
+        db.admin_notifications.insert_one(doc)
+    except Exception as exc:
+        # Notify-once is enforced by the unique index on (reportId, type).
+        # Notification write errors must never fail or alter enrichment.
+        print(f"[AdminNotification] Write skipped/failed: {exc}")
+
+
 def enrich_report_pipeline(report_id_str: str) -> dict:
     try:
         pymongo = importlib.import_module("py" + "mongo")
@@ -55,23 +76,38 @@ def enrich_report_pipeline(report_id_str: str) -> dict:
     except Exception:
         return {"status": "SKIPPED", "reason": "PyMongo driver unavailable"}
 
-    from config import MONGO_URI
+    from config import MONGO_URI, EXTREME_TEMP_DIFF_C
     from services.gee_service import gee_service
     from services.fusion_service import calculate_fusion_score
     from services.quality_control import run_quality_checks
 
     client = None
+    report = None
     try:
         client = MongoClient(MONGO_URI)
         db = client.get_database()
 
         # Idempotency: exactly one analysis row per report, no matter how
-        # many times enrichment runs.
-        db.satelliteanalyses.create_index("report", unique=True)
-        db.aianalyses.create_index("report", unique=True)
+        # many times enrichment runs. Unique index on (reportId, type) ensures
+        # notify-once for outliers at the database level.
+        try:
+            db.satelliteanalyses.create_index("report", unique=True)
+        except Exception:
+            pass
+        try:
+            db.aianalyses.create_index("report", unique=True)
+        except Exception:
+            pass
+        try:
+            db.admin_notifications.create_index([("reportId", 1), ("type", 1)], unique=True)
+        except Exception:
+            pass
 
         if len(report_id_str) == 24:
-            report = db.reports.find_one({"_id": ObjectId(report_id_str)})
+            try:
+                report = db.reports.find_one({"_id": ObjectId(report_id_str)})
+            except Exception:
+                report = db.reports.find_one({"reportRef": report_id_str})
         else:
             report = db.reports.find_one({"reportRef": report_id_str})
         if not report:
@@ -79,9 +115,11 @@ def enrich_report_pipeline(report_id_str: str) -> dict:
 
         lat, lng = _coords(report)
         if lat is None or lng is None:
+            reason = "Report has no coordinates; refusing to invent a location"
+            _record_admin_notification(db, report["_id"], "enrichment_failed", reason)
             return {
                 "status": "FAILED",
-                "reason": "Report has no coordinates; refusing to invent a location",
+                "reason": reason,
             }
 
         severity = report.get("severityLevel")
@@ -99,9 +137,11 @@ def enrich_report_pipeline(report_id_str: str) -> dict:
         if severity is None:
             # No fabrication: a report without a severity cannot be fused,
             # so enrichment refuses instead of inventing severity 3.
+            reason = "Report has no severity; refusing to invent one"
+            _record_admin_notification(db, report["_id"], "enrichment_failed", reason)
             return {
                 "status": "FAILED",
-                "reason": "Report has no severity; refusing to invent one",
+                "reason": reason,
             }
 
         # Real weather signals from the backend snapshot (may be absent).
@@ -203,6 +243,20 @@ def enrich_report_pipeline(report_id_str: str) -> dict:
             {"$set": {"status": next_status, "updatedAt": now}},
         )
 
+        # Outlier notification: notify admin on extreme citizen-vs-instrument gap
+        if qc.get("verdict") == "suspect":
+            for chk in qc.get("checks", []):
+                if chk.get("name") == "citizen_temp_vs_weather" and chk.get("result") == "fail":
+                    diff = (chk.get("data") or {}).get("diff")
+                    if diff is not None and diff >= EXTREME_TEMP_DIFF_C:
+                        _record_admin_notification(
+                            db,
+                            report["_id"],
+                            "extreme_contradiction",
+                            chk.get("detail"),
+                            qc.get("score"),
+                        )
+
         return {
             "status": "COMPLETED",
             "reportId": str(report["_id"]),
@@ -215,6 +269,11 @@ def enrich_report_pipeline(report_id_str: str) -> dict:
 
     except Exception as e:
         print(f"[Pipeline Error] {e}")
+        if client is not None and report is not None and "_id" in report:
+            try:
+                _record_admin_notification(db, report["_id"], "enrichment_failed", str(e))
+            except Exception:
+                pass
         return {"status": "FAILED", "reason": str(e)}
     finally:
         if client is not None:

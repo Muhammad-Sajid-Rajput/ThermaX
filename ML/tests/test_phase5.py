@@ -121,6 +121,7 @@ def test_hotspot_tvi_matches_hand_computation(monkeypatch):
     _seed_verified(db, "k", "Karachi", [KARACHI_CENTERS[0]], temp=42.0)
     _seed_heat_all(db, "k", [KARACHI_CENTERS[0]], score=80.0)
 
+    monkeypatch.setattr("services.scheduled_pipeline.pop_density_at", lambda c, lat, lng: 25000.0)
     res = run_city_pipeline(db, "Karachi")
     assert res["clustersFound"] == 1
     (hotspot,) = current_hotspots(db, "Karachi")
@@ -129,7 +130,7 @@ def test_hotspot_tvi_matches_hand_computation(monkeypatch):
     comps = hotspot["tviComponents"]
     assert comps["heat"] == pytest.approx(0.8)      # mean heatScore 80 / 100
     assert comps["reports"] == pytest.approx(0.25)  # 5 reports / cap 20
-    assert 0.0 < comps["population"] <= 1.0        # real WorldPop grid cell
+    assert 0.0 < comps["population"] <= 1.0        # pop density component
     # The persisted score equals a fresh hand computation from the same
     # three inputs — the pipeline wires the components, not magic numbers.
     expected = compute_tvi(80.0, 5, comps["population"] * 50000.0)
@@ -142,6 +143,7 @@ def test_hotspot_without_heat_data_excludes_component(monkeypatch):
     db = holder["get_db"]()
     # Verified reports but NO aianalyses rows → heat component missing.
     _seed_verified(db, "k", "Karachi", [KARACHI_CENTERS[0]])
+    monkeypatch.setattr("services.scheduled_pipeline.pop_density_at", lambda c, lat, lng: 25000.0)
     res = run_city_pipeline(db, "Karachi")
     assert res["clustersFound"] == 1
     (hotspot,) = current_hotspots(db, "Karachi")

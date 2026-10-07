@@ -79,8 +79,11 @@ def _num(value):
     return n
 
 
-def _check(name, result, detail):
-    return {"name": name, "result": result, "detail": detail}
+def _check(name, result, detail, data=None):
+    c = {"name": name, "result": result, "detail": detail}
+    if data is not None:
+        c["data"] = data
+    return c
 
 
 def _inside_bounds(lat, lng, bounds):
@@ -121,16 +124,19 @@ def run_quality_checks(report, weather_snapshot=None, satellite_data=None, city_
         ))
     else:
         diff = abs(citizen_temp - weather_temp)
+        rounded_diff = round(diff, 1)
         if diff <= TEMP_TOLERANCE_C:
             checks.append(_check(
                 "citizen_temp_vs_weather", "pass",
-                f"|{citizen_temp} − {weather_temp}| = {round(diff, 1)}°C ≤ {TEMP_TOLERANCE_C}°C",
+                f"|{citizen_temp} − {weather_temp}| = {rounded_diff}°C ≤ {TEMP_TOLERANCE_C}°C",
+                data={"diff": rounded_diff},
             ))
         else:
             failures += 1
             checks.append(_check(
                 "citizen_temp_vs_weather", "fail",
-                f"|{citizen_temp} − {weather_temp}| = {round(diff, 1)}°C > {TEMP_TOLERANCE_C}°C",
+                f"|{citizen_temp} − {weather_temp}| = {rounded_diff}°C > {TEMP_TOLERANCE_C}°C",
+                data={"diff": rounded_diff},
             ))
 
     # ── Check 2: severity vs satellite LST anomaly (surface-air excess) ──

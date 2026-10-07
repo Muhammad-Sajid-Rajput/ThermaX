@@ -2,7 +2,7 @@ import json
 import os
 
 def _load_env():
-    for path in ['../Backend/.env', '.env']:
+    for path in ['.env', '../Backend/.env']:
         if os.path.exists(path):
             with open(path, encoding='utf-8') as f:
                 for line in f:
@@ -56,6 +56,7 @@ ML_MAX_BODY_BYTES = int(os.getenv("ML_MAX_BODY_BYTES", 5 * 1024 * 1024))
 QC_TEMP_TOLERANCE_C = float(os.getenv("QC_TEMP_TOLERANCE_C", 3.0))
 QC_ANOMALY_TOLERANCE_C = float(os.getenv("QC_ANOMALY_TOLERANCE_C", 8.0))
 QC_SCORE_PENALTY_PER_FAILURE = float(os.getenv("QC_SCORE_PENALTY_PER_FAILURE", 0.35))
+EXTREME_TEMP_DIFF_C = float(os.getenv("EXTREME_TEMP_DIFF_C", 15.0))
 
 # ─── Phase 5: shared city definitions ──────────────────────────────────────────
 # The canonical city list (name, boundary polygon, center, timezone) lives in

@@ -324,6 +324,7 @@ def test_pipeline_publishes_hotspots_with_phase6_fields(monkeypatch):
             "weatherSnapshotRef": _FakeObjectId(f"w-0-{i}"),
         })
 
+    monkeypatch.setattr("services.pop_grid.pop_density_at", lambda c, lat, lng: 25000.0)
     res = run_city_pipeline(db, "Karachi")
     assert res["status"] == "COMPLETED"
     assert res["clustersFound"] == 1
