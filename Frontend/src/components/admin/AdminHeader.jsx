@@ -8,6 +8,7 @@ import {
   Users,
   Map,
   BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 import { checkHealth } from '../../services/api';
 
@@ -17,6 +18,7 @@ const PAGE_TITLES = {
   '/admin/users': { title: 'User Directory', icon: Users },
   '/admin/heatmap': { title: 'Spatial Heatmap & Hotspots', icon: Map },
   '/admin/analytics': { title: 'System Analytics & Trends', icon: BarChart3 },
+  '/admin/insights': { title: 'Area Insights & Decision Briefing', icon: TrendingUp },
 };
 
 const AdminHeader = () => {

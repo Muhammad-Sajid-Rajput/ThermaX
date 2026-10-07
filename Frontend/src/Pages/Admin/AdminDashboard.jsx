@@ -12,7 +12,7 @@ import {
   Users,
   AlertTriangle,
   CheckCircle,
-  XCircle,
+  Eye,
   Shield,
   Activity,
   Flame,
@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import {
   fetchReports,
-  updateModerationStatus,
   fetchUsers,
   fetchAdminStats,
   fetchHeatmap,
@@ -29,6 +28,8 @@ import {
   fetchEnrichmentFailures,
   retryEnrichmentFailure,
   dismissEnrichmentFailure,
+  fetchAdminNotifications,
+  markNotificationRead,
   formatTimestamp,
 } from '../../services/api';
 
@@ -84,21 +85,24 @@ function AdminDashboard() {
   const [unlocatableReports, setUnlocatableReports] = useState(0);
   const [mapHeatmap, setMapHeatmap] = useState([]);
   const [enrichmentFailures, setEnrichmentFailures] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsData, reportsData, usersData, hotspotsData, heatmapData, failuresData] = await Promise.all([
+      const [statsData, reportsData, usersData, hotspotsData, heatmapData, failuresData, notifsData] = await Promise.all([
         fetchAdminStats().catch(() => null),
-        fetchReports({ status: 'pending', limit: 6 }).catch(() => ({ data: [] })),
+        fetchReports({ limit: 100 }).catch(() => ({ data: [] })),
         fetchUsers().catch(() => []),
         fetchHotspots().catch(() => ({ data: [] })),
         fetchHeatmap().catch(() => ({ data: [] })),
         fetchEnrichmentFailures().catch(() => []),
+        fetchAdminNotifications().catch(() => []),
       ]);
       setEnrichmentFailures(Array.isArray(failuresData) ? failuresData : []);
+      setNotifications(Array.isArray(notifsData) ? notifsData : []);
 
       const usersList = Array.isArray(usersData) ? usersData : [];
       const totalUsers = usersList.length;
@@ -164,40 +168,6 @@ function AdminDashboard() {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  // Handle Moderation
-  const handleReportAction = async (reportId, action) => {
-    try {
-      setActionLoadingId(reportId);
-      const newStatus = action === 'approve' ? 'verified' : 'rejected';
-
-      // Optimistic update: immediately remove from pending queue in UI
-      setPendingReports((prev) =>
-        prev.filter((r) => (r._id || r.id) !== reportId)
-      );
-      setStats((prev) => ({
-        ...prev,
-        pendingReports: Math.max(0, prev.pendingReports - 1),
-        approvedReports:
-          action === 'approve' ? prev.approvedReports + 1 : prev.approvedReports,
-        rejectedReports:
-          action === 'reject' ? prev.rejectedReports + 1 : prev.rejectedReports,
-      }));
-
-      await updateModerationStatus(reportId, newStatus);
-      toast.success(
-        action === 'approve'
-          ? 'Report approved & verified'
-          : 'Report rejected'
-      );
-      await loadDashboardData();
-    } catch {
-      toast.error('Action failed. Please try again.');
-      await loadDashboardData();
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   // Phase 4: enrichment dead letters — retry or dismiss, then refresh.
   const handleFailureRetry = async (failureId) => {
     try {
@@ -225,6 +195,32 @@ function AdminDashboard() {
     }
   };
 
+  const unreadNotifications = notifications.filter((n) => !n.readAt);
+
+  const handleNotificationClick = async (notif) => {
+    try {
+      if (!notif.readAt) {
+        await markNotificationRead(notif._id);
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n._id === notif._id ? { ...n, readAt: new Date().toISOString() } : n
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+    const report = notif.reportId && typeof notif.reportId === 'object' ? notif.reportId : null;
+    const reportRef = report?.reportRef || notif.reportId;
+    const targetId = report?._id || notif.reportId;
+    navigate('/admin/reports', {
+      state: {
+        search: reportRef ? String(reportRef) : '',
+        highlightReportId: targetId ? String(targetId) : '',
+      },
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -239,6 +235,12 @@ function AdminDashboard() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               Live Monitoring
             </span>
+            {unreadNotifications.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                {unreadNotifications.length} Needs Review
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 font-medium">
             Real-time heat risk oversight, incident moderation dispatch, and national system governance
@@ -258,11 +260,11 @@ function AdminDashboard() {
       {/* Real KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title="PENDING MODERATION"
+          title="PENDING AUTO-QC"
           value={stats.pendingReports}
-          change={stats.pendingReports > 0 ? 'Requires action' : 'Queue clear'}
+          change={stats.pendingReports > 0 ? 'Queued for automated QC' : 'Queue clear'}
           changeType={stats.pendingReports > 0 ? 'up' : 'down'}
-          trend="pending verification"
+          trend="awaiting scheduler tick"
           icon={FileText}
           color="orange"
           glow={stats.pendingReports > 0}
@@ -424,55 +426,128 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* Row 3: Operational Governance (Moderation Queue + User Governance & Diagnostics) */}
-      {/* Phase 4: enrichment dead letters — only rendered when failures exist. */}
-      {enrichmentFailures.length > 0 && (
-        <AdminPanel
-          title={`ML Enrichment Failures (${enrichmentFailures.length})`}
-          subtitle="Reports whose enrichment trigger failed after 3 retries. The ML scheduler will pick up pending reports on its next tick; retry now or dismiss."
-          icon={AlertTriangle}
-          iconColor="yellow"
-        >
-          <div className="space-y-3">
-            {enrichmentFailures.map((f) => (
-              <div
-                key={f._id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">
-                    {f.report?.reportRef || 'Report'} · {f.report?.city || 'Unknown city'}
-                  </p>
-                  <p className="text-xs text-slate-600 truncate">
-                    {f.attempts} attempts · {f.lastError} · {formatTimestamp(f.lastAttemptAt)}
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleFailureRetry(f._id)}
-                    disabled={actionLoadingId === f._id}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    onClick={() => handleFailureDismiss(f._id)}
-                    disabled={actionLoadingId === f._id}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    Dismiss
-                  </button>
-                </div>
+      {/* Row 3: Operational Governance (Outlier Review Queue + ML Enrichment Failures) */}
+      {(notifications.length > 0 || enrichmentFailures.length > 0) && (
+        <div className={`grid grid-cols-1 ${notifications.length > 0 && enrichmentFailures.length > 0 ? 'lg:grid-cols-2' : ''} gap-6`}>
+          {notifications.length > 0 && (
+            <AdminPanel
+              title={`Outlier Review Queue (${unreadNotifications.length} unread)`}
+              subtitle="Autonomous pipeline flagged outlier reports for human review (extreme temperature gaps or enrichment errors)."
+              icon={AlertTriangle}
+              iconColor="red"
+              action
+              actionLabel="View All Reports"
+              onAction={() => navigate('/admin/reports')}
+            >
+              <div className="space-y-3">
+                {notifications.slice(0, 5).map((n) => {
+                  const report = n.reportId && typeof n.reportId === 'object' ? n.reportId : {};
+                  const isUnread = !n.readAt;
+                  return (
+                    <div
+                      key={n._id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                        isUnread
+                          ? 'border-red-300 bg-red-50/70 hover:bg-red-50 hover:border-red-400 shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 opacity-80'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 text-[11px] font-bold rounded uppercase tracking-wider ${
+                              n.type === 'extreme_contradiction'
+                                ? 'bg-red-100 text-red-800 border border-red-200'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}
+                          >
+                            {n.type === 'extreme_contradiction' ? 'Extreme Contradiction' : 'Enrichment Failed'}
+                          </span>
+                          {isUnread && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white animate-pulse">
+                              Needs review
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500">
+                            {formatTimestamp(n.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {report.reportRef || 'Report'} · {report.city || 'Unknown city'} · Status: <span className="capitalize">{report.status || 'flagged'}</span>
+                        </p>
+                        <p className="text-xs text-slate-600 truncate mt-0.5">
+                          {n.reason || 'Anomaly detected during automated QC.'}
+                          {n.qcScore != null ? ` · QC Score: ${n.qcScore}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotificationClick(n);
+                          }}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs"
+                        >
+                          Review &rarr;
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </AdminPanel>
+            </AdminPanel>
+          )}
+
+          {enrichmentFailures.length > 0 && (
+            <AdminPanel
+              title={`ML Enrichment Failures (${enrichmentFailures.length})`}
+              subtitle="Reports whose enrichment trigger failed after 3 retries. The ML scheduler will pick up pending reports on its next tick; retry now or dismiss."
+              icon={AlertTriangle}
+              iconColor="yellow"
+            >
+              <div className="space-y-3">
+                {enrichmentFailures.map((f) => (
+                  <div
+                    key={f._id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {f.report?.reportRef || 'Report'} · {f.report?.city || 'Unknown city'}
+                      </p>
+                      <p className="text-xs text-slate-600 truncate">
+                        {f.attempts} attempts · {f.lastError} · {formatTimestamp(f.lastAttemptAt)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleFailureRetry(f._id)}
+                        disabled={actionLoadingId === f._id}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+                      >
+                        Retry
+                      </button>
+                      <button
+                        onClick={() => handleFailureDismiss(f._id)}
+                        disabled={actionLoadingId === f._id}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AdminPanel>
+          )}
+        </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Moderation Queue Panel */}
+        {/* Pending Auto-QC Queue Panel */}
         <AdminPanel
-          title="Moderation Queue"
-          subtitle={`${stats.pendingReports} submissions awaiting validation`}
+          title="Pending Auto-QC Queue"
+          subtitle={`${stats.pendingReports} community submissions queued for automated QC & enrichment`}
           icon={AlertTriangle}
           iconColor="orange"
           action
@@ -529,23 +604,19 @@ function AdminDashboard() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 ml-3">
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold">
+                        Awaiting Auto-QC
+                      </span>
                       <button
-                        onClick={() => handleReportAction(rId, 'approve')}
-                        disabled={actionLoadingId === rId}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                        title="Validate Report"
+                        onClick={() =>
+                          navigate('/admin/reports', {
+                            state: { search: report.reportRef || rId, highlightReportId: rId },
+                          })
+                        }
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                        title="Inspect Report"
                       >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Approve</span>
-                      </button>
-                      <button
-                        onClick={() => handleReportAction(rId, 'reject')}
-                        disabled={actionLoadingId === rId}
-                        className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                        title="Reject Report"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Reject</span>
+                        <Eye className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

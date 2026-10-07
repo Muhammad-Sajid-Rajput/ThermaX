@@ -13,7 +13,7 @@ const TIER_BADGE = {
   critical: 'bg-red-100 text-red-800 border-red-300',
   high: 'bg-orange-100 text-orange-800 border-orange-300',
   moderate: 'bg-amber-100 text-amber-800 border-amber-300',
-  low: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  low: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   unknown: 'bg-slate-100 text-slate-600 border-slate-300',
 };
 
@@ -44,7 +44,7 @@ function ComponentBar({ name, value, weightUsed }) {
       </div>
       <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-amber-400 to-red-500"
+          className="h-full rounded-full bg-linear-to-r from-amber-400 to-red-500"
           style={{ width: `${pct}%` }}
         />
       </div>

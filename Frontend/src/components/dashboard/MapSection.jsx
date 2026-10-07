@@ -5,15 +5,13 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Map, Eye, EyeOff, RotateCcw, Maximize, Minimize, Navigation } from 'lucide-react';
 import useFullscreen from '../../hooks/ui/useFullscreen';
 import useUserLocationStore from '../../stores/userLocationStore';
-
-import { runDbscan } from '../../utils/geo/clustering';
-import { processClustersToHotspots } from '../../utils/geo/hotspotUtils';
 import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
 import {
   formatHeatmapPoints,
   HEATMAP_CONFIG,
 } from '../../utils/geo/heatmapLayer';
 import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
+import { getHotspotRadius } from '../../utils/geo/hotspotUtils';
 
 // Fix default marker icon paths (Vite asset pipeline issue)
 delete L.Icon.Default.prototype._getIconUrl;
@@ -26,17 +24,42 @@ L.Icon.Default.mergeOptions({
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Live labels: API priority (Critical|High|Moderate|Low|Unknown, see
-// Backend/routes/hotspots.js toDto) or client-computed severityLabel from
-// utils/geo/hotspotUtils.js (Extreme|High|Moderate|Low|Unknown). `Medium` is
-// a legacy alias the current API never emits; unknown keys fall back to teal.
+// TVI tier thresholds matching ML Phase 5/6:
+// Critical (>=0.65), High (>=0.45), Moderate (>=0.25), Low (<0.25)
+// TVI tier thresholds matching ML Phase 5/6:
+// Critical (>=0.65), High (>=0.45), Moderate (>=0.25), Low (<0.25)
+// Thermal hotspots use warm hazard tones: red, flame orange, deep amber, golden yellow. No greens.
+const TVI_TIER_COLORS = {
+  critical: '#dc2626',
+  high: '#f97316',
+  moderate: '#f59e0b',
+  low: '#eab308',
+  unknown: '#c2410c',
+};
+
+export function getHotspotColor(hs) {
+  const riskTier = String(hs?.riskTier || '').toLowerCase();
+  if (riskTier && TVI_TIER_COLORS[riskTier]) {
+    return TVI_TIER_COLORS[riskTier];
+  }
+  if (hs?.tvi != null && Number.isFinite(Number(hs.tvi))) {
+    const val = Number(hs.tvi);
+    if (val >= 0.65) return TVI_TIER_COLORS.critical;
+    if (val >= 0.45) return TVI_TIER_COLORS.high;
+    if (val >= 0.25) return TVI_TIER_COLORS.moderate;
+    return TVI_TIER_COLORS.low;
+  }
+  const priority = hs?.severityLabel || hs?.priority;
+  return PRIORITY_COLORS[priority] ?? '#c2410c';
+}
+
 const PRIORITY_COLORS = {
   Extreme: '#dc2626',
   Critical: '#dc2626',
   High: '#f97316',
-  Moderate: '#facc15',
-  Medium: '#facc15',
-  Low: '#65a30d',
+  Moderate: '#f59e0b',
+  Medium: '#f59e0b',
+  Low: '#eab308',
 };
 
 const SEVERITY_COLORS = {
@@ -81,11 +104,11 @@ const LeafletMapInner = ({
       center: center || PAKISTAN_CENTER,
       zoom: zoom || PAKISTAN_ZOOM,
       zoomControl: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      touchZoom: false,
-      boxZoom: false,
-      keyboard: false,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      touchZoom: true,
+      boxZoom: true,
+      keyboard: true,
     });
 
     // OpenStreetMap basemap
@@ -94,6 +117,10 @@ const LeafletMapInner = ({
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(map);
+
+    // Zoom control in bottom right
+    const zoomCtrl = L.control.zoom({ position: 'bottomright' }).addTo(map);
+    zoomControlRef.current = zoomCtrl;
 
     mapRef.current = map;
 
@@ -136,27 +163,14 @@ const LeafletMapInner = ({
         .map((p) => {
           const lat = p.lat ?? p[0];
           const lng = p.lng ?? p[1];
-          const weight = p.intensity ?? p.weight ?? p[2] ?? 0.5;
+          // Gentle ambient weight so the heatmap is soft and non-overpowering
+          const rawWeight = p.intensity ?? p.weight ?? p[2] ?? 0.5;
+          const weight = Math.min(1, Math.max(0.1, Number(rawWeight) * 0.7));
           return [lat, lng, weight];
         })
         .filter((p) => p[0] != null && p[1] != null);
 
-      const heatLayer = L.heatLayer(
-        points,
-        HEATMAP_CONFIG || {
-          radius: 25,
-          blur: 18,
-          maxZoom: 15,
-          gradient: {
-            0.2: '#2a9d8f',
-            0.4: '#facc15',
-            0.6: '#f97316',
-            0.8: '#dc2626',
-            1.0: '#991b1b',
-          },
-        }
-      );
-
+      const heatLayer = L.heatLayer(points, HEATMAP_CONFIG);
       heatLayer.addTo(map);
       layerRefs.current.heat = heatLayer;
     }
@@ -172,64 +186,78 @@ const LeafletMapInner = ({
 
     if (layers.hotspots && (!focus || focus === 'hotspots')) {
       const newLayers = hotspotsData
-        .map((hs) => {
-          const priority = hs.severityLabel || hs.priority;
-          const color = PRIORITY_COLORS[priority] ?? '#0f766e';
-          let layer;
-
-          // Popup HTML is built by the shared, XSS-hardened builder —
-          // never interpolate API values into a template literal here.
+        .flatMap((hs) => {
+          const color = getHotspotColor(hs);
           const popupContent = buildHotspotPopup(hs, color);
+          const created = [];
 
-          if (hs.geojson) {
-            // Render Polygon
-            layer = L.geoJSON(hs.geojson, {
-              style: {
-                color,
-                weight: focus === 'hotspots' ? 2.5 : 1.5,
-                fillColor: color,
-                fillOpacity: focus === 'hotspots' ? 0.22 : 0.14,
-                dashArray: focus === 'hotspots' ? null : '5 4',
-              },
+          const hasValidCentroid =
+            hs.centroid &&
+            Number.isFinite(Number(hs.centroid.lat)) &&
+            Number.isFinite(Number(hs.centroid.lng));
+
+          if (hasValidCentroid) {
+            // Hotspot perimeter envelope: balanced radius (450m - 1200m) scaled to cluster report density
+            const radius = getHotspotRadius(hs.reportCount);
+            const circle = L.circle([hs.centroid.lat, hs.centroid.lng], {
+              color,
+              fillColor: color,
+              fillOpacity: focus === 'hotspots' ? 0.38 : 0.28,
+              weight: focus === 'hotspots' ? 3 : 2,
+              radius,
+              dashArray: focus === 'hotspots' ? null : '5 4',
             });
-            layer.bindPopup(popupContent);
+            circle.bindPopup(popupContent);
 
             // Hover effect
-            layer.on('mouseover', function () {
-              this.setStyle({ fillOpacity: 0.4 });
+            circle.on('mouseover', function () {
+              this.setStyle({ fillOpacity: 0.55 });
             });
-            layer.on('mouseout', function () {
+            circle.on('mouseout', function () {
               this.setStyle({
-                fillOpacity: focus === 'hotspots' ? 0.22 : 0.14,
+                fillOpacity: focus === 'hotspots' ? 0.42 : 0.32,
               });
             });
-          } else if (hs.centroid) {
-            // Render Dynamic Circle (from DBSCAN)
-            const radius = Math.min(200 + (hs.reportCount || 1) * 50, 1000);
-            layer = L.circle([hs.centroid.lat, hs.centroid.lng], {
-              color: color,
-              fillColor: color,
-              fillOpacity: 0.3,
-              weight: 2,
-              radius: radius,
-              dashArray: '5 5',
-            });
-            layer.bindPopup(popupContent);
+            circle.addTo(map);
+            created.push(circle);
 
-            // Hover effect
-            layer.on('mouseover', function () {
+            // Centroid beacon to pinpoint hotspot center
+            const centerMarker = L.circleMarker([hs.centroid.lat, hs.centroid.lng], {
+              radius: 7,
+              color: '#ffffff',
+              weight: 2.5,
+              fillColor: color,
+              fillOpacity: 1.0,
+            });
+            centerMarker.bindPopup(popupContent);
+            centerMarker.addTo(map);
+            created.push(centerMarker);
+          } else if (hs.geojson) {
+            // Fallback: Render polygon/boundary if centroid is missing
+            const poly = L.geoJSON(hs.geojson, {
+              style: {
+                color,
+                weight: focus === 'hotspots' ? 3.5 : 2.5,
+                fillColor: color,
+                fillOpacity: focus === 'hotspots' ? 0.35 : 0.25,
+                dashArray: focus === 'hotspots' ? null : '6 4',
+              },
+            });
+            poly.bindPopup(popupContent);
+
+            poly.on('mouseover', function () {
               this.setStyle({ fillOpacity: 0.5 });
             });
-            layer.on('mouseout', function () {
-              this.setStyle({ fillOpacity: 0.3 });
+            poly.on('mouseout', function () {
+              this.setStyle({
+                fillOpacity: focus === 'hotspots' ? 0.35 : 0.25,
+              });
             });
+            poly.addTo(map);
+            created.push(poly);
           }
 
-          if (layer) {
-            layer.addTo(map);
-            return layer;
-          }
-          return null;
+          return created;
         })
         .filter(Boolean);
 
@@ -264,8 +292,8 @@ const LeafletMapInner = ({
             html: `
             <div style="
               width:${size * 2}px;height:${size * 2}px;border-radius:50%;
-              background:${color};border:2.5px solid white;
-              box-shadow:0 2px 10px ${color}99;
+              background:${color};border:2px solid white;
+              box-shadow:0 3px 8px rgba(0,0,0,0.4),0 0 0 1px rgba(0,0,0,0.15);
               display:flex;align-items:center;justify-content:center;
               color:white;font-size:11px;font-weight:700;font-family:Inter,sans-serif">${sev}</div>`,
             className: '',
@@ -273,7 +301,7 @@ const LeafletMapInner = ({
             iconAnchor: [size, size],
           });
 
-          const marker = L.marker([lat, lng], { icon }).bindPopup(buildReportPopup(rpt));
+          const marker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).bindPopup(buildReportPopup(rpt));
 
           marker.addTo(map);
           return marker;
@@ -347,33 +375,13 @@ const LeafletMapInner = ({
     }
   }, [center, zoom, resetTrigger]);
 
-  // Toggle zoom controls and interactions based strictly on Fullscreen mode
+  // Handle fullscreen map resize
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    if (isFullscreen) {
-      map.scrollWheelZoom.enable();
-      map.doubleClickZoom.enable();
-      map.touchZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      if (!zoomControlRef.current) {
-        zoomControlRef.current = L.control
-          .zoom({ position: 'bottomright' })
-          .addTo(map);
-      }
-    } else {
-      map.scrollWheelZoom.disable();
-      map.doubleClickZoom.disable();
-      map.touchZoom.disable();
-      map.boxZoom.disable();
-      map.keyboard.disable();
-      if (zoomControlRef.current) {
-        map.removeControl(zoomControlRef.current);
-        zoomControlRef.current = null;
-      }
-    }
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
   }, [isFullscreen]);
 
   return (
@@ -449,8 +457,8 @@ const MapSection = ({
   reports = [],
   points = [],
   focus = null,
-  eps = 0.015,
-  minPts = 2,
+  _eps = 0.015,
+  _minPts = 2,
   hideControls = false,
   title = null,
   showHeatmap = true,
@@ -470,16 +478,14 @@ const MapSection = ({
   const mapCenter = useMemo(() => {
     if (centerOverride) return centerOverride;
     if (initialCenter) return initialCenter;
-    if (isUserLocated) return [lat, lng];
     return PAKISTAN_CENTER;
-  }, [centerOverride, initialCenter, isUserLocated, lat, lng]);
+  }, [centerOverride, initialCenter]);
 
   const mapZoom = useMemo(() => {
     if (zoomOverride) return zoomOverride;
     if (initialZoom) return initialZoom;
-    if (isUserLocated) return 12;
     return PAKISTAN_ZOOM;
-  }, [zoomOverride, initialZoom, isUserLocated]);
+  }, [zoomOverride, initialZoom]);
 
   const displayTitle = useMemo(() => {
     if (title) return title;
@@ -488,33 +494,18 @@ const MapSection = ({
 
   const [showLegend, setShowLegend] = useState(true);
   const [layers, setLayers] = useState({
-    heat: hideControls
-      ? focus === 'heatmap'
-      : showHeatmap && (focus === 'heatmap' || !focus),
-    hotspots: hideControls
-      ? focus === 'hotspots'
-      : showHotspots && (focus === 'hotspots' || !focus),
-    reports: hideControls
-      ? !focus || focus === 'reports'
-      : showMarkers && !focus,
+    heat: showHeatmap && (focus === 'heatmap' || !focus),
+    hotspots: showHotspots && (focus === 'hotspots' || !focus),
+    reports: showMarkers && (!focus || focus === 'reports'),
   });
 
   useEffect(() => {
-    if (hideControls) {
-      setLayers({
-        heat: focus === 'heatmap',
-        hotspots: focus === 'hotspots',
-        reports: !focus || focus === 'reports',
-      });
-      return;
-    }
-    setLayers((prev) => ({
-      ...prev,
-      ...(showHeatmap !== undefined ? { heat: showHeatmap && (focus === 'heatmap' || !focus) } : {}),
-      ...(showHotspots !== undefined ? { hotspots: showHotspots && (focus === 'hotspots' || !focus) } : {}),
-      ...(showMarkers !== undefined ? { reports: showMarkers && (!focus || focus === 'reports') } : {}),
-    }));
-  }, [showHeatmap, showHotspots, showMarkers, hideControls, focus]);
+    setLayers({
+      heat: showHeatmap && (focus === 'heatmap' || !focus),
+      hotspots: showHotspots && (focus === 'hotspots' || !focus),
+      reports: showMarkers && (!focus || focus === 'reports'),
+    });
+  }, [showHeatmap, showHotspots, showMarkers, focus]);
 
   useEffect(() => {
     if (initialCenter) {
@@ -537,13 +528,13 @@ const MapSection = ({
   const handleLocateMe = () => {
     if (isUserLocated) {
       setCenterOverride([lat, lng]);
-      setZoomOverride(13);
+      setZoomOverride(12);
       setResetTrigger((prev) => prev + 1);
     } else {
       requestLocation({ force: true }).then((res) => {
         if (res?.lat && res?.lng) {
           setCenterOverride([res.lat, res.lng]);
-          setZoomOverride(13);
+          setZoomOverride(12);
           setResetTrigger((prev) => prev + 1);
         }
       });
@@ -551,8 +542,8 @@ const MapSection = ({
   };
 
   const handleResetView = () => {
-    setCenterOverride(null);
-    setZoomOverride(null);
+    setCenterOverride(initialCenter || PAKISTAN_CENTER);
+    setZoomOverride(initialZoom || PAKISTAN_ZOOM);
     setResetTrigger((prev) => prev + 1);
   };
 

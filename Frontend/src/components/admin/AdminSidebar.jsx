@@ -6,6 +6,7 @@ import {
   Users,
   Map,
   BarChart3,
+  TrendingUp,
   Shield,
   LogOut,
   Flame,
@@ -48,6 +49,12 @@ const AdminSidebar = () => {
       icon: BarChart3,
       label: 'Analytics',
       description: 'System Insights',
+    },
+    {
+      path: '/admin/insights',
+      icon: TrendingUp,
+      label: 'Area Insights',
+      description: 'Decision Briefing',
     },
   ];
 

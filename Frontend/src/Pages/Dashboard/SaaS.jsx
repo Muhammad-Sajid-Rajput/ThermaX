@@ -1,20 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
-  LayoutDashboard,
-  Map,
-  Flame,
   AlertCircle,
   CheckCircle,
   Clock,
   XCircle,
-  MapPin,
+  Flame,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import KpiCards from '../../components/dashboard/KpiCards';
 import MapSection from '../../components/dashboard/MapSection';
-import AnalyticsSection from '../../components/dashboard/AnalyticsSection';
 import {
   Card,
   CardHeader,
@@ -30,12 +26,6 @@ import {
 import toast from 'react-hot-toast';
 import LiveWeatherCard from '../../components/weather/LiveWeatherCard';
 import AdvisoryBanner from '../../components/advisory/AdvisoryBanner';
-// ─── View navigation config ────────────────────────────────────────────────
-const VIEWS = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'heatmap', label: 'Heat Map', icon: Map },
-  { id: 'hotspots', label: 'Hotspots', icon: Flame },
-];
 // ─── Status badge helpers (keyed by the Phase 3 lifecycle vocabulary;
 // rpt.status is the lowercase backend status) ────────────────────────────
 const LEGACY_STATUS_ALIASES = { validated: 'verified', anomaly: 'flagged' };
@@ -62,6 +52,22 @@ const SEVERITY_BG = {
   2: 'bg-green-500',
   1: 'bg-slate-400',
 };
+const PRIORITY_BORDER = {
+  Critical: 'border-l-red-500 bg-red-50',
+  High: 'border-l-orange-500 bg-orange-50',
+  Moderate: 'border-l-amber-500 bg-amber-50',
+  Medium: 'border-l-amber-500 bg-amber-50',
+  Low: 'border-l-yellow-500 bg-yellow-50',
+  Unknown: 'border-l-slate-400 bg-slate-50',
+};
+const PRIORITY_PILL = {
+  Critical: 'bg-red-100 text-red-800',
+  High: 'bg-orange-100 text-orange-800',
+  Moderate: 'bg-amber-100 text-amber-800',
+  Medium: 'bg-amber-100 text-amber-800',
+  Low: 'bg-yellow-100 text-yellow-800',
+  Unknown: 'bg-slate-100 text-slate-700',
+};
 // ─── Loading skeleton ──────────────────────────────────────────────────────
 const SkeletonPulse = ({ className = '' }) => (
   <div className={`animate-pulse bg-slate-200 rounded-xl ${className}`} />
@@ -80,16 +86,10 @@ const LoadingSkeleton = () => (
         <SkeletonPulse className="h-44" />
       </div>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <SkeletonPulse className="h-48" />
-      <SkeletonPulse className="h-48" />
-      <SkeletonPulse className="h-48" />
-    </div>
   </div>
 );
 // ─── Main dashboard ────────────────────────────────────────────────────────
 const SaaSDashboard = () => {
-  const [currentView, setCurrentView] = useState('overview');
   const [snapshot, setSnapshot] = useState(null);
   const [hotspots, setHotspots] = useState([]);
   const [heatmap, setHeatmap] = useState([]);
@@ -148,27 +148,8 @@ const SaaSDashboard = () => {
   useEffect(() => {
     loadSnapshot();
   }, [loadSnapshot]);
-  // ── Page meta helpers ──────────────────────────────────────────────────
-  const getViewMeta = (view) => {
-    switch (view) {
-      case 'heatmap':
-        return {
-          title: 'Heat Map View',
-          desc: 'Interactive heatmap visualization across Pakistan regions',
-        };
-      case 'hotspots':
-        return {
-          title: 'Hotspot Analysis',
-          desc: 'Identified heat hotspot clusters and severity distribution',
-        };
-      default:
-        return {
-          title: 'Urban Heat Intelligence',
-          desc: 'Real-time monitoring of urban heat islands across Pakistan',
-        };
-    }
-  };
-  const { title, desc } = getViewMeta(currentView);
+  const title = 'Urban Heat Intelligence';
+  const desc = 'Real-time monitoring of urban heat islands across Pakistan';
   // ── Error state ─────────────────────────────────────────────────────────
   if (error && !snapshot) {
     return (
@@ -191,16 +172,6 @@ const SaaSDashboard = () => {
       </div>
     );
   }
-
-  const priorityActions = (hotspots || []).flatMap((hs) =>
-    (hs.directives || []).map((d, idx) => ({
-      id: d.id || `${hs.clusterId || 'HS'}-${idx + 1}`,
-      area: hs.city ? `${hs.city} Hotspot (${hs.clusterId || hs.name || 'Zone'})` : 'Active Hotspot Zone',
-      action: d.directive || d.action || d.text || hs.advisory?.headline || 'Implement targeted cooling measures',
-      priority: hs.priority || 'High',
-    }))
-  ).slice(0, 5);
-  const displayRecommendations = priorityActions.length > 0 ? priorityActions : (snapshot?.recommendations ?? []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -235,37 +206,11 @@ const SaaSDashboard = () => {
         </div>
       </div>
       <LiveWeatherCard />
-
-      {/* View Navigation Tabs */}
-      <div className="flex items-center justify-center gap-1 flex-wrap">
-        {VIEWS.map((view) => {
-          const Icon = view.icon;
-          const isActive = currentView === view.id;
-          return (
-            <button
-              key={view.id}
-              onClick={() => setCurrentView(view.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-green-600 text-white shadow-md'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {view.label}
-            </button>
-          );
-        })}
-      </div>
-
-            {/* ── Loading ────────────────────────────────────────────────────── */}
+      {/* ── Loading ────────────────────────────────────────────────────── */}
       {loading ? (
         <LoadingSkeleton />
       ) : (
-        <>
-          {/* ══ OVERVIEW ═══════════════════════════════════════════════ */}
-          {currentView === 'overview' && (
-            <div className="space-y-6">
+        <div className="space-y-6">
               {/* Phase 6: citizen heat advisory for the user's city */}
               <AdvisoryBanner />
               {/* KPI Row */}
@@ -284,214 +229,78 @@ const SaaSDashboard = () => {
                     reports={reports}
                     hotspots={hotspots}
                     title="Urban Heat Map — Pakistan (All)"
+                    showHeatmap={true}
                     showHotspots={displayPrefs.showHotspots}
                     showMarkers={displayPrefs.showMarkers}
                     disableLegend={true}
                   />
                 </div>
-                {/* Recommendations panel */}
-                <div className="lg:col-span-1 h-[60vh] lg:h-[75vh] min-h-125 flex flex-col gap-6 overflow-hidden">
-                  <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    <CardHeader className="pb-3 border-b border-slate-100">
-                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                        <Flame className="w-4 h-4 text-red-500" />
-                        Priority Actions
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4 space-y-3 flex-1 overflow-y-auto min-h-0">
-                      {displayRecommendations.map((rec) => {
-                        const priorityColor =
-                          {
-                            Critical: 'border-l-red-500 bg-red-50',
-                            High: 'border-l-orange-500 bg-orange-50',
-                            Moderate: 'border-l-amber-400 bg-amber-50',
-                            Medium: 'border-l-amber-400 bg-amber-50',
-                            Low: 'border-l-green-500 bg-green-50',
-                          }[rec.priority] ?? 'border-l-slate-400 bg-slate-50';
+                {/* Hotspot breakdown */}
+                <div className="lg:col-span-1 h-[60vh] lg:h-[75vh] min-h-125 flex flex-col overflow-hidden">
+                  <div className="rounded-2xl transition-shadow bg-white border border-slate-200 shadow-sm p-6 space-y-4 h-full flex flex-col min-h-0">
+                    <div eyebrow="Priority Zones" description="Clusters ranked by severity and report density.">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h2 className="font-semibold text-gray-900 text-xl flex items-center gap-2">
+                          <Flame className="w-5 h-5 text-orange-500" />
+                          Hotspot breakdown
+                        </h2>
+                        <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                          Priority Zones
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Clusters ranked by severity and report density.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1 min-h-0">
+                      {((hotspots.length ? hotspots : snapshot?.hotspots) ?? []).map((hotspot, idx) => {
+                        const priority =
+                          hotspot.priority ||
+                          (hotspot.riskTier
+                            ? hotspot.riskTier.charAt(0).toUpperCase() + hotspot.riskTier.slice(1)
+                            : 'Moderate');
+                        const borderStyle =
+                          PRIORITY_BORDER[priority] ?? PRIORITY_BORDER.Moderate;
+                        const pillStyle =
+                          PRIORITY_PILL[priority] ?? PRIORITY_PILL.Moderate;
+                        const avgT = hotspot.avgTemperature ?? hotspot.avgTemp ?? hotspot.peakTemp;
+
                         return (
                           <div
-                            key={rec.id}
-                            className={`border-l-4 rounded-r-xl p-3 ${priorityColor}`}
+                            key={hotspot.id || hotspot._id || `${hotspot.clusterId || 'hs'}-${idx}`}
+                            className={`border-l-4 rounded-r-xl p-3 ${borderStyle}`}
                           >
-                            <div className="flex justify-between items-start mb-1.5">
-                              <span className="text-xs font-bold text-slate-800 leading-tight">
-                                {rec.area}
-                              </span>
-                              <span className="text-[10px] font-semibold text-slate-500 shrink-0 ml-2">
-                                {rec.id}
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="font-semibold text-slate-900 text-sm truncate">
+                                {hotspot.area || hotspot.city || `Zone ${idx + 1}`}
+                              </p>
+                              <span
+                                className={`inline-flex items-center font-medium rounded-full px-3 py-1 text-xs shrink-0 ${pillStyle}`}
+                              >
+                                {priority}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-600 leading-snug">
-                              {rec.action}
+                            <p className="text-xs text-slate-500">
+                              {hotspot.reportCount ?? 1} reports&nbsp;&bull;&nbsp;
+                              {avgT != null
+                                ? `${typeof avgT === 'number' ? avgT.toFixed(1) : avgT}°C avg`
+                                : 'avg temp N/A'}
                             </p>
                           </div>
                         );
                       })}
-                      {!displayRecommendations.length && (
-                        <p className="text-sm text-slate-400 text-center py-4">
-                          No recommendations available.
-                        </p>
+
+                      {!((hotspots.length ? hotspots : snapshot?.hotspots) ?? []).length && (
+                        <div className="h-32 flex items-center justify-center text-slate-400 text-xs italic">
+                          No active hotspots identified in this window.
+                        </div>
                       )}
-                    </CardContent>
-                  </Card>
-                  {/* Report stats */}
-                  <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    <CardHeader className="pb-3 border-b border-slate-100">
-                      <CardTitle className="text-sm font-semibold">
-                        Recent Reports
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4 space-y-3 flex-1 overflow-y-auto min-h-0">
-                      {((reports.length ? reports : snapshot?.reports) ?? []).slice(0, 5).map((rpt) => {
-                        const statusKey = canonicalStatus(rpt.status);
-                        const StatusIcon = STATUS_ICONS[statusKey] ?? Clock;
-                        return (
-                          <div
-                            key={rpt.id}
-                            className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0 last:pb-0"
-                          >
-                            <div
-                              className={`mt-0.5 w-3 h-3 rounded-full shrink-0 ${SEVERITY_BG[rpt.severity] ?? 'bg-slate-400'}`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">
-                                {rpt.area}
-                              </p>
-                              <p className="text-xs text-slate-500 truncate mt-0.5">
-                                {rpt.category}
-                              </p>
-                            </div>
-                            <span
-                              className={`text-[10px] font-medium px-2 py-1 rounded-md border ${STATUS_COLORS[statusKey] ?? 'text-slate-500 bg-slate-50 border-slate-200'}`}
-                            >
-                              S{rpt.severity}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               </div>
-              {/* Analytics Charts */}
-              <AnalyticsSection
-                charts={snapshot?.charts ?? {}}
-                onFilterChange={(type, value) => {
-                  if (type === 'severity') {
-                    setFilters((f) => ({ ...f, severity: value }));
-                  } else if (type === 'date') {
-                    setFilters((f) => ({ ...f, range: '24h' }));
-                  }
-                  toast.success(`Filtered by ${type}: ${value}`);
-                  loadSnapshot(true);
-                }}
-              />
             </div>
-          )}
-          {/* ══ HEATMAP VIEW ══════════════════════════════════════════ */}
-          {currentView === 'heatmap' && (
-            <div className="h-[75vh] min-h-125 w-full flex flex-col overflow-hidden">
-              <MapSection
-                heatmap={snapshot?.heatmap ?? []}
-                reports={snapshot?.reports ?? []}
-                hotspots={hotspots}
-                focus="heatmap"
-                hideControls={true}
-                title="District Heat Intensity"
-              />
-            </div>
-          )}
-          {/* ══ HOTSPOTS VIEW ═════════════════════════════════════════ */}
-          {currentView === 'hotspots' && (
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-              <div className="xl:col-span-8 h-[60vh] xl:h-[75vh] min-h-125 flex flex-col">
-                <MapSection
-                  heatmap={snapshot?.heatmap ?? []}
-                  reports={snapshot?.reports ?? []}
-                  hotspots={hotspots}
-                  focus="hotspots"
-                  hideControls={true}
-                  title="Hotspot Analytics Map"
-                />
-              </div>
-              <div className="xl:col-span-4 h-[60vh] xl:h-[75vh] min-h-125 grid grid-cols-2 gap-4 pr-2 content-start">
-                {hotspots.map((hs) => {
-                  const color =
-                    {
-                      Critical: '#dc2626',
-                      High: '#f97316',
-                      Moderate: '#facc15',
-                      Medium: '#facc15',
-                      Low: '#65a30d',
-                      Unknown: '#94a3b8',
-                    }[hs.priority] ?? '#0f766e';
-                  return (
-                    <Card key={hs.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">
-                              {hs.area}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {hs.clusterId}
-                            </p>
-                          </div>
-                          <span
-                            className="text-[11px] font-semibold px-2 py-1 rounded-full"
-                            style={{ background: color + '22', color }}
-                          >
-                            {hs.priority}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          {[
-                            // avgTemperature / avgSeverity are null when the
-                            // backend has no measured value (unknown
-                            // severity is withheld, never zeroed) — never
-                            // call .toFixed on them unguarded.
-                            ['Temp', hs.avgTemperature != null ? `${hs.avgTemperature}°C` : 'N/A'],
-                            ['Severity', hs.avgSeverity != null ? hs.avgSeverity.toFixed(1) : 'N/A'],
-                            ['Reports', hs.reportCount],
-                          ].map(([label, val]) => (
-                            <div
-                              key={label}
-                              className="bg-slate-50 rounded-lg py-1.5"
-                            >
-                              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-                                {label}
-                              </p>
-                              <p className="text-sm font-bold text-slate-800">
-                                {val}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                        {/* NDVI — only when the backend actually provides it */}
-                        {hs.ndvi != null && (
-                        <div className="mt-2">
-                          <div className="flex justify-between text-xs text-slate-500 mb-0.5">
-                            <span>NDVI (Vegetation)</span>
-                            <span className="font-medium">
-                              {(hs.ndvi * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-green-500"
-                              style={{ width: `${hs.ndvi * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
       )}
     </div>
   );
