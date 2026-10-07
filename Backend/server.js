@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import app from './app.js';
 import { assertRequiredEnv } from './config/env.js';
 
+// Load environment variables before booting services
 dotenv.config();
 
 // Fail fast: never boot without a JWT signing secret.

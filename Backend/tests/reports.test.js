@@ -180,7 +180,7 @@ describe('Report submit — causes, observedAt, category (Phase 3)', () => {
       .send({ location: { lat: 25.4062, lng: 68.2552 }, areaName: 'Hyderabad Division', severity: 4 });
     expect(res.status).toBe(201);
     const stored = await Report.findById(res.body.report._id);
-    expect(stored.city).toBe('Hyderabad Division');
+    expect(stored.city).toBe('Hyderabad');
   });
 });
 

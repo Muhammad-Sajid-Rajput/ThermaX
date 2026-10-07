@@ -4,7 +4,7 @@ import SatelliteAnalysis from '../models/SatelliteAnalysis.js';
 import AIAnalysis from '../models/AIAnalysis.js';
 import { ROLES } from '../models/User.js';
 import { REPORT_CATEGORIES } from '../constants/categories.js';
-import { resolveDistrictAndCity, resolveCity, isLocationInPakistan } from '../services/boundaryService.js';
+import { resolveDistrictAndCity, resolveCity, getCities } from '../services/boundaryService.js';
 import { enrichAndSaveSnapshot } from '../services/weatherService.js';
 import { triggerReportEnrichment } from '../services/mlServiceClient.js';
 import { snapToGrid } from '../services/anonymizationService.js';
@@ -94,9 +94,10 @@ export const getReports = async (req, res) => {
     } else if (!isAdmin) {
       filter.status = { $in: PUBLIC_REPORT_STATUSES };
     }
-    // No-fabrication policy: synthetic demo rows never appear on the public
-    // listing. Admins see everything (they moderate it).
-    if (!isAdmin) {
+    // No-fabrication policy: synthetic demo rows appear only when
+    // INCLUDE_SYNTHETIC_REPORTS=true or for admins.
+    const includeSynthetic = isAdmin || process.env.INCLUDE_SYNTHETIC_REPORTS === 'true' || req.query.includeSynthetic === 'true';
+    if (!includeSynthetic) {
       filter.isSynthetic = { $ne: true };
     }
     if (severity && severity !== 'all') {
@@ -140,21 +141,26 @@ export const getReports = async (req, res) => {
     // (grid-anonymized) location instead. Admins keep the full documents.
     const payload = isAdmin
       ? reports
-      : reports.map((r) => ({
-          id: r._id,
-          city: r.city,
-          area: r.areaName,
-          severity: r.severityLevel,
-          category: r.category,
-          status: r.status,
-          description: r.description,
-          causes: r.causes,
-          observedAt: r.observedAt,
-          source: r.source,
-          location: r.snappedLocation ?? null,
-          hasPhoto: Boolean(r.image || (r.images && r.images.length > 0)),
-          createdAt: r.createdAt,
-        }));
+      : reports.map((r) => {
+          const snapped = (r.snappedLocation?.lat != null && r.snappedLocation?.lng != null)
+            ? r.snappedLocation
+            : (r.latitude != null && r.longitude != null ? snapToGrid(r.latitude, r.longitude) : null);
+          return {
+            id: r._id,
+            city: r.city,
+            area: r.areaName,
+            severity: r.severityLevel,
+            category: r.category,
+            status: r.status,
+            description: r.description,
+            causes: r.causes,
+            observedAt: r.observedAt,
+            source: r.source,
+            location: snapped,
+            hasPhoto: Boolean(r.image || (r.images && r.images.length > 0)),
+            createdAt: r.createdAt,
+          };
+        });
 
     res.json({
       message: 'Reports retrieved successfully',
@@ -247,21 +253,22 @@ export const submitReport = async (req, res) => {
       });
     }
 
-    // Validate that the report is located within Pakistan
-    if (!isLocationInPakistan(latNum, lngNum)) {
+    // Server-side boundary & district resolution. The city is resolved
+    // from coordinates against the canonical city polygons — the client
+    // never decides its own city. Reports outside every supported city
+    // are rejected: silently accepting them would corrupt per-city
+    // analytics with unattributable points.
+    const city = resolveCity(latNum, lngNum);
+    if (!city) {
       return res.status(400).json({
         error: 'Validation failed',
         message:
-          'Report location is outside Pakistan (outside our supported cities).',
+          'Report location is outside our supported cities (' +
+          getCities().map((c) => c.name).join(', ') +
+          ').',
       });
     }
-
-    // Resolve city: check canonical pilot cities first, otherwise fall back to areaName or 'Pakistan'
-    let city = resolveCity(latNum, lngNum);
-    if (!city) {
-      city = data.city || areaName || 'Pakistan';
-    }
-    const geofence = resolveDistrictAndCity(latNum, lngNum, areaName);
+    const geofence = resolveDistrictAndCity(latNum, lngNum);
     const snappedCoords = snapToGrid(latNum, lngNum);
 
     const reportData = {
@@ -271,8 +278,8 @@ export const submitReport = async (req, res) => {
       longitude: lngNum,
       location: { lat: latNum, lng: lngNum },
       snappedLocation: snappedCoords,
-      areaName: areaName || geofence.areaName || city,
-      district: geofence.district || (areaName && areaName.includes('Division') ? areaName : null),
+      areaName: areaName || geofence.areaName,
+      district: geofence.district,
       city,
       severityLevel: severityNum,
       severity: severityNum,

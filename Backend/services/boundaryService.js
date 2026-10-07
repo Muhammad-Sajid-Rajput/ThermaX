@@ -1,10 +1,15 @@
 // Phase 5: canonical server-side city resolution.
 //
-// The supported cities (name, boundary polygon, center, timezone) are
+// The supported cities (name, center, bbox, timezone) are
 // defined ONCE in Backend/data/cities.json — the same file the ML service
 // reads — so the backend and ML can never disagree about what "Karachi"
-// means. Boundary polygons are OSM administrative relations (simplified),
-// stored per city under Backend/data/boundaries/.
+// means.
+//
+// Uniform Bounding Box model (Pakistan-wide scope, 12 cities):
+// All cities resolve via their metropolitan bounding boxes. Points inside
+// a bbox resolve to that city. In cases of overlapping metro bboxes
+// (e.g. nearby Gujranwala / Sialkot), ties are broken deterministically
+// by the nearest city center. Points outside every bbox are rejected (HTTP 400).
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,7 +20,6 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '../data');
 
 let cityDefs = [];
-let cityPolygons = new Map(); // city name -> array of rings [[[lng,lat],...]]
 
 function loadCities() {
   try {
@@ -26,33 +30,13 @@ function loadCities() {
     console.warn('cities.json loading warning:', err.message);
     cityDefs = [];
   }
-  cityPolygons = new Map();
-  for (const city of cityDefs) {
-    try {
-      const geoPath = path.join(DATA_DIR, city.boundaryFile);
-      const gj = JSON.parse(fs.readFileSync(geoPath, 'utf8'));
-      const rings = [];
-      for (const feature of gj.features || []) {
-        const geom = feature.geometry;
-        if (!geom) continue;
-        if (geom.type === 'Polygon') {
-          for (const ring of geom.coordinates) rings.push(ring);
-        } else if (geom.type === 'MultiPolygon') {
-          for (const poly of geom.coordinates)
-            for (const ring of poly) rings.push(ring);
-        }
-      }
-      cityPolygons.set(city.name, rings);
-    } catch (err) {
-      console.warn(`Boundary load warning for ${city.name}:`, err.message);
-    }
-  }
 }
 
 loadCities();
 
 /**
- * Standard ray-casting point-in-polygon. Point is [lng, lat].
+ * Standard ray-casting point-in-polygon helper. Point is [lng, lat].
+ * Kept for GIS utility / backwards compatibility.
  */
 export function isPointInPolygon(point, polygon) {
   const [lng, lat] = point;
@@ -82,66 +66,47 @@ export function getCities() {
 
 /**
  * Resolve (lat, lng) to a supported city name, or null when the point is
- * outside every known city boundary. Server-side only — the client never
+ * outside every known city bounding box. Server-side only — the client never
  * decides its own city.
+ *
+ * Checks all 12 cities against their metro bounding boxes. Overlapping
+ * bboxes resolve deterministically to the nearest city center.
  */
 export function resolveCity(lat, lng) {
   const latNum = Number(lat);
   const lngNum = Number(lng);
   if (Number.isNaN(latNum) || Number.isNaN(lngNum)) return null;
-  const point = [lngNum, latNum];
+
+  let best = null;
   for (const city of cityDefs) {
-    const rings = cityPolygons.get(city.name) || [];
-    for (const ring of rings) {
-      if (ring.length >= 4 && isPointInPolygon(point, ring)) {
-        return city.name;
-      }
+    const b = city.bbox;
+    if (
+      b &&
+      lngNum >= b.minLng &&
+      lngNum <= b.maxLng &&
+      latNum >= b.minLat &&
+      latNum <= b.maxLat
+    ) {
+      const dLat = latNum - (city.center?.lat ?? 0);
+      const dLng = lngNum - (city.center?.lng ?? 0);
+      const distSq = dLat * dLat + dLng * dLng;
+      if (!best || distSq < best.distSq) best = { name: city.name, distSq };
     }
   }
-  return null;
-}
-
-export const PAKISTAN_BOUNDS = {
-  minLat: 23.0,
-  maxLat: 37.5,
-  minLng: 60.5,
-  maxLng: 78.0,
-};
-
-export function isLocationInPakistan(lat, lng) {
-  const latNum = Number(lat);
-  const lngNum = Number(lng);
-  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
-  return (
-    latNum >= PAKISTAN_BOUNDS.minLat &&
-    latNum <= PAKISTAN_BOUNDS.maxLat &&
-    lngNum >= PAKISTAN_BOUNDS.minLng &&
-    lngNum <= PAKISTAN_BOUNDS.maxLng
-  );
+  return best ? best.name : null;
 }
 
 /**
- * Backwards-compatible district/area resolution.
+ * Backwards-compatible district/area resolution. District-level boundaries
+ * are not shipped in Phase 5, so district is honestly null; areaName falls
+ * back to the matched city name.
  */
-export function resolveDistrictAndCity(lat, lng, areaName = null) {
+export function resolveDistrictAndCity(lat, lng) {
   const city = resolveCity(lat, lng);
   if (!city) {
-    const isPk = isLocationInPakistan(lat, lng);
-    return {
-      district: areaName && areaName.includes('Division') ? areaName : null,
-      areaName: areaName || (isPk ? 'Pakistan' : null),
-      city: areaName || (isPk ? 'Pakistan' : null),
-      outsideKnownBoundaries: !isPk,
-    };
+    return { district: null, areaName: null, city: null, outsideKnownBoundaries: true };
   }
   return { district: null, areaName: city, city, outsideKnownBoundaries: false };
 }
 
-export default {
-  getCities,
-  resolveCity,
-  resolveDistrictAndCity,
-  isPointInPolygon,
-  isLocationInPakistan,
-  PAKISTAN_BOUNDS,
-};
+export default { getCities, resolveCity, resolveDistrictAndCity, isPointInPolygon };

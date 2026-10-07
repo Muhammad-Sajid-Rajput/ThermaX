@@ -4,7 +4,10 @@ import { getJwtSecret } from '../config/env.js';
 
 // No fallback default: getJwtSecret() throws if no secret is configured.
 const JWT_SECRET = () => getJwtSecret();
-const JWT_EXPIRES_IN = () => process.env.JWT_ACCESS_EXPIRES_IN || '15m';
+const JWT_EXPIRES_IN = () =>
+  process.env.JWT_ACCESS_EXPIRES_IN ||
+  process.env.JWT_EXPIRES_IN ||
+  (process.env.NODE_ENV === 'development' ? '7d' : '15m');
 
 /**
  * Generate 15-minute Access Token

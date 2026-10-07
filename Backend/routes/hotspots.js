@@ -19,7 +19,7 @@ function severityToLevel(severity) {
   }
 }
 
-function toDto(h) {
+export function toDto(h) {
   return {
     id: h._id,
     clusterId: h.clusterId,

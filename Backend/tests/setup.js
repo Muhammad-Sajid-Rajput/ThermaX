@@ -47,6 +47,7 @@ mkdirSync(TEST_DB_PATH, { recursive: true });
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'phase0-test-secret';
 process.env.NODE_ENV = 'test';
+process.env.INCLUDE_SYNTHETIC_REPORTS = 'false';
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';

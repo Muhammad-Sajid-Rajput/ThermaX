@@ -15,6 +15,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { exportRoutes } from './routes/exports.js';
 import { weatherRoutes } from './routes/weather.js';
 import { adminRoutes } from './routes/admin.js';
+import { insightsRoutes } from './routes/insights.js';
 import { apiLimiter } from './middleware/rateLimiters.js';
 
 dotenv.config();
@@ -93,6 +94,7 @@ const routeMap = [
   ['/dashboard', dashboardRoutes],
   ['/exports', exportRoutes],
   ['/admin', adminRoutes],
+  ['/insights', insightsRoutes],
 ];
 
 routeMap.forEach(([path, router]) => {

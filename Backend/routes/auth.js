@@ -201,7 +201,7 @@ router.post('/refresh', authLimiter, async (req, res) => {
 
     const tokenHash = hashToken(rawToken);
 
-    const storedTokenDoc = await RefreshToken.findOneAndUpdate(
+    let storedTokenDoc = await RefreshToken.findOneAndUpdate(
       {
         tokenHash,
         revoked: false,
@@ -209,6 +209,32 @@ router.post('/refresh', authLimiter, async (req, res) => {
       },
       { $set: { revoked: true } }
     ).populate('user');
+
+    if (!storedTokenDoc) {
+      // Grace period for concurrent requests: if rotated within last 60 seconds, grant fresh access token
+      const recentlyRevoked = await RefreshToken.findOne({
+        tokenHash,
+        revoked: true,
+        updatedAt: { $gt: new Date(Date.now() - 60 * 1000) },
+        expiresAt: { $gt: new Date() },
+      }).populate('user');
+
+      if (recentlyRevoked && recentlyRevoked.user && recentlyRevoked.user.isActive) {
+        if (!recentlyRevoked.user.isEmailVerified) {
+          return res.status(403).json({
+            error: 'Email not verified',
+            code: 'EMAIL_NOT_VERIFIED',
+            message: 'Please verify your email address before refreshing your session.',
+          });
+        }
+        const user = recentlyRevoked.user;
+        const newAccessToken = generateAccessToken(user._id, user.role);
+        return res.json({
+          message: 'Token rotated successfully',
+          accessToken: newAccessToken,
+        });
+      }
+    }
 
     if (!storedTokenDoc || !storedTokenDoc.user || !storedTokenDoc.user.isActive) {
       return res.status(401).json({

@@ -14,9 +14,7 @@
         "maxLng": 67.5827753,
         "maxLat": 25.676796
       },
-      "boundaryFile": "boundaries/karachi.geojson",
-      "popGridFile": "pop_grids/karachi.json",
-      "boundarySource": "OpenStreetMap relation 6080948 (Nominatim simplified polygon, retrieved 2026-09-27)"
+      "boundarySource": "Metro bounding box around city center"
     },
     {
       "name": "Lahore",
@@ -32,9 +30,7 @@
         "maxLng": 74.6546712,
         "maxLat": 31.7134238
       },
-      "boundaryFile": "boundaries/lahore.geojson",
-      "popGridFile": "pop_grids/lahore.json",
-      "boundarySource": "OpenStreetMap relation 16117666 (Nominatim simplified polygon, retrieved 2026-09-27)"
+      "boundarySource": "Metro bounding box around city center"
     },
     {
       "name": "Islamabad",
@@ -50,9 +46,151 @@
         "maxLng": 73.3748776,
         "maxLat": 33.8032755
       },
-      "boundaryFile": "boundaries/islamabad.geojson",
-      "popGridFile": "pop_grids/islamabad.json",
-      "boundarySource": "OpenStreetMap relation 358002 (Nominatim simplified polygon, retrieved 2026-09-27)"
+      "boundarySource": "Metro bounding box around city center"
+    },
+    {
+      "name": "Rawalpindi",
+      "slug": "rawalpindi",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 33.6,
+        "lng": 73.05
+      },
+      "bbox": {
+        "minLng": 72.7,
+        "minLat": 33.25,
+        "maxLng": 73.4,
+        "maxLat": 33.95
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Faisalabad",
+      "slug": "faisalabad",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 31.42,
+        "lng": 73.08
+      },
+      "bbox": {
+        "minLng": 72.73,
+        "minLat": 31.07,
+        "maxLng": 73.43,
+        "maxLat": 31.77
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Multan",
+      "slug": "multan",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 30.16,
+        "lng": 71.52
+      },
+      "bbox": {
+        "minLng": 71.17,
+        "minLat": 29.81,
+        "maxLng": 71.87,
+        "maxLat": 30.51
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Gujranwala",
+      "slug": "gujranwala",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 32.16,
+        "lng": 74.19
+      },
+      "bbox": {
+        "minLng": 73.84,
+        "minLat": 31.81,
+        "maxLng": 74.54,
+        "maxLat": 32.51
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Sialkot",
+      "slug": "sialkot",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 32.5,
+        "lng": 74.53
+      },
+      "bbox": {
+        "minLng": 74.18,
+        "minLat": 32.15,
+        "maxLng": 74.88,
+        "maxLat": 32.85
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Hyderabad",
+      "slug": "hyderabad",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 25.4,
+        "lng": 68.37
+      },
+      "bbox": {
+        "minLng": 68.02,
+        "minLat": 25.05,
+        "maxLng": 68.72,
+        "maxLat": 25.75
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Peshawar",
+      "slug": "peshawar",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 34.01,
+        "lng": 71.58
+      },
+      "bbox": {
+        "minLng": 71.23,
+        "minLat": 33.66,
+        "maxLng": 71.93,
+        "maxLat": 34.36
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Quetta",
+      "slug": "quetta",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 30.18,
+        "lng": 67.0
+      },
+      "bbox": {
+        "minLng": 66.65,
+        "minLat": 29.83,
+        "maxLng": 67.35,
+        "maxLat": 30.53
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Bahawalpur",
+      "slug": "bahawalpur",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 29.4,
+        "lng": 71.68
+      },
+      "bbox": {
+        "minLng": 71.33,
+        "minLat": 29.05,
+        "maxLng": 72.03,
+        "maxLat": 29.75
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
     }
   ]
 }

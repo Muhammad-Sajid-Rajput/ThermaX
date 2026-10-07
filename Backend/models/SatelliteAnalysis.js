@@ -8,6 +8,7 @@ const satelliteAnalysisSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Report',
       required: true,
+      unique: true,
       index: true,
     },
     lst: Number, // Land Surface Temp (°C)

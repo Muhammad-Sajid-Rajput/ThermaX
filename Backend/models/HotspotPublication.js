@@ -25,11 +25,15 @@ const hotspotPublicationSchema = new Schema(
       default: null,
     },
   },
-  { timestamps: { createdAt: true, updatedAt: true } }
+  {
+    collection: 'hotspot_publications',
+    timestamps: { createdAt: true, updatedAt: true },
+  }
 );
 
 export const HotspotPublication = mongoose.model(
   'HotspotPublication',
-  hotspotPublicationSchema
+  hotspotPublicationSchema,
+  'hotspot_publications'
 );
 export default HotspotPublication;
