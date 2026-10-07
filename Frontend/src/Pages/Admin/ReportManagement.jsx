@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AdminPanel, StatusBadge } from '../../components/admin';
 import { toast } from 'react-hot-toast';
 import {
@@ -8,7 +9,6 @@ import {
   Eye,
   Search,
   Download,
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -22,6 +22,7 @@ import { fetchReports, updateModerationStatus, formatTimestamp } from '../../ser
 import { csvCell } from '../../utils/csv';
 
 function ReportManagement() {
+  const location = useLocation();
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [selectedReports, setSelectedReports] = useState([]);
@@ -32,10 +33,12 @@ function ReportManagement() {
   // Filters
   const [filters, setFilters] = useState({
     status: 'all',
-    severity: 'all',
-    area: 'all',
     search: '',
   });
+
+  const flaggedSelectedCount = selectedReports.filter((id) =>
+    reports.some((r) => r.id === id && r.status === 'flagged')
+  ).length;
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,7 +49,6 @@ function ReportManagement() {
     try {
       const response = await fetchReports({
         status: filters.status === 'all' ? undefined : filters.status,
-        severity: filters.severity === 'all' ? undefined : parseInt(filters.severity),
       });
 
       const raw = response?.data || [];
@@ -64,7 +66,7 @@ function ReportManagement() {
       }));
 
       setReports(normalized);
-      // Client-side filters (search/area) are applied by the effect below
+      // Client-side filters (search) are applied by the effect below
       // which watches `reports` — calling applyFilters here directly would
       // capture a stale closure over `filters` (exhaustive-deps).
     } catch (err) {
@@ -75,7 +77,7 @@ function ReportManagement() {
     } finally {
       setLoading(false);
     }
-  }, [filters.status, filters.severity]);
+  }, [filters.status]);
 
   const applyFilters = useCallback(
     (data = reports) => {
@@ -88,21 +90,13 @@ function ReportManagement() {
         filtered = filtered.filter((r) => r.status !== 'rejected');
       }
 
-      if (filters.severity !== 'all') {
-        filtered = filtered.filter((r) => String(r.severity) === String(filters.severity));
-      }
-
-      if (filters.area !== 'all') {
-        filtered = filtered.filter((r) =>
-          r.area.toLowerCase().includes(filters.area.toLowerCase())
-        );
-      }
 
       if (filters.search.trim()) {
         const q = filters.search.toLowerCase().trim();
         filtered = filtered.filter(
           (r) =>
             r.id?.toLowerCase().includes(q) ||
+            r.reportRef?.toLowerCase().includes(q) ||
             r.area?.toLowerCase().includes(q) ||
             r.userName?.toLowerCase().includes(q) ||
             r.description?.toLowerCase().includes(q)
@@ -116,20 +110,35 @@ function ReportManagement() {
   );
 
   useEffect(() => {
+    if (location.state?.search) {
+      setFilters((prev) => ({
+        ...prev,
+        search: location.state.search,
+        status: 'all',
+      }));
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    if (location.state?.highlightReportId && reports.length > 0) {
+      const match = reports.find(
+        (r) =>
+          String(r.id) === String(location.state.highlightReportId) ||
+          String(r.reportRef) === String(location.state.highlightReportId)
+      );
+      if (match) {
+        setShowDetailModal(match);
+      }
+    }
+  }, [location.state, reports]);
+
+  useEffect(() => {
     loadReports();
   }, [loadReports]);
 
   useEffect(() => {
     applyFilters(reports);
-  }, [filters.search, filters.area, applyFilters, reports]);
-
-  const uniqueAreas = useMemo(() => {
-    const set = new Set();
-    reports.forEach((r) => {
-      if (r.area) set.add(r.area);
-    });
-    return Array.from(set);
-  }, [reports]);
+  }, [filters.search, applyFilters, reports]);
 
   // Actions
   const handleReportAction = async (reportId, action) => {
@@ -173,15 +182,22 @@ function ReportManagement() {
   };
 
   const handleBulkAction = async (action) => {
-    if (selectedReports.length === 0) return;
+    // Bulk operations apply to pending and flagged reports.
+    const targets = selectedReports.filter((id) =>
+      reports.some((r) => r.id === id && ['flagged', 'pending'].includes(r.status))
+    );
+    if (targets.length === 0) {
+      toast.error('Select at least one pending or flagged report.');
+      return;
+    }
     try {
       setActionLoadingId('bulk');
       const decision =
         action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
-      await Promise.all(selectedReports.map((id) => updateModerationStatus(id, decision)));
+      await Promise.all(targets.map((id) => updateModerationStatus(id, decision)));
       const label =
         action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
-      toast.success(`${selectedReports.length} report(s) ${label}`);
+      toast.success(`${targets.length} report(s) ${label}`);
       setSelectedReports([]);
       await loadReports();
     } catch {
@@ -257,7 +273,8 @@ function ReportManagement() {
             <h1 className="text-xl font-bold text-slate-900">Report Moderation</h1>
           </div>
           <p className="text-xs text-slate-500">
-            Real community reports review, verification, and moderation workflow
+            Verification and flagging run automatically — manual actions appear only on
+            flagged outliers
           </p>
         </div>
 
@@ -291,7 +308,7 @@ function ReportManagement() {
         <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 shadow-xs">
           <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
           <p className="text-[11px] text-amber-700 font-semibold uppercase tracking-wider mt-0.5">
-            Pending Moderation
+            Pending Auto-QC
           </p>
         </div>
         <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 shadow-xs">
@@ -340,52 +357,18 @@ function ReportManagement() {
             className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600"
           >
             <option value="all">Active Queue (Pending, Verified & Flagged)</option>
-            <option value="pending">Pending Review Only</option>
+            <option value="pending">Pending Auto-QC Only</option>
             <option value="verified">Verified Only</option>
             <option value="flagged">Flagged Only</option>
             <option value="rejected">Archived / Rejected</option>
           </select>
-
-          {/* Severity Filter */}
-          <select
-            value={filters.severity}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, severity: e.target.value }))
-            }
-            className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600"
-          >
-            <option value="all">All Severities</option>
-            <option value="5">Level 5 - Critical</option>
-            <option value="4">Level 4 - Severe</option>
-            <option value="3">Level 3 - Moderate</option>
-            <option value="2">Level 2 - Mild</option>
-            <option value="1">Level 1 - Low</option>
-          </select>
-
-          {/* Area Filter */}
-          {uniqueAreas.length > 0 && (
-            <select
-              value={filters.area}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, area: e.target.value }))
-              }
-              className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600 max-w-45 truncate"
-            >
-              <option value="all">All Areas</option>
-              {uniqueAreas.map((area) => (
-                <option key={area} value={area}>
-                  {area}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
 
-        {/* Bulk Actions */}
-        {selectedReports.length > 0 && (
+        {/* Bulk Actions — outlier-only: visible when flagged reports are selected */}
+        {flaggedSelectedCount > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-medium">
-              {selectedReports.length} selected
+              {flaggedSelectedCount} flagged selected
             </span>
             <button
               onClick={() => handleBulkAction('approve')}
@@ -512,7 +495,8 @@ function ReportManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {r.status !== 'verified' && (
+                          {/* Manual actions: available for pending and flagged reports */}
+                          {['flagged', 'pending'].includes(r.status) && (
                             <button
                               onClick={() => handleReportAction(r.id, 'approve')}
                               disabled={actionLoadingId === r.id}
@@ -523,18 +507,7 @@ function ReportManagement() {
                             </button>
                           )}
 
-                          {r.status !== 'flagged' && r.status !== 'rejected' && (
-                            <button
-                              onClick={() => handleReportAction(r.id, 'flag')}
-                              disabled={actionLoadingId === r.id}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 transition-colors disabled:opacity-50"
-                              title="Flag for Review"
-                            >
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-
-                          {r.status !== 'rejected' && (
+                          {['flagged', 'pending'].includes(r.status) && (
                             <button
                               onClick={() => handleReportAction(r.id, 'reject')}
                               disabled={actionLoadingId === r.id}
@@ -693,29 +666,31 @@ function ReportManagement() {
                 </div>
               )}
 
-              {/* Moderation Controls */}
-              <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    handleReportAction(showDetailModal.id, 'approve');
-                  }}
-                  disabled={actionLoadingId === showDetailModal.id}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Validate & Approve</span>
-                </button>
-                <button
-                  onClick={() => {
-                    handleReportAction(showDetailModal.id, 'reject');
-                  }}
-                  disabled={actionLoadingId === showDetailModal.id}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-xs disabled:opacity-50"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Reject Submission</span>
-                </button>
-              </div>
+              {/* Moderation Controls: available for pending and flagged reports */}
+              {['flagged', 'pending'].includes(showDetailModal.status) && (
+                <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      handleReportAction(showDetailModal.id, 'approve');
+                    }}
+                    disabled={actionLoadingId === showDetailModal.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Validate & Approve</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleReportAction(showDetailModal.id, 'reject');
+                    }}
+                    disabled={actionLoadingId === showDetailModal.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-xs disabled:opacity-50"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>Reject Submission</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

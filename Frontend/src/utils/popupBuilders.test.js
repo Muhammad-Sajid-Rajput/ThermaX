@@ -61,6 +61,32 @@ describe('popup builders — stored-XSS regression', () => {
     expect(html).toContain('12');
   });
 
+  it('buildHotspotPopup renders TVI score and risk tier honestly', () => {
+    const html = buildHotspotPopup({
+      area: 'Gulshan',
+      priority: 'High',
+      tvi: 0.724,
+      riskTier: 'critical',
+      avgTemp: 41.5,
+      avgSeverity: 4.25,
+      reportCount: 12,
+    });
+    expect(html).toContain('0.72');
+    expect(html).toContain('(Critical)');
+    expect(html).toContain('TVI: Critical');
+  });
+
+  it('buildHotspotPopup neutralizes malicious TVI riskTier injection', () => {
+    const html = buildHotspotPopup({
+      riskTier: XSS,
+      tvi: XSS,
+    });
+    const doc = setsInnerHTML(html);
+    expect(activeXssVectors(doc)).toEqual([]);
+    expect(html).toContain('&lt;img');
+  });
+
+
   it('buildReportPopup neutralizes payloads in every field', () => {
     const html = buildReportPopup({
       id: XSS,

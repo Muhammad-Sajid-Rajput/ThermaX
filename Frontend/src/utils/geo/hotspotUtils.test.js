@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { processClustersToHotspots } from './hotspotUtils.js';
+import { processClustersToHotspots, getHotspotColor, getHotspotRadius } from './hotspotUtils.js';
 
 // Regression tests for the pre-Phase-5 honesty pass: the client-side
 // DBSCAN path must never invent a confidence score, a temperature, or a
@@ -45,3 +45,46 @@ describe('processClustersToHotspots (no-fabrication)', () => {
     expect(processClustersToHotspots(null, pts)).toEqual([]);
   });
 });
+
+describe('getHotspotColor (TVI tier derivation)', () => {
+  it('maps canonical risk tiers to their color codes', () => {
+    expect(getHotspotColor({ riskTier: 'critical' })).toBe('#dc2626');
+    expect(getHotspotColor({ riskTier: 'high' })).toBe('#f97316');
+    expect(getHotspotColor({ riskTier: 'moderate' })).toBe('#f59e0b');
+    expect(getHotspotColor({ riskTier: 'low' })).toBe('#eab308');
+  });
+
+  it('maps numerical TVI score when riskTier string is missing', () => {
+    expect(getHotspotColor({ tvi: 0.70 })).toBe('#dc2626');
+    expect(getHotspotColor({ tvi: 0.50 })).toBe('#f97316');
+    expect(getHotspotColor({ tvi: 0.30 })).toBe('#f59e0b');
+    expect(getHotspotColor({ tvi: 0.15 })).toBe('#eab308');
+  });
+
+  it('falls back to citizen priority or default when unscored', () => {
+    expect(getHotspotColor({ priority: 'Critical' })).toBe('#dc2626');
+    expect(getHotspotColor({ priority: 'High' })).toBe('#f97316');
+    expect(getHotspotColor({ priority: 'Moderate' })).toBe('#f59e0b');
+    expect(getHotspotColor({ priority: 'Low' })).toBe('#eab308');
+    expect(getHotspotColor({})).toBe('#c2410c');
+  });
+});
+
+describe('getHotspotRadius (balanced urban envelope scaling)', () => {
+  it('returns tight baseline radius for single report or null', () => {
+    expect(getHotspotRadius(1)).toBe(530);
+    expect(getHotspotRadius()).toBe(530);
+    expect(getHotspotRadius(null)).toBe(530);
+  });
+
+  it('scales radius moderately with cluster reports', () => {
+    expect(getHotspotRadius(4)).toBe(770);
+    expect(getHotspotRadius(6)).toBe(930);
+  });
+
+  it('caps at maximum 1200m for dense clusters', () => {
+    expect(getHotspotRadius(15)).toBe(1200);
+    expect(getHotspotRadius(50)).toBe(1200);
+  });
+});
+

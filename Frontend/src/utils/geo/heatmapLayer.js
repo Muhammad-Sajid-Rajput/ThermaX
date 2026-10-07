@@ -28,14 +28,33 @@ export const formatHeatmapPoints = (points) => {
  * Standard configuration for leaflet.heat
  */
 export const HEATMAP_CONFIG = {
-  radius: 25,
-  blur: 18,
-  maxZoom: 15,
+  radius: 28,
+  blur: 24,
+  maxZoom: 7,
+  minOpacity: 0.22,
   gradient: {
-    0.2: '#2a9d8f', // Low
-    0.4: '#facc15', // Moderate
-    0.6: '#f97316', // High
-    0.8: '#dc2626', // Very High
-    1.0: '#991b1b', // Extreme
+    0.2: '#2a9d8f', // Soft Low
+    0.4: '#eab308', // Soft Moderate
+    0.6: '#f97316', // Soft High
+    0.8: '#ef4444', // Moderate Red
+    1.0: '#dc2626', // Thermal Crimson
   },
 };
+
+// Optimize Chromium Canvas2D readbacks for leaflet.heat (eliminates willReadFrequently warning)
+if (
+  typeof window !== 'undefined' &&
+  typeof HTMLCanvasElement !== 'undefined' &&
+  HTMLCanvasElement.prototype?.getContext &&
+  !HTMLCanvasElement.prototype._thermaxPatched
+) {
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attributes) {
+    if (type === '2d' && attributes === undefined) {
+      return origGetContext.call(this, type, { willReadFrequently: true });
+    }
+    return origGetContext.apply(this, arguments);
+  };
+  HTMLCanvasElement.prototype._thermaxPatched = true;
+}
+

@@ -23,6 +23,7 @@ import UserManagement from './Pages/Admin/UserManagement';
 import ReportManagement from './Pages/Admin/ReportManagement';
 import HeatmapControl from './Pages/Admin/HeatmapControl';
 import Analytics from './Pages/Admin/Analytics';
+import AreaInsights from './Pages/Admin/AreaInsights';
 
 // Admin Routes Wrapper - Uses AdminLayout
 function AdminRoutes() {
@@ -35,6 +36,7 @@ function AdminRoutes() {
           <Route path="reports" element={<ReportManagement />} />
           <Route path="heatmap" element={<HeatmapControl />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="insights" element={<AreaInsights />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </AdminLayout>

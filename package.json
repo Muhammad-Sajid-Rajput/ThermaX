@@ -1,7 +1,14 @@
 {
+  "name": "thermax-workspace",
+  "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "start": "concurrently \"npm --prefix Frontend run preview\" \"npm --prefix Backend start\"",
-    "dev": "concurrently \"npm --prefix Frontend run dev\" \"npm --prefix Backend run dev\""
+    "start": "concurrently -n \"FRONTEND,BACKEND,ML\" -c \"cyan,green,yellow\" \"npm --prefix Frontend run preview\" \"npm --prefix Backend start\" \"node scripts/run-ml.js\"",
+    "dev": "concurrently -n \"FRONTEND,BACKEND,ML\" -c \"cyan,green,yellow\" \"npm --prefix Frontend run dev\" \"npm --prefix Backend run dev\" \"node scripts/run-ml.js\"",
+    "dev:frontend": "npm --prefix Frontend run dev",
+    "dev:backend": "npm --prefix Backend run dev",
+    "dev:ml": "node scripts/run-ml.js",
+    "reports:verify": "node scripts/verify-reports.js"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

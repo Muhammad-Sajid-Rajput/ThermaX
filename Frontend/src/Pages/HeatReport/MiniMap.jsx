@@ -4,7 +4,8 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import useUserLocationStore from '../../stores/userLocationStore';
 import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
-import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
+import { getHotspotColor, getHotspotRadius } from '../../utils/geo/hotspotUtils';
+import { HEATMAP_CONFIG } from '../../utils/geo/heatmapLayer';
 
 const PAKISTAN_CENTER = [30.3753, 69.3451];
 
@@ -112,18 +113,7 @@ const MiniMap = ({
         })
         .filter((point) => point[0] != null && point[1] != null);
 
-      const heatLayer = L.heatLayer(points, {
-        radius: 25,
-        blur: 18,
-        maxZoom: 15,
-        gradient: {
-          0.2: '#2a9d8f',
-          0.4: '#facc15',
-          0.6: '#f97316',
-          0.8: '#dc2626',
-          1.0: '#991b1b',
-        },
-      });
+      const heatLayer = L.heatLayer(points, HEATMAP_CONFIG);
 
       heatLayer.addTo(map);
       layersRef.current.heat = heatLayer;
@@ -188,37 +178,44 @@ const MiniMap = ({
 
     clearLayers('hotspots');
 
-    // Live API priorities (Backend/routes/hotspots.js toDto): Critical |
-    // High | Moderate | Low | Unknown. `Medium` is a legacy alias kept for
-    // older cached payloads — the current API never emits it. `Extreme`
-    // covers client-computed severityLabel values (utils/geo/hotspotUtils.js).
-    // Anything else falls back to teal instead of crashing.
-    const PRIORITY_COLORS = {
-      Critical: '#dc2626',
-      Extreme: '#dc2626',
-      High: '#f97316',
-      Moderate: '#facc15',
-      Medium: '#facc15',
-      Low: '#65a30d',
-    };
-
     const newLayers = hotspots
       .map((hotspot) => {
-        if (!hotspot.geojson) return null;
+        const color = getHotspotColor(hotspot);
+        const popupContent = buildHotspotPopup(hotspot, color);
 
-        const color = PRIORITY_COLORS[hotspot.priority] ?? '#0f766e';
-        const layer = L.geoJSON(hotspot.geojson, {
-          style: {
+        const hasValidCentroid =
+          hotspot.centroid &&
+          Number.isFinite(Number(hotspot.centroid.lat)) &&
+          Number.isFinite(Number(hotspot.centroid.lng));
+
+        let layer;
+        if (hasValidCentroid) {
+          const radius = getHotspotRadius(hotspot.reportCount);
+          layer = L.circle([hotspot.centroid.lat, hotspot.centroid.lng], {
             color,
-            weight: 1.5,
             fillColor: color,
-            fillOpacity: 0.14,
+            fillOpacity: 0.28,
+            weight: 2,
+            radius,
             dashArray: '5 4',
-          },
-        }).bindPopup(buildHotspotPopup(hotspot, color));
+          }).bindPopup(popupContent);
+        } else if (hotspot.geojson) {
+          layer = L.geoJSON(hotspot.geojson, {
+            style: {
+              color,
+              weight: 1.5,
+              fillColor: color,
+              fillOpacity: 0.14,
+              dashArray: '5 4',
+            },
+          }).bindPopup(popupContent);
+        }
 
-        layer.addTo(map);
-        return layer;
+        if (layer) {
+          layer.addTo(map);
+          return layer;
+        }
+        return null;
       })
       .filter(Boolean);
 

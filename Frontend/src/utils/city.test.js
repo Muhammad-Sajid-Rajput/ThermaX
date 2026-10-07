@@ -20,7 +20,21 @@ describe('normalizeCity', () => {
   });
 
   it('covers exactly the supported cities', () => {
-    expect(SUPPORTED_CITIES).toEqual(['Karachi', 'Lahore', 'Islamabad']);
+    // Pakistan-wide scope (12 cities); must mirror Backend/data/cities.json.
+    expect(SUPPORTED_CITIES).toEqual([
+      'Karachi',
+      'Lahore',
+      'Islamabad',
+      'Rawalpindi',
+      'Faisalabad',
+      'Multan',
+      'Gujranwala',
+      'Sialkot',
+      'Hyderabad',
+      'Peshawar',
+      'Quetta',
+      'Bahawalpur',
+    ]);
   });
 });
 

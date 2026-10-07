@@ -13,15 +13,33 @@ import { authStorage } from '../services/localStorageService';
 import useUserLocationStore from '../stores/userLocationStore';
 import { ROLES, PERMISSIONS, ROLE_PERMISSIONS } from './authPermissions';
 
-const initialState = {
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: true,
-  permissions: [],
-  role: null,
-  error: null,
+const getInitialAuthState = () => {
+  const token = authStorage.getToken();
+  const user = authStorage.getCurrentUser();
+  if (token && user) {
+    const role = (user.role || 'USER').toUpperCase();
+    return {
+      user,
+      token,
+      isAuthenticated: true,
+      isLoading: false,
+      permissions: ROLE_PERMISSIONS[role] || [],
+      role,
+      error: null,
+    };
+  }
+  return {
+    user: null,
+    token: null,
+    isAuthenticated: false,
+    isLoading: Boolean(token),
+    permissions: [],
+    role: null,
+    error: null,
+  };
 };
+
+const initialState = getInitialAuthState();
 
 const AUTH_ACTIONS = {
   LOGIN_START: 'LOGIN_START',
@@ -89,7 +107,9 @@ export const AuthProvider = ({ children }) => {
     (async () => {
       const token = authStorage.getToken();
       if (!token) {
-        dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+        if (state.isAuthenticated) {
+          dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+        }
         return;
       }
       try {
@@ -99,14 +119,17 @@ export const AuthProvider = ({ children }) => {
           authStorage.setCurrentUser(user);
           const currentToken = authStorage.getToken() || token;
           dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user, token: currentToken } });
-        } else {
-          authStorage.clearAuth();
-          dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
         }
-      } catch {
+      } catch (err) {
         if (cancelled) return;
-        authStorage.clearAuth();
-        dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+        const status = err?.response?.status;
+        if (status === 401 || status === 403) {
+          const refreshToken = authStorage.getRefreshToken();
+          if (!refreshToken) {
+            authStorage.clearAuth();
+            dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
+          }
+        }
       }
     })();
     return () => {
@@ -293,10 +316,11 @@ export const AuthProvider = ({ children }) => {
 // are fast-refresh-safe in practice. The react-refresh plugin flags them
 // because it only statically recognizes components; splitting them into
 // another file would churn every importer for no runtime benefit.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    if (typeof window !== 'undefined' && (import.meta.env?.DEV || process.env.NODE_ENV !== 'production')) {
+    if (typeof window !== 'undefined' && (import.meta.env?.DEV || (typeof globalThis !== 'undefined' && globalThis.process?.env?.NODE_ENV !== 'production'))) {
       console.warn('useAuth was called outside of an active AuthProvider or during HMR reload');
       return {
         user: null,

@@ -84,7 +84,12 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const newAccessToken = await doRefresh();
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        originalRequest.headers = originalRequest.headers || {};
+        if (typeof originalRequest.headers.set === 'function') {
+          originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
+        } else {
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
         return api(originalRequest);
       } catch (refreshErr) {
         authStorage.clearAuth();
@@ -104,8 +109,8 @@ export const HOTSPOT_PRIORITY_ORDER = ['Critical', 'High', 'Medium', 'Low'];
 export const HOTSPOT_PRIORITY_COLORS = {
   Critical: '#dc2626',
   High: '#f97316',
-  Medium: '#eab308',
-  Low: '#22c55e',
+  Medium: '#f59e0b',
+  Low: '#eab308',
 };
 
 export function formatTimestamp(isoString) {
@@ -400,6 +405,47 @@ export async function retryEnrichmentFailure(failureId) {
 
 export async function dismissEnrichmentFailure(failureId) {
   const response = await api.post(`/api/admin/enrichment-failures/${failureId}/dismiss`);
+  return response.data;
+}
+
+// ─── OUTLIER REVIEW NOTIFICATIONS (ADMIN) ──────────────────────────────────
+// Autonomous QC flags outliers (extreme citizen-vs-instrument temperature
+// contradictions and enrichment failures) for manual human-in-the-loop review.
+export async function fetchAdminNotifications() {
+  const response = await api.get('/api/admin/notifications');
+  return response.data?.notifications || [];
+}
+
+export async function markNotificationRead(id) {
+  const response = await api.post(`/api/admin/notifications/${id}/read`);
+  return response.data;
+}
+
+// ─── AREA INSIGHTS (ADMIN) ──────────────────────────────────────────────────
+// One payload shape, three exits: the page renders it, the JSON button
+// downloads it verbatim (client-side Blob), the CSV button hits the export
+// endpoint. `area` is an optional literal substring; empty values are dropped
+// so the server never sees `area=`.
+function insightsParams({ city, province, area, days, includeSynthetic }) {
+  const params = { days };
+  if (province) params.province = province;
+  if (city) params.city = city;
+  if (area && area.trim()) params.area = area.trim();
+  // Include synthetic/seed data by default so demo cities populate full analytics
+  params.includeSynthetic = includeSynthetic !== undefined ? String(includeSynthetic) : 'true';
+  return params;
+}
+
+export async function fetchInsights(options, { signal } = {}) {
+  const response = await api.get('/api/insights', { params: insightsParams(options), signal });
+  return response.data;
+}
+
+export async function downloadInsightsCsv(options) {
+  const response = await api.get('/api/insights/export', {
+    params: { ...insightsParams(options), format: 'csv' },
+    responseType: 'blob',
+  });
   return response.data;
 }
 

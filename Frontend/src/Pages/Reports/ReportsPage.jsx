@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import MapSection from '../../components/dashboard/MapSection';
-import Badge from '../../components/ui/Badge';
 import { ErrorState, SkeletonBlocks } from '../../components/ui/DataState';
 import Panel from '../../components/ui/Panel';
 import SectionHeading from '../../components/ui/SectionHeading';
@@ -27,15 +26,15 @@ const PRIORITY_BADGE = {
   High: 'high',
   Moderate: 'moderate',
   Medium: 'moderate',
-  Low: 'safe',
+  Low: 'warning',
   Unknown: 'gray',
 };
 const PRIORITY_BORDER = {
   Critical: 'border-l-red-500 bg-red-50',
   High: 'border-l-orange-500 bg-orange-50',
-  Moderate: 'border-l-amber-400 bg-amber-50',
-  Medium: 'border-l-amber-400 bg-amber-50',
-  Low: 'border-l-green-500 bg-green-50',
+  Moderate: 'border-l-amber-500 bg-amber-50',
+  Medium: 'border-l-amber-500 bg-amber-50',
+  Low: 'border-l-yellow-500 bg-yellow-50',
   Unknown: 'border-l-slate-400 bg-slate-50',
 };
 // ── Status helpers (keyed by the Phase 3 lifecycle vocabulary; status is
@@ -152,56 +151,25 @@ function ReportsPage() {
               color="text-amber-500"
             />
           </div>
-          {/* ── Map + Hotspot cards ─────────────────────────────────────── */}
-          <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
-            {/* Map */}
-            <Panel className="space-y-4">
-              <SectionHeading
-                eyebrow="Live Map"
-                title="Hotspot distribution"
-                description={`Showing ${data.hotspots?.length ?? 0} identified heat clusters across Pakistan. Updated ${formatTimestamp(data.lastUpdated ?? new Date().toISOString())}.`}
+          {/* ── Map ──────────────────────────────────────────────────────── */}
+          <Panel className="space-y-4">
+            <SectionHeading
+              eyebrow="Live Map"
+              title="Hotspot distribution"
+              description={`Showing ${data.hotspots?.length ?? 0} identified heat clusters across Pakistan. Updated ${formatTimestamp(data.lastUpdated ?? new Date().toISOString())}.`}
+            />
+            <div className="h-[60vh] min-h-125 flex flex-col">
+              <MapSection
+                heatmap={data.heatmap ?? []}
+                reports={data.reports ?? []}
+                hotspots={data.hotspots ?? []}
+                showHeatmap={true}
+                showHotspots={true}
+                showMarkers={true}
+                title="Heat & Hotspots Map"
               />
-              <div className="h-[60vh] min-h-125 flex flex-col">
-                <MapSection
-                  reports={data.reports ?? []}
-                  hotspots={data.hotspots ?? []}
-                  hideControls={true}
-                  title="Report Map"
-                />
-              </div>
-            </Panel>
-            {/* Hotspot priority cards */}
-            <Panel className="space-y-4">
-              <SectionHeading
-                eyebrow="Priority Zones"
-                title="Hotspot breakdown"
-                description="Clusters ranked by severity and report density."
-              />
-              <div className="space-y-3 max-h-70 overflow-y-auto pr-1">
-                {(data.hotspots ?? []).map((hotspot) => (
-                  <div
-                    key={hotspot.clusterId ?? hotspot.id}
-                    className={`border-l-4 rounded-r-xl p-3 ${PRIORITY_BORDER[hotspot.priority] ?? PRIORITY_BORDER.Unknown}`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="font-semibold text-slate-900 text-sm">
-                        {hotspot.area}
-                      </p>
-                      <Badge variant={PRIORITY_BADGE[hotspot.priority] ?? 'info'}>
-                        {hotspot.priority}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      {hotspot.reportCount ?? 0} reports&nbsp;&bull;&nbsp;
-                      {(hotspot.avgTemperature ?? hotspot.avgTemp) != null
-                        ? `${hotspot.avgTemperature ?? hotspot.avgTemp}°C avg`
-                        : 'avg temp N/A'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          </div>
+            </div>
+          </Panel>
           {/* ── Recent community reports ─────────────────────────────────── */}
           <Panel className="space-y-4">
             <SectionHeading
@@ -210,12 +178,12 @@ function ReportsPage() {
               description="Heat vulnerability reports submitted by citizens and field volunteers."
             />
             <div className="space-y-3">
-              {(data.reports ?? []).slice(0, 8).map((rpt) => {
+              {(data.reports ?? []).slice(0, 8).map((rpt, idx) => {
                 const statusKey = canonicalStatus(rpt.status);
                 const SIcon = STATUS_ICON[statusKey] ?? Clock;
                 return (
                   <div
-                    key={rpt.id}
+                    key={rpt.id || rpt._id || `rpt-${idx}`}
                     className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50"
                   >
                     {/* Severity dot */}

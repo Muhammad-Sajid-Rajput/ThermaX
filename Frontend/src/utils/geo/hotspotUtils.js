@@ -55,7 +55,6 @@ export const processClustersToHotspots = (clusters, points) => {
       else if (avgSev >= 2.5) severityLabel = 'Moderate';
       else severityLabel = 'Low';
     }
-
     return {
       id: `HS-${index + 1}`,
       centroid: { lat: avgLat, lng: avgLng },
@@ -66,3 +65,57 @@ export const processClustersToHotspots = (clusters, points) => {
     };
   });
 };
+
+// TVI tier thresholds matching ML Phase 5/6:
+// Critical (>=0.65), High (>=0.45), Moderate (>=0.25), Low (<0.25)
+// Thermal hotspots use warm hazard tones: red, flame orange, deep amber, golden yellow. No greens.
+export const TVI_TIER_COLORS = {
+  critical: '#dc2626',
+  high: '#f97316',
+  moderate: '#f59e0b',
+  low: '#eab308',
+  unknown: '#c2410c',
+};
+
+export const PRIORITY_COLORS = {
+  Extreme: '#dc2626',
+  Critical: '#dc2626',
+  High: '#f97316',
+  Moderate: '#f59e0b',
+  Medium: '#f59e0b',
+  Low: '#eab308',
+};
+
+/**
+ * Resolves color based strictly on TVI tier when present,
+ * falling back to TVI numerical score, then citizen report severity.
+ */
+export function getHotspotColor(hs) {
+  const riskTier = String(hs?.riskTier || '').toLowerCase();
+  if (riskTier && TVI_TIER_COLORS[riskTier]) {
+    return TVI_TIER_COLORS[riskTier];
+  }
+  if (hs?.tvi != null && Number.isFinite(Number(hs.tvi))) {
+    const val = Number(hs.tvi);
+    if (val >= 0.65) return TVI_TIER_COLORS.critical;
+    if (val >= 0.45) return TVI_TIER_COLORS.high;
+    if (val >= 0.25) return TVI_TIER_COLORS.moderate;
+    return TVI_TIER_COLORS.low;
+  }
+  const priority = hs?.severityLabel || hs?.priority;
+  return PRIORITY_COLORS[priority] ?? '#c2410c';
+}
+
+/**
+ * Computes a balanced hotspot perimeter envelope radius in meters based on cluster density.
+ * Kept tight and accurate to localized thermal microclimates (450m - 1200m)
+ * rather than engulfing wide multi-neighborhood swathes.
+ *
+ * @param {number} reportCount - Number of reports in the cluster
+ * @returns {number} Radius in meters
+ */
+export function getHotspotRadius(reportCount = 1) {
+  const count = Number.isFinite(Number(reportCount)) ? Math.max(1, Number(reportCount)) : 1;
+  return Math.min(450 + count * 80, 1200);
+}
+

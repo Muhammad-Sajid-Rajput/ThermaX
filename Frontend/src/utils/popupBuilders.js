@@ -22,7 +22,14 @@ function safeTemp(value) {
 /** Hotspot popup shared by the dashboard map and the report mini-map. */
 export function buildHotspotPopup(hotspot, color = '#0f766e') {
   const hs = hotspot || {};
-  const label = hs.severityLabel || hs.priority;
+  const tier = hs.riskTier && hs.riskTier !== 'unknown'
+    ? hs.riskTier.charAt(0).toUpperCase() + hs.riskTier.slice(1)
+    : null;
+  const label = tier ? `TVI: ${tier}` : (hs.severityLabel || hs.priority || 'Hotspot');
+  const tviScore = hs.tvi != null && Number.isFinite(Number(hs.tvi))
+    ? Number(hs.tvi).toFixed(2)
+    : null;
+
   return `
     <div style="min-width:200px;font-family:Inter,sans-serif;line-height:1.5">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#1e293b;">
@@ -32,6 +39,10 @@ export function buildHotspotPopup(hotspot, color = '#0f766e') {
         ${escapeHtml(label)}
       </span>
       <div style="font-size:12px;color:#475569">
+        ${tviScore != null ? `
+        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+          <span>TVI Score:</span> <b>${escapeHtml(tviScore)}${tier ? ` (${escapeHtml(tier)})` : ''}</b>
+        </div>` : ''}
         <div style="display:flex; justify-content:space-between;">
           <span>Avg Temp:</span> <b>${safeTemp(hs.avgTemp ?? hs.avgTemperature)}</b>
         </div>
