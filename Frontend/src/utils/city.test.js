@@ -1,40 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCity, highestTier, SUPPORTED_CITIES } from './city.js';
+import { normalizeCity, highestTier } from './city.js';
 
 describe('normalizeCity', () => {
-  it('matches supported cities case-insensitively', () => {
+  it('formats city names case-insensitively with proper title casing', () => {
     expect(normalizeCity('karachi')).toBe('Karachi');
     expect(normalizeCity('LAHORE')).toBe('Lahore');
     expect(normalizeCity('Islamabad')).toBe('Islamabad');
+    expect(normalizeCity('sukkur')).toBe('Sukkur');
+    expect(normalizeCity('mian channu')).toBe('Mian Channu');
   });
 
-  it('handles known aliases', () => {
-    expect(normalizeCity('Islamabad Capital Territory')).toBe('Islamabad');
-  });
-
-  it('returns null instead of guessing', () => {
-    expect(normalizeCity('Atlantis')).toBeNull();
-    expect(normalizeCity('Your City')).toBeNull();
+  it('returns null for empty or non-string input', () => {
     expect(normalizeCity(null)).toBeNull();
+    expect(normalizeCity(undefined)).toBeNull();
     expect(normalizeCity('')).toBeNull();
-  });
-
-  it('covers exactly the supported cities', () => {
-    // Pakistan-wide scope (12 cities); must mirror Backend/data/cities.json.
-    expect(SUPPORTED_CITIES).toEqual([
-      'Karachi',
-      'Lahore',
-      'Islamabad',
-      'Rawalpindi',
-      'Faisalabad',
-      'Multan',
-      'Gujranwala',
-      'Sialkot',
-      'Hyderabad',
-      'Peshawar',
-      'Quetta',
-      'Bahawalpur',
-    ]);
+    expect(normalizeCity('   ')).toBeNull();
   });
 });
 

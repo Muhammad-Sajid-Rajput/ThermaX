@@ -523,6 +523,70 @@ export async function detectAreaName(latitude, longitude) {
   return null;
 }
 
+export async function searchNominatimLocations(query, { signal } = {}) {
+  if (!query || typeof query !== 'string' || query.trim().length < 2) return [];
+  const clean = query.trim();
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+    clean
+  )}&countrycodes=pk&format=json&addressdetails=1&limit=6&accept-language=en`;
+
+  try {
+    const res = await fetch(url, {
+      signal,
+      headers: {
+        'User-Agent': 'ThermaX-App',
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) return [];
+    const items = await res.json();
+    return (items || []).map((item) => {
+      const addr = item.address || {};
+      const primaryName =
+        item.name ||
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.suburb ||
+        addr.hamlet ||
+        addr.county ||
+        clean;
+
+      const city =
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.municipality ||
+        addr.county ||
+        primaryName;
+
+      const province =
+        addr.state ||
+        addr.province ||
+        addr.region ||
+        '';
+
+      const district = addr.county || addr.state_district || '';
+
+      return {
+        id: item.place_id,
+        name: primaryName,
+        displayName: item.display_name,
+        city,
+        province,
+        district,
+        lat: item.lat,
+        lon: item.lon,
+        type: item.type || item.class || 'location',
+      };
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') return [];
+    console.warn('Nominatim forward search error:', err);
+    return [];
+  }
+}
+
 export async function checkHealth() {
   try {
     const response = await api.get('/api/health');

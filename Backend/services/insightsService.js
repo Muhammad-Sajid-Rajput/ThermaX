@@ -426,6 +426,15 @@ function parseQuery({ city, province, area, days, includeSynthetic } = {}) {
     }
   }
 
+  // If a province was explicitly passed along with a town or city, scope down to that city/area
+  if (provConfig && rawCity && !areaTerm) {
+    const isProvName = Object.keys(PROVINCES_CONFIG).some((k) => k === rawCity.toLowerCase());
+    const isCanonical = rawCity.toLowerCase() === provConfig.canonicalCity.toLowerCase();
+    if (!isProvName && !isCanonical) {
+      areaTerm = rawCity;
+    }
+  }
+
   let resolvedCityName = null;
   let cityDef = null;
 
@@ -795,7 +804,7 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
 
   return {
     scope: {
-      city: isProvinceQuery ? provinceConfig.name : city,
+      city: isProvinceQuery ? (areaTerm || provinceConfig.name) : city,
       province: isProvinceQuery ? provinceConfig.name : (CITY_TO_PROVINCE[city] || city),
       area: areaTerm,
       days,

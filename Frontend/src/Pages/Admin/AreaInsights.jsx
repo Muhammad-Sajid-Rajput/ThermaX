@@ -13,6 +13,9 @@ import {
   Flame,
   ShieldAlert,
   MapPin,
+  Search,
+  Globe,
+  Loader2,
   ChevronDown,
   ChevronUp,
   FileSpreadsheet,
@@ -31,8 +34,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { fetchInsights, downloadInsightsCsv } from '../../services/api';
-import { SUPPORTED_CITIES } from '../../utils/city';
+import { fetchInsights, downloadInsightsCsv, searchNominatimLocations } from '../../services/api';
 import HotspotDetailPanel from '../../components/admin/HotspotDetailPanel';
 import AnalyticsSection from '../../components/dashboard/AnalyticsSection';
 
@@ -67,270 +69,21 @@ function CustomTooltip({ active, payload, label, unit = '' }) {
 }
 
 const PROVINCES = [
-  {
-    id: 'punjab',
-    name: 'Punjab',
-    city: 'Lahore',
-    citiesHint: 'e.g. Lahore, Faisalabad, Rawalpindi, Multan...',
-    majorCities: [
-      'Lahore',
-      'Faisalabad',
-      'Rawalpindi',
-      'Multan',
-      'Gujranwala',
-      'Sargodha',
-      'Sialkot',
-      'Bahawalpur',
-      'Rahim Yar Khan',
-      'Dera Ghazi Khan',
-      'Sahiwal',
-      'Sheikhupura',
-    ],
-    minorCities: [
-      'Attock',
-      'Jhelum',
-      'Gujrat',
-      'Chakwal',
-      'Mianwali',
-      'Bhakkar',
-      'Khushab',
-      'Jhang',
-      'Chiniot',
-      'Toba Tek Singh',
-      'Hafizabad',
-      'Mandi Bahauddin',
-      'Kasur',
-      'Okara',
-      'Nankana Sahib',
-      'Pakpattan',
-      'Vehari',
-      'Burewala',
-      'Khanewal',
-      'Lodhran',
-      'Muzaffargarh',
-      'Layyah',
-      'Rajanpur',
-      'Bahawalnagar',
-      'Chishtian',
-      'Haroonabad',
-      'Ahmedpur East',
-      'Kot Addu',
-      'Taunsa Sharif',
-      'Murree',
-      'Kamoke',
-      'Sambrial',
-      'Daska',
-      'Wazirabad',
-      'Pind Dadan Khan',
-      'Taxila',
-      'Rabwah',
-      'Chenab Nagar',
-      'Bhalwal',
-    ],
-  },
-  {
-    id: 'sindh',
-    name: 'Sindh',
-    city: 'Karachi',
-    citiesHint: 'e.g. Karachi, Hyderabad, Jamshoro, Sukkur, Larkana...',
-    majorCities: [
-      'Karachi',
-      'Hyderabad',
-      'Jamshoro',
-      'Sukkur',
-      'Larkana',
-      'Mirpur Khas',
-      'Nawabshah',
-      'Shaheed Benazirabad',
-    ],
-    minorCities: [
-      'Kotri',
-      'Jacobabad',
-      'Shikarpur',
-      'Khairpur',
-      'Dadu',
-      'Ghotki',
-      'Mirpur Mathelo',
-      'Umerkot',
-      'Badin',
-      'Thatta',
-      'Sujawal',
-      'Kashmore',
-      'Kandhkot',
-      'Tando Adam',
-      'Tando Allahyar',
-      'Tando Muhammad Khan',
-      'Matiari',
-      'Sanghar',
-      'Moro',
-      'Shahdadkot',
-      'Kamber Ali Khan',
-      'Pano Akil',
-      'Sehwan Sharif',
-      'Mithi',
-      'Digri',
-      'Ratodero',
-      'Mehrabpur',
-      'Rohri',
-      'Hala',
-      'Ranipur',
-    ],
-  },
-  {
-    id: 'kpk',
-    name: 'Khyber Pakhtunkhwa',
-    city: 'Peshawar',
-    citiesHint: 'e.g. Peshawar, Mardan, Mingora (Swat), Kohat...',
-    majorCities: [
-      'Peshawar',
-      'Mardan',
-      'Mingora (Swat)',
-      'Kohat',
-      'Abbottabad',
-      'Dera Ismail Khan',
-    ],
-    minorCities: [
-      'Nowshera',
-      'Charsadda',
-      'Swabi',
-      'Haripur',
-      'Mansehra',
-      'Bannu',
-      'Karak',
-      'Hangu',
-      'Tank',
-      'Lakki Marwat',
-      'Timergara',
-      'Dir',
-      'Chitral',
-      'Batkhela',
-      'Saidu Sharif',
-      'Battagram',
-      'Alpuri',
-      'Parachinar',
-      'Miranshah',
-      'Wana',
-      'Ghalanai',
-      'Khar',
-      'Landi Kotal',
-      'Tangi',
-      'Topi',
-      'Pabbi',
-    ],
-  },
-  {
-    id: 'balochistan',
-    name: 'Balochistan',
-    city: 'Quetta',
-    citiesHint: 'e.g. Quetta, Turbat, Khuzdar, Hub, Gwadar...',
-    majorCities: [
-      'Quetta',
-      'Turbat (Kech)',
-      'Khuzdar',
-      'Hub',
-      'Gwadar',
-      'Chaman',
-    ],
-    minorCities: [
-      'Panjgur',
-      'Pishin',
-      'Dera Murad Jamali',
-      'Dera Allah Yar',
-      'Kharan',
-      'Nushki',
-      'Sibi',
-      'Loralai',
-      'Zhob',
-      'Kalat',
-      'Mastung',
-      'Usta Muhammad',
-      'Sui',
-      'Dera Bugti',
-      'Kohlu',
-      'Barkhan',
-      'Ziarat',
-      'Qila Saifullah',
-      'Qila Abdullah',
-      'Taftan',
-      'Pasni',
-      'Ormara',
-      'Mach',
-      'Uthal',
-      'Bela',
-      'Surab',
-    ],
-  },
-  {
-    id: 'islamabad',
-    name: 'Islamabad Capital Territory',
-    city: 'Islamabad',
-    citiesHint: 'e.g. Islamabad, Sector F-6, Sector G-9, Blue Area...',
-    majorCities: [
-      'Islamabad',
-      'Blue Area',
-      'Rawal Lake',
-      'Bhara Kahu',
-      'Chak Shahzad',
-    ],
-    minorCities: [
-      'Sector F-6',
-      'Sector F-7',
-      'Sector F-8',
-      'Sector F-10',
-      'Sector G-9',
-      'Sector G-10',
-      'Sector G-11',
-      'Sector I-8',
-      'Sector I-9',
-      'Tarlai',
-    ],
-  },
-  {
-    id: 'ajk',
-    name: 'Azad Kashmir',
-    city: 'Muzaffarabad',
-    citiesHint: 'e.g. Muzaffarabad, Mirpur, Rawalakot, Kotli...',
-    majorCities: [
-      'Muzaffarabad',
-      'Mirpur',
-    ],
-    minorCities: [
-      'Rawalakot',
-      'Kotli',
-      'Bhimber',
-      'Bagh',
-      'Pallandri',
-      'Hattian Bala',
-      'Athmuqam (Neelum Valley)',
-    ],
-  },
-  {
-    id: 'gb',
-    name: 'Gilgit Baltistan',
-    city: 'Gilgit',
-    citiesHint: 'e.g. Gilgit, Skardu, Hunza, Chilas...',
-    majorCities: [
-      'Gilgit',
-      'Skardu',
-    ],
-    minorCities: [
-      'Hunza (Aliabad)',
-      'Chilas (Diamer)',
-      'Khaplu (Ghanche)',
-      'Gakuch (Ghizer)',
-      'Shigar',
-      'Eidgah (Astore)',
-      'Minimarg',
-    ],
-  },
+  { id: 'punjab', name: 'Punjab', city: 'Lahore' },
+  { id: 'sindh', name: 'Sindh', city: 'Karachi' },
+  { id: 'kpk', name: 'Khyber Pakhtunkhwa', city: 'Peshawar' },
+  { id: 'balochistan', name: 'Balochistan', city: 'Quetta' },
+  { id: 'islamabad', name: 'Islamabad Capital Territory', city: 'Islamabad' },
+  { id: 'ajk', name: 'Azad Kashmir', city: 'Muzaffarabad' },
+  { id: 'gb', name: 'Gilgit Baltistan', city: 'Gilgit' },
 ];
 
 export default function AreaInsights() {
   const [scopeMode, setScopeMode] = useState('city'); // 'city' | 'province'
-  const [selectedCity, setSelectedCity] = useState(SUPPORTED_CITIES[0]); // 'Karachi'
+  const [selectedCity, setSelectedCity] = useState('Karachi');
+  const [selectedCityProvince, setSelectedCityProvince] = useState('');
+  const [citySearchInput, setCitySearchInput] = useState('Karachi');
   const [selectedProvince, setSelectedProvince] = useState(PROVINCES[0].name); // 'Punjab'
-  const [areaInput, setAreaInput] = useState('');
-  const [appliedArea, setAppliedArea] = useState('');
   const [days, setDays] = useState(30);
 
   const [data, setData] = useState(null);
@@ -338,14 +91,17 @@ export default function AreaInsights() {
   const [error, setError] = useState(null);
   const [expandedHotspotId, setExpandedHotspotId] = useState(null);
 
+  // Live Nominatim OpenStreetMap Search State
+  const [nominatimResults, setNominatimResults] = useState([]);
+  const [searchingOsm, setSearchingOsm] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchContainerRef = useRef(null);
+  const osmAbortRef = useRef(null);
+
   const [downloadingCsv, setDownloadingCsv] = useState(false);
   const [downloadingJson, setDownloadingJson] = useState(false);
 
-  const debounceTimerRef = useRef(null);
-
-  const currentProvinceDef = PROVINCES.find((p) => p.name === selectedProvince) || PROVINCES[0];
-
-  const loadData = useCallback(async (mode, city, province, area, currentDays) => {
+  const loadData = useCallback(async (mode, city, province, currentDays) => {
     setLoading(true);
     setError(null);
     try {
@@ -354,13 +110,14 @@ export default function AreaInsights() {
         includeSynthetic: true,
       };
       if (mode === 'city') {
-        params.city = city;
-        if (area) params.area = area;
+        params.city = (city || 'Karachi').trim();
+        if (province && province.trim()) {
+          params.province = province.trim();
+        }
       } else {
         const provDef = PROVINCES.find((p) => p.name === province) || PROVINCES[0];
         params.province = provDef.name;
         params.city = provDef.city || provDef.name;
-        if (area) params.area = area;
       }
       const res = await fetchInsights(params);
       setData(res);
@@ -370,6 +127,8 @@ export default function AreaInsights() {
         err?.response?.data?.message ||
         (err?.response?.status === 503
           ? 'Insights service is temporarily unavailable due to a database outage.'
+          : err?.response?.status === 400
+          ? 'City not recognized. Please choose a Pakistani city from the search suggestions.'
           : 'Failed to generate area insights.');
       setError(msg);
       toast.error(msg);
@@ -380,75 +139,98 @@ export default function AreaInsights() {
 
   // Sync state on filter change
   useEffect(() => {
-    loadData(scopeMode, selectedCity, selectedProvince, appliedArea, days);
-  }, [scopeMode, selectedCity, selectedProvince, appliedArea, days, loadData]);
+    if (scopeMode === 'city') {
+      loadData('city', selectedCity, selectedCityProvince, days);
+    } else {
+      loadData('province', '', selectedProvince, days);
+    }
+  }, [scopeMode, selectedCity, selectedCityProvince, selectedProvince, days, loadData]);
+
+  // Live OpenStreetMap Nominatim search debounced
+  useEffect(() => {
+    if (scopeMode !== 'city') return;
+    const query = citySearchInput.trim();
+    if (query.length < 2) {
+      setNominatimResults([]);
+      setSearchingOsm(false);
+      return;
+    }
+
+    setSearchingOsm(true);
+    if (osmAbortRef.current) {
+      osmAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    osmAbortRef.current = abortController;
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchNominatimLocations(query, {
+          signal: abortController.signal,
+        });
+        setNominatimResults(results);
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          setNominatimResults([]);
+        }
+      } finally {
+        setSearchingOsm(false);
+      }
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [citySearchInput, scopeMode]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleScopeModeChange = (mode) => {
     setScopeMode(mode);
-    setAreaInput('');
-    setAppliedArea('');
-  };
-
-  const handleCityChange = (newCity) => {
-    setSelectedCity(newCity);
-    setAreaInput('');
-    setAppliedArea('');
+    setShowDropdown(false);
   };
 
   const handleProvinceChange = (newProvince) => {
     setSelectedProvince(newProvince);
-    setAreaInput('');
-    setAppliedArea('');
   };
 
-  // Handle typing with debounce
-  const handleAreaChange = (e) => {
-    const value = e.target.value;
-    setAreaInput(value);
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      setAppliedArea(value.trim());
-    }, 450);
-  };
-
-  const handleQuickCityClick = (cityName) => {
-    const cleanName = cityName.replace(/\s*\([^)]*\)/g, '').trim();
-    if (scopeMode === 'city') {
-      if (SUPPORTED_CITIES.includes(cleanName)) {
-        setSelectedCity(cleanName);
-        setAreaInput('');
-        setAppliedArea('');
-      } else {
-        if (appliedArea.toLowerCase() === cleanName.toLowerCase()) {
-          setAreaInput('');
-          setAppliedArea('');
-        } else {
-          setAreaInput(cleanName);
-          setAppliedArea(cleanName);
-        }
-      }
-    } else {
-      if (appliedArea.toLowerCase() === cleanName.toLowerCase()) {
-        setAreaInput('');
-        setAppliedArea('');
-      } else {
-        setAreaInput(cleanName);
-        setAppliedArea(cleanName);
-      }
-    }
-  };
-
-  const handleClearArea = () => {
-    setAreaInput('');
-    setAppliedArea('');
-  };
-
-  const handleManualSearch = (e) => {
+  const handleCitySearchSubmit = (e) => {
     e.preventDefault();
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    setAppliedArea(areaInput.trim());
+    const query = citySearchInput.trim();
+    if (!query) {
+      toast.error('Please enter a city name to search');
+      return;
+    }
+    setShowDropdown(false);
+    setSelectedCity(query);
+    const matchedOsm = nominatimResults.find(
+      (r) => r.name.toLowerCase() === query.toLowerCase() || r.city?.toLowerCase() === query.toLowerCase()
+    );
+    setSelectedCityProvince(matchedOsm?.province || '');
+  };
+
+  const handleCityInputChange = (e) => {
+    const val = e.target.value;
+    setCitySearchInput(val);
+    setShowDropdown(true);
+  };
+
+  const handleSelectLocation = (loc) => {
+    const targetName = loc.city || loc.name;
+    setCitySearchInput(targetName);
+    setSelectedCity(targetName);
+    setSelectedCityProvince(loc.province || '');
+    setShowDropdown(false);
   };
 
   const handleDownloadCsv = async () => {
@@ -639,7 +421,7 @@ export default function AreaInsights() {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              City Scope (12 Cities)
+              City Search
             </button>
             <button
               type="button"
@@ -656,35 +438,24 @@ export default function AreaInsights() {
 
           <span className="text-[11px] text-slate-400 font-medium">
             {scopeMode === 'city'
-              ? 'Analyzing thermal hotspots & microclimates across Pakistan metro areas'
+              ? 'Search any city across Pakistan for localized thermal intelligence'
               : 'Aggregating province-wide heat stress patterns'}
           </span>
         </div>
 
-        <form onSubmit={handleManualSearch} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-          {/* Target City or Province Selector */}
-          <div className="md:col-span-3">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-              {scopeMode === 'city' ? 'Target City' : 'Target Province'}
-            </label>
-            <div className="relative">
-              {scopeMode === 'city' ? (
-                <select
-                  value={selectedCity}
-                  onChange={(e) => handleCityChange(e.target.value)}
-                  className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:bg-white focus:outline-none focus:border-emerald-600 appearance-none cursor-pointer"
-                >
-                  {SUPPORTED_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              ) : (
+        {/* Filter Controls Form */}
+        {scopeMode === 'province' ? (
+          /* Province Scope: ONLY the list of provinces occurs. Admin selects province -> province report occurs */
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            <div className="md:col-span-8">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Target Province
+              </label>
+              <div className="relative">
                 <select
                   value={selectedProvince}
                   onChange={(e) => handleProvinceChange(e.target.value)}
-                  className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:bg-white focus:outline-none focus:border-emerald-600 appearance-none cursor-pointer"
+                  className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-emerald-600 appearance-none cursor-pointer"
                 >
                   {PROVINCES.map((p) => (
                     <option key={p.id} value={p.name}>
@@ -692,164 +463,215 @@ export default function AreaInsights() {
                     </option>
                   ))}
                 </select>
-              )}
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+              </div>
             </div>
-          </div>
 
-          {/* Substring Input */}
-          <div className="md:col-span-5">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                {scopeMode === 'city'
-                  ? `Search Sub-area / Sector in ${selectedCity}`
-                  : `Search City / Area in ${selectedProvince}`}
+            {/* Time Window Pills */}
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Time Window
               </label>
-              {appliedArea && (
-                <button
-                  type="button"
-                  onClick={handleClearArea}
-                  className="text-[10px] text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer"
-                >
-                  Clear filter
-                </button>
-              )}
+              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDays(d)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                      days === d
+                        ? 'bg-white text-emerald-800 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="relative">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                list="area-datalist"
-                value={areaInput}
-                onChange={handleAreaChange}
-                placeholder={
-                  scopeMode === 'city'
-                    ? `e.g. Gulshan, DHA, Model Town, Sector F-6...`
-                    : currentProvinceDef.citiesHint
-                }
-                className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-8 py-2 focus:bg-white focus:outline-none focus:border-emerald-600"
-              />
-              {areaInput && (
-                <button
-                  type="button"
-                  onClick={handleClearArea}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs cursor-pointer font-bold"
-                  title="Clear input"
-                >
-                  ✕
-                </button>
-              )}
-              <datalist id="area-datalist">
-                {scopeMode === 'city'
-                  ? ['Gulshan-e-Iqbal', 'Clifton', 'DHA', 'Saddar', 'Model Town', 'Gulberg', 'Blue Area', 'F-7', 'I-9', 'Cantt'].map(
-                      (name) => <option key={name} value={name} />
-                    )
-                  : [
-                      ...(currentProvinceDef.majorCities || []),
-                      ...(currentProvinceDef.minorCities || []),
-                    ].map((cityName) => {
-                      const clean = cityName.replace(/\s*\([^)]*\)/g, '').trim();
-                      return <option key={cityName} value={clean} label={cityName} />;
-                    })}
-              </datalist>
-            </div>
-          </div>
 
-          {/* Time Window Pills */}
-          <div className="md:col-span-3">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-              Time Window
-            </label>
-            <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
-              {[7, 30, 90].map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDays(d)}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                    days === d
-                      ? 'bg-white text-emerald-800 shadow-2xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {d}d
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Refresh Action */}
-          <div className="md:col-span-1 flex items-end">
-            <button
-              type="button"
-              onClick={() => loadData(scopeMode, selectedCity, selectedProvince, appliedArea, days)}
-              disabled={loading}
-              className="w-full flex items-center justify-center p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-              title="Refresh Briefing"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-            </button>
-          </div>
-        </form>
-
-        {/* Quick Pick Chips */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            {scopeMode === 'city' ? '12 Cities:' : 'Quick Cities:'}
-          </span>
-          {(scopeMode === 'city'
-            ? SUPPORTED_CITIES
-            : currentProvinceDef.majorCities || []
-          ).map((cityName) => {
-            const clean = cityName.replace(/\s*\([^)]*\)/g, '').trim();
-            const isSelected =
-              scopeMode === 'city'
-                ? selectedCity.toLowerCase() === clean.toLowerCase()
-                : appliedArea.toLowerCase() === clean.toLowerCase();
-            return (
+            {/* Refresh Action */}
+            <div className="md:col-span-1 flex items-end">
               <button
-                key={cityName}
                 type="button"
-                onClick={() => handleQuickCityClick(cityName)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border ${
-                  isSelected
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-                title={`Scope to ${clean}`}
+                onClick={() => loadData('province', '', selectedProvince, days)}
+                disabled={loading}
+                className="w-full flex items-center justify-center p-2.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                title="Refresh Province Briefing"
               >
-                {clean}
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
               </button>
-            );
-          })}
-        </div>
+            </div>
+          </div>
+        ) : (
+          /* City Scope: ONLY search bar with OpenStreetMap Nominatim live search */
+          <form onSubmit={handleCitySearchSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+            <div className="md:col-span-8">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Search City / Town / Village in Pakistan
+                </label>
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  <Globe className="w-2.5 h-2.5" />
+                  Live OpenStreetMap Nominatim
+                </span>
+              </div>
+              <div ref={searchContainerRef} className="relative">
+                <div className="relative flex items-center">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={citySearchInput}
+                    onChange={handleCityInputChange}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder="e.g. Moro, Liaquatpur, F-7, Kharian, Gwadar, Abbottabad..."
+                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg pl-8.5 pr-24 py-2.5 focus:bg-white focus:outline-none focus:border-emerald-600 shadow-2xs"
+                  />
+                  <div className="absolute right-1.5 flex items-center gap-1.5">
+                    {searchingOsm && (
+                      <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin mr-0.5" />
+                    )}
+                    {citySearchInput && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCitySearchInput('');
+                          setNominatimResults([]);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 text-xs cursor-pointer font-bold rounded"
+                        title="Clear input"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={loading || !citySearchInput.trim()}
+                      className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                    >
+                      Search
+                    </button>
+                  </div>
+                </div>
+
+                {/* Floating Live Autocomplete Dropdown for Nominatim & National Cities */}
+                {showDropdown && citySearchInput.trim().length >= 2 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                    {/* Live OpenStreetMap Results */}
+                    {nominatimResults.length > 0 && (
+                      <div>
+                        <div className="px-3 py-1.5 bg-emerald-50/70 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center justify-between border-b border-emerald-100/60">
+                          <span className="flex items-center gap-1 font-extrabold">
+                            <Globe className="w-3 h-3 text-emerald-600" />
+                            OpenStreetMap Nominatim Results
+                          </span>
+                          <span className="text-[9px] text-emerald-600 font-medium">Live Geocoded</span>
+                        </div>
+                        {nominatimResults.map((loc) => (
+                          <button
+                            key={loc.id || loc.displayName}
+                            type="button"
+                            onClick={() => handleSelectLocation(loc)}
+                            className="w-full text-left px-3 py-2 hover:bg-emerald-50/60 transition-colors cursor-pointer flex items-start gap-2.5 group border-b border-slate-50 last:border-b-0"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">
+                                  {loc.name}
+                                </span>
+                                {loc.province && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                    {loc.province}
+                                  </span>
+                                )}
+                                {loc.district && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {loc.district}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                {loc.displayName}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Loading State */}
+                    {searchingOsm && nominatimResults.length === 0 && (
+                      <div className="px-4 py-3 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                        <span>Searching OpenStreetMap across Pakistan...</span>
+                      </div>
+                    )}
+
+                    {/* No Results */}
+                    {!searchingOsm && nominatimResults.length === 0 && (
+                      <div className="px-4 py-3 text-center text-xs text-slate-400">
+                        No locations found for &ldquo;{citySearchInput}&rdquo;. Press Search to query database directly.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Time Window Pills */}
+            <div className="md:col-span-3">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Time Window
+              </label>
+              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200">
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDays(d)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                      days === d
+                        ? 'bg-white text-emerald-800 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Refresh Action */}
+            <div className="md:col-span-1 flex items-end">
+              <button
+                type="button"
+                onClick={() => loadData('city', selectedCity, selectedCityProvince, days)}
+                disabled={loading}
+                className="w-full flex items-center justify-center p-2.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                title="Refresh City Briefing"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Applied Scope indicator */}
         <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-slate-500 border-t border-slate-100">
           <span className="font-semibold text-slate-600">Active Scope:</span>
           <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
-            {scopeMode === 'city' ? `City: ${data?.scope?.city || selectedCity}` : `Province: ${data?.scope?.province || selectedProvince}`}
+            {scopeMode === 'city'
+              ? `City: ${data?.scope?.city || selectedCity}`
+              : `Province: ${data?.scope?.province || selectedProvince} (Province-wide Aggregate)`}
           </span>
           {data?.scope?.province && scopeMode === 'city' && (
             <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
               {data.scope.province}
             </span>
           )}
-          {appliedArea && (
-            <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1.5 shadow-2xs">
-              <span>Area: &ldquo;{appliedArea}&rdquo;</span>
-              <button
-                type="button"
-                onClick={handleClearArea}
-                className="text-amber-600 hover:text-red-600 transition-colors cursor-pointer font-bold leading-none"
-                title="Clear area filter"
-              >
-                ✕
-              </button>
-            </span>
-          )}
           <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-            Past {days} days
+            Past {data?.scope?.days || days} days
           </span>
           <span className="ml-auto text-[11px] text-slate-400">
             {loading ? 'Refreshing intelligence...' : 'Audit verified • Live sync'}
@@ -1036,7 +858,7 @@ export default function AreaInsights() {
             ) : (
               <div>
                 <div className="h-52 w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+                  <ResponsiveContainer width="100%" height={208} minWidth={0} minHeight={200} initialDimension={{ width: 500, height: 208 }}>
                     <LineChart data={data.tempSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis

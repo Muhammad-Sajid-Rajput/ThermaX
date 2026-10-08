@@ -1,49 +1,15 @@
 /**
- * Normalize a free-text city name (e.g. from reverse geocoding) to one of
- * ThermaX's supported cities. Returns null when the name doesn't match —
- * callers must then skip city-scoped requests rather than guess.
- *
- * Pakistan-wide scope (12 cities): the first three carry exact OSM boundary
- * polygons; the rest resolve via approximate metro bounding boxes
- * (see Backend/services/boundaryService.js).
+ * Normalizes city names for display and querying (e.g. "karachi" -> "Karachi").
+ * Supports any location across Pakistan.
  */
-export const SUPPORTED_CITIES = [
-  'Karachi',
-  'Lahore',
-  'Islamabad',
-  'Rawalpindi',
-  'Faisalabad',
-  'Multan',
-  'Gujranwala',
-  'Sialkot',
-  'Hyderabad',
-  'Peshawar',
-  'Quetta',
-  'Bahawalpur',
-];
-
-const ALIASES = {
-  karachi: 'Karachi',
-  lahore: 'Lahore',
-  islamabad: 'Islamabad',
-  'islamabad capital territory': 'Islamabad',
-  rawalpindi: 'Rawalpindi',
-  faisalabad: 'Faisalabad',
-  multan: 'Multan',
-  gujranwala: 'Gujranwala',
-  sialkot: 'Sialkot',
-  hyderabad: 'Hyderabad',
-  peshawar: 'Peshawar',
-  quetta: 'Quetta',
-  bahawalpur: 'Bahawalpur',
-};
-
 export function normalizeCity(name) {
   if (!name || typeof name !== 'string') return null;
-  const key = name.trim().toLowerCase();
-  if (ALIASES[key]) return ALIASES[key];
-  const direct = SUPPORTED_CITIES.find((c) => c.toLowerCase() === key);
-  return direct || null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  return trimmed
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 /** Risk-tier rank for "highest tier" selection (higher = more severe). */
@@ -86,3 +52,4 @@ export function isLocationInPakistan(lat, lng) {
     lngNum <= PAKISTAN_BOUNDS.maxLng
   );
 }
+

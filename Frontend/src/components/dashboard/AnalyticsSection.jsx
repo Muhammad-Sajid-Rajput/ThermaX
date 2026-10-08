@@ -74,7 +74,7 @@ const TrendChart = ({ trend = [], onBarClick }) => {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={140} minWidth={0}>
+    <ResponsiveContainer width="100%" height={140} minWidth={0} initialDimension={{ width: 300, height: 140 }}>
       <AreaChart
         data={data}
         margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
@@ -134,7 +134,7 @@ const SeverityChart = ({ severity = [], onBarClick }) => {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={140} minWidth={0}>
+    <ResponsiveContainer width="100%" height={140} minWidth={0} initialDimension={{ width: 300, height: 140 }}>
       <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
         <XAxis
           dataKey="severity"
@@ -190,7 +190,7 @@ const HeatIndexChart = ({ hotspotGrowth = [] }) => {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={150} minWidth={0}>
+    <ResponsiveContainer width="100%" height={150} minWidth={0} initialDimension={{ width: 300, height: 150 }}>
       <RadialBarChart
         cx="50%"
         cy="50%"

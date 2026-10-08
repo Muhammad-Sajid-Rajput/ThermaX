@@ -364,25 +364,33 @@ function AdminDashboard() {
                     ? 'bg-orange-50 text-orange-700 border-orange-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200';
 
-                  const borderClasses = isCritical
-                    ? 'border-l-red-500 hover:border-red-300'
+                  const stripeColor = isCritical
+                    ? 'bg-red-500'
                     : isHigh
-                    ? 'border-l-orange-500 hover:border-orange-300'
-                    : 'border-l-amber-500 hover:border-amber-300';
+                    ? 'bg-orange-500'
+                    : 'bg-amber-500';
+
+                  const areaTitle = hs.area || hs.district || hs.name || hs.city || 'Hotspot Zone';
+                  const citySubtitle = hs.city && hs.city.toLowerCase() !== areaTitle.toLowerCase()
+                    ? ` • ${hs.city}`
+                    : '';
 
                   return (
                     <div
                       key={hs.id || hs.clusterId || index}
                       onClick={() => navigate('/admin/heatmap')}
-                      className={`p-3 rounded-xl border border-slate-200 ${borderClasses} border-l-4 bg-white hover:bg-slate-50/60 transition-all duration-200 cursor-pointer shadow-2xs group`}
+                      className="relative overflow-hidden p-3 pl-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/70 hover:border-slate-300 transition-all duration-200 cursor-pointer shadow-2xs group"
                     >
+                      {/* Clean left accent stripe */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${stripeColor} transition-all duration-200 group-hover:w-1.5`} />
+
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors truncate">
-                            {hs.area || hs.district || hs.name || 'Hotspot Zone'}
+                            {areaTitle}
                           </p>
-                          <p className="text-[11px] text-slate-500 font-medium">
-                            Cluster #{hs.clusterId || index + 1} &bull; {hs.city || 'Pakistan'}
+                          <p className="text-[11px] text-slate-500 font-medium truncate">
+                            Cluster #{hs.clusterId || index + 1}{citySubtitle}
                           </p>
                         </div>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badgeClasses}`}>
@@ -390,7 +398,7 @@ function AdminDashboard() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100 text-center">
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-center">
                         <div className="bg-slate-50 rounded-lg py-1 px-1">
                           <span className="text-[10px] text-slate-400 font-medium block">Avg Temp</span>
                           <span className="text-xs font-bold font-mono text-slate-800">
