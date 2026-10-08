@@ -6,6 +6,7 @@ import useUserLocationStore from '../../stores/userLocationStore';
 import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
 import { getHotspotColor, getHotspotRadius } from '../../utils/geo/hotspotUtils';
 import { HEATMAP_CONFIG } from '../../utils/geo/heatmapLayer';
+import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
 
 const PAKISTAN_CENTER = [30.3753, 69.3451];
 
