@@ -707,11 +707,7 @@ function HeatReport() {
                     <p className="text-sm text-slate-600 font-mono">
                       {form.latitude}, {form.longitude}
                     </p>
-                    {isInPakistan ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        <CheckCircle className="w-3 h-3" /> {form.areaName || 'Pakistan Verified'}
-                      </span>
-                    ) : (
+                    {!isInPakistan && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
                         <AlertTriangle className="w-3 h-3" /> Outside Pakistan
                       </span>
