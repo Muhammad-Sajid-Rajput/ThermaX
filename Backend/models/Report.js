@@ -29,8 +29,6 @@ const reportSchema = new Schema(
     ambientTemp: Number,
     surfaceTemp: Number,
     humidity: Number,
-    images: [String],
-    image: String,
     status: {
       type: String,
       enum: ['pending', 'verified', 'flagged', 'rejected'],

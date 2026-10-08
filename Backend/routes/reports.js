@@ -4,44 +4,21 @@ import {
   authorizeAdmin,
   optionalAuth,
 } from '../middleware/auth.js';
+import multer from 'multer';
 import * as reportController from '../controllers/reportController.js';
-import upload from '../utils/upload.js';
 
 const router = express.Router();
+const parseMultipartFields = multer().none();
 
 // ─── PUBLIC / USER ROUTES ──────────────────────────────────────────────────
 // Get all heat reports (public read — no auth required)
 router.get('/', optionalAuth, reportController.getReports);
 
-// Submit new heat report (any authenticated user)
-//
-// The multer wrapper maps upload failures to an honest 400: the fileFilter
-// rejects non-images with 'Error: Images Only!' and the size limiter rejects
-// oversize files — both are client errors, not 500s. Without this wrapper,
-// multer's error reaches the generic error handler as a 500.
-function handleReportUpload(req, res, next) {
-  upload.single('image')(req, res, (err) => {
-    if (err) {
-      const message =
-        typeof err === 'string'
-          ? err
-          : err.code === 'LIMIT_FILE_SIZE'
-            ? 'Image exceeds the 5MB size limit.'
-            : err.message || 'Image upload failed.';
-      return res.status(400).json({
-        error: 'Invalid image upload',
-        code: 'INVALID_IMAGE',
-        message,
-      });
-    }
-    next();
-  });
-}
-
+// Submit new heat report (any authenticated user — accepts JSON or multipart text fields, no files)
 router.post(
   '/',
   authenticate,
-  handleReportUpload,
+  parseMultipartFields,
   reportController.submitReport
 );
 

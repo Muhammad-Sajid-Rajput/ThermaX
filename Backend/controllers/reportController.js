@@ -10,12 +10,7 @@ import { triggerReportEnrichment } from '../services/mlServiceClient.js';
 import { snapToGrid } from '../services/anonymizationService.js';
 import { assertTransition } from '../utils/reportLifecycle.js';
 import { logAuditEvent } from '../middleware/auditLogger.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const VALID_CATEGORIES = Object.values(REPORT_CATEGORIES);
 const MAX_CAUSES = 10;
@@ -157,7 +152,6 @@ export const getReports = async (req, res) => {
             observedAt: r.observedAt,
             source: r.source,
             location: snapped,
-            hasPhoto: Boolean(r.image || (r.images && r.images.length > 0)),
             createdAt: r.createdAt,
           };
         });
@@ -291,8 +285,6 @@ export const submitReport = async (req, res) => {
       observedAt: observedAtDate,
       source: 'Citizen',
       status: 'pending',
-      image: req.file ? `/uploads/${req.file.filename}` : null,
-      images: req.file ? [`/uploads/${req.file.filename}`] : [],
       reportRef: `HTX-${Date.now().toString().slice(-6)}`,
     };
 
@@ -461,21 +453,7 @@ export const deleteReport = async (req, res) => {
     await SatelliteAnalysis.deleteMany({ report: report._id });
     await AIAnalysis.deleteMany({ report: report._id });
 
-    // Remove the uploaded photo, if it was stored locally. Uploads live in
-    // Backend/uploads/ (multer destination); __dirname here is
-    // Backend/controllers/, so resolve one level up. path.basename keeps a
-    // malicious image value from escaping the uploads directory.
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    const localImage = report.image && report.image.startsWith('/uploads/')
-      ? path.join(uploadsDir, path.basename(report.image))
-      : null;
-    if (localImage) {
-      try {
-        fs.unlinkSync(localImage);
-      } catch {
-        // Already gone or unreadable — the DB row is what matters.
-      }
-    }
+
 
     const deleteFilter = isAdmin
       ? { _id: id }

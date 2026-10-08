@@ -393,17 +393,9 @@ describe('Phase 3 remediation re-verification', () => {
     expect(String(req.user._id)).toBe(String(user._id));
   });
 
-  it('deleting a report removes the photo from the real uploads directory', async () => {
-    const admin = await makeUser(ROLES.ADMIN, `delphoto-admin-${Date.now()}`);
-    const citizen = await makeUser(ROLES.USER, `delphoto-cit-${Date.now()}`);
-    const uploadsDir = path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '..',
-      'uploads'
-    );
-    const filename = `test-delete-${Date.now()}.png`;
-    const filePath = path.join(uploadsDir, filename);
-    fs.writeFileSync(filePath, Buffer.from('fake-image-bytes'));
+  it('deleting a report removes the document from the database', async () => {
+    const admin = await makeUser(ROLES.ADMIN, `delreport-admin-${Date.now()}`);
+    const citizen = await makeUser(ROLES.USER, `delreport-cit-${Date.now()}`);
     const report = await Report.create({
       user: citizen.user._id,
       latitude: 24.86,
@@ -411,7 +403,6 @@ describe('Phase 3 remediation re-verification', () => {
       severityLevel: 3,
       city: 'Karachi',
       status: 'pending',
-      image: `/uploads/${filename}`,
     });
 
     const res = await request(app)
@@ -419,7 +410,6 @@ describe('Phase 3 remediation re-verification', () => {
       .set('Authorization', `Bearer ${admin.token}`);
 
     expect(res.status).toBe(200);
-    expect(fs.existsSync(filePath)).toBe(false);
     expect(await Report.findById(report._id)).toBeNull();
   });
 });
