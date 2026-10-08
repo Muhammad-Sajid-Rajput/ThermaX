@@ -10,11 +10,9 @@ import useWeather from '../../hooks/data/useWeather';
 import useUserLocationStore from '../../stores/userLocationStore';
 import {
   MapPin,
-  Camera,
   Clock,
   AlertTriangle,
   CheckCircle,
-  Upload,
   User,
   Thermometer,
   FileText,
@@ -113,11 +111,9 @@ function HeatReport() {
   }, [isAuthenticated, requireAuth]);
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(null); // 0..100 while the photo uploads
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadError, setUploadError] = useState(null); // safe message string after a failed submission
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState({
     latitude: '',
@@ -128,17 +124,6 @@ function HeatReport() {
     observedAt: getLocalDateTimeString(),
     description: '',
   });
-  useEffect(() => {
-    if (!selectedFile) {
-      setPreviewUrl('');
-      return undefined;
-    }
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [selectedFile]);
   const userLat = useUserLocationStore((s) => s.lat);
   const userLng = useUserLocationStore((s) => s.lng);
   const geoStatus = useUserLocationStore((s) => s.status);
@@ -173,10 +158,7 @@ function HeatReport() {
       }
     }
     if (currentStep === 3) {
-      if (!form.description.trim()) {
-        nextErrors.description =
-          'Describe what the observer is experiencing on-site.';
-      }
+      // Field notes description is optional — no mandatory error
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -279,18 +261,16 @@ function HeatReport() {
         temperature = ambientWeather?.heatIndex ?? ambientWeather?.temperature;
       }
 
-      // The backend expects multipart form data: `reportData` (JSON) plus the
-      // `image` file via upload.single('image'). Sending the File inside a
-      // plain JSON object would serialize it to {} and silently drop the photo.
       const reportPayload = {
         ...form,
+        description: form.description.trim(),
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
         temperature,
       };
-      const body = buildReportFormData(reportPayload, selectedFile);
+      const body = buildReportFormData(reportPayload);
 
-      setUploadProgress(selectedFile ? 0 : null);
+      setUploadProgress(null);
       await submitHeatReport(body, {
         onUploadProgress: (event) => {
           if (event.total) {
@@ -670,14 +650,17 @@ function HeatReport() {
                   Field Evidence
                 </h3>
                 <p className="text-sm text-slate-600">
-                  Describe your observation and optionally upload a photo
+                  Describe your on-site observations (optional)
                 </p>
               </div>
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <FileText className="w-4 h-4 text-green-500" />
-                  Field notes
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <FileText className="w-4 h-4 text-green-500" />
+                    Field notes
+                  </label>
+                  <span className="text-xs text-slate-400 font-medium">Optional</span>
+                </div>
                 <textarea
                   rows={5}
                   value={form.description}
@@ -685,71 +668,15 @@ function HeatReport() {
                     updateForm({ description: event.target.value })
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-all focus:border-green-500 focus:ring-2 focus:ring-green-500/20 resize-none"
-                  placeholder="Describe radiant heat, pedestrian exposure, shade availability, and any visible surface conditions..."
+                  placeholder="Describe radiant heat, pedestrian exposure, shade availability, or visible conditions (optional)..."
                 />
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>
                     Be specific about temperature, time of day, and
-                    environmental conditions
+                    environmental conditions if available
                   </span>
                   <span>{form.description.length}/500</span>
                 </div>
-              </div>
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Camera className="w-4 h-4 text-green-500" />
-                  Photo evidence
-                </label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      setSelectedFile(event.target.files?.[0] ?? null)
-                    }
-                    className="sr-only"
-                    id="photo-upload"
-                  />
-                  <label
-                    htmlFor="photo-upload"
-                    className="group flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 cursor-pointer transition-all hover:border-green-500 hover:bg-green-50"
-                  >
-                    <Upload className="w-8 h-8 text-slate-400 group-hover:text-green-500 transition-colors mb-3" />
-                    <span className="text-sm font-medium text-slate-700 mb-1">
-                      {selectedFile
-                        ? selectedFile.name
-                        : 'Click to upload or drag and drop'}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      PNG, JPG, GIF up to 5MB
-                    </span>
-                  </label>
-                </div>
-                {previewUrl ? (
-                  <div className="relative rounded-xl overflow-hidden border border-slate-200">
-                    <img
-                      alt="Selected upload preview"
-                      className="w-full h-64 object-cover"
-                      src={previewUrl}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFile(null)}
-                      className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
-                    >
-                      <span className="text-slate-600 text-lg leading-none">
-                        ×
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center">
-                    <Camera className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-                    <p className="text-sm text-slate-500">
-                      Image preview will appear here
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           ) : null}
@@ -875,14 +802,10 @@ function HeatReport() {
                   </h4>
                 </div>
                 <p className="text-sm leading-relaxed text-slate-700">
-                  {form.description || 'No description provided yet.'}
+                  {form.description || 'No description provided (optional).'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-sm">
-                  <Camera className="w-3 h-3" />
-                  {selectedFile ? selectedFile.name : 'No photo attached'}
-                </span>
                 <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-lg text-sm">
                   <CheckCircle className="w-3 h-3" />
                   Ready for moderation queue
@@ -981,7 +904,7 @@ function HeatReport() {
                 modeling
               </p>
               <p>
-                • Step 3 adds qualitative evidence and optional image upload
+                • Step 3 adds qualitative field notes and on-site observations (optional)
               </p>
               <p>• Step 4 reviews the payload before it enters moderation</p>
             </div>
