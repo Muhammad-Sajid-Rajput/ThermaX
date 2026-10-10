@@ -14,15 +14,16 @@ const COMPONENT_LABELS = {
   population: 'Population density',
 };
 
-function ComponentBar({ name, value, weightUsed }) {
-  const pct = value == null ? 0 : Math.round(value * 100);
+function ComponentBar({ name, value, weightUsed, isMissing }) {
+  const isNoData = isMissing || value == null;
+  const pct = isNoData ? 0 : Math.round(value * 100);
   return (
     <div className="mb-1.5 print:mb-0.5">
       <div className="flex justify-between text-[11px] print:text-[10px] mb-0.5 print:mb-0">
         <span className="text-slate-600 font-medium">{COMPONENT_LABELS[name] || name}</span>
         <span className="text-slate-500 font-mono">
-          {value == null ? 'no data' : `${pct}%`}
-          {weightUsed != null && value != null && (
+          {isNoData ? 'no data' : `${pct}%`}
+          {weightUsed != null && !isNoData && (
             <span className="text-slate-400"> · w {weightUsed}</span>
           )}
         </span>
@@ -48,7 +49,7 @@ function simplifyDirective(text) {
   return text;
 }
 
-export default function HotspotDetailPanel({ hotspot }) {
+export default function HotspotDetailPanel({ hotspot, className = '', embedded = false }) {
   if (!hotspot) return null;
 
   const tier = hotspot.riskTier || 'unknown';
@@ -58,21 +59,33 @@ export default function HotspotDetailPanel({ hotspot }) {
   const advisory = hotspot.advisory;
   
   // Resolve TVI components without fabricating unmeasured data
-  const rawComponents = Array.isArray(hotspot.tviComponents)
-    ? {}
-    : (hotspot.tviComponents || {});
-  const components = { ...rawComponents };
+  const components =
+    hotspot.tviComponents &&
+    typeof hotspot.tviComponents === 'object' &&
+    !Array.isArray(hotspot.tviComponents)
+      ? hotspot.tviComponents
+      : {};
 
-  const componentList = Array.isArray(hotspot.tviComponents)
-    ? hotspot.tviComponents
-    : Object.keys(hotspot.tviWeightsUsed || hotspot.tviComponents || {});
+  const missingDimensions = Array.isArray(hotspot.tviComponentsMissing)
+    ? hotspot.tviComponentsMissing
+    : (Array.isArray(hotspot.tviComponents)
+        ? Object.keys(COMPONENT_LABELS).filter((d) => !hotspot.tviComponents.includes(d))
+        : Object.keys(COMPONENT_LABELS).filter((d) => components[d] == null));
 
   const weightsUsed = hotspot.tviWeightsUsed || {};
+  const isPopulationUnavailable =
+    missingDimensions.includes('population') || components.population == null;
 
   const advisoryText = advisory?.en || advisory?.ur || '';
 
   return (
-    <div className="rounded-xl border border-slate-200/90 bg-white p-3.5 print:p-0 print:border-none print:shadow-none space-y-3.5 print:space-y-1.5 shadow-2xs">
+    <div
+      className={
+        embedded
+          ? `space-y-3.5 print:space-y-1.5 ${className}`
+          : `rounded-xl border border-slate-200/90 bg-white p-3.5 print:p-0 print:border-none print:shadow-none space-y-3.5 print:space-y-1.5 shadow-2xs ${className}`
+      }
+    >
       {/* TVI breakdown */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -101,6 +114,7 @@ export default function HotspotDetailPanel({ hotspot }) {
                 name={name}
                 value={components[name]}
                 weightUsed={weightsUsed[name]}
+                isMissing={missingDimensions.includes(name)}
               />
             ))}
             <p className="text-[10px] text-slate-400 mt-1">
@@ -108,7 +122,7 @@ export default function HotspotDetailPanel({ hotspot }) {
               {Object.keys(weightsUsed).length > 0 && Object.keys(weightsUsed).length < 3
                 && ' — adjusted for available data'}
             </p>
-            {!componentList.includes('population') && (
+            {isPopulationUnavailable && (
               <p className="text-[10px] text-slate-400 italic mt-0.5">
                 2-component TVI (population unavailable for this city)
               </p>

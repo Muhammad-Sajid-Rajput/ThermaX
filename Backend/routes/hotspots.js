@@ -21,17 +21,24 @@ function severityToLevel(severity) {
 
 export function toDto(h) {
   const TVI_DIMENSIONS = ['heat', 'reports', 'population'];
-  const tviComponents = Array.isArray(h.tviComponents)
-    ? h.tviComponents
-    : (h.tviWeightsUsed && Object.keys(h.tviWeightsUsed).length > 0
-        ? Object.keys(h.tviWeightsUsed)
-        : (h.tviComponents && typeof h.tviComponents === 'object'
-            ? Object.keys(h.tviComponents).filter((k) => h.tviComponents[k] != null)
-            : null));
+  const isComponentObj =
+    h.tviComponents &&
+    typeof h.tviComponents === 'object' &&
+    !Array.isArray(h.tviComponents);
 
-  const tviComponentsMissing = Array.isArray(tviComponents)
-    ? TVI_DIMENSIONS.filter((d) => !tviComponents.includes(d))
-    : [...TVI_DIMENSIONS];
+  const tviComponents = isComponentObj
+    ? {
+        heat: h.tviComponents.heat ?? null,
+        reports: h.tviComponents.reports ?? null,
+        population: h.tviComponents.population ?? null,
+      }
+    : (Array.isArray(h.tviComponents) ? h.tviComponents : null);
+
+  const tviComponentsMissing = isComponentObj
+    ? TVI_DIMENSIONS.filter((d) => tviComponents[d] == null)
+    : (Array.isArray(tviComponents)
+        ? TVI_DIMENSIONS.filter((d) => !tviComponents.includes(d))
+        : [...TVI_DIMENSIONS]);
 
   return {
     id: h._id,

@@ -26,6 +26,7 @@ import {
   Sparkles,
   Building2,
   Radio,
+  Copy,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -90,26 +91,29 @@ const ACTION_METADATA = {
 const PHASE_CONFIG = {
   1: {
     name: 'Phase 1: Immediate Relief (First 48 Hours)',
-    short: 'Phase 1 (First 48h)',
+    short: 'Phase 1 • First 48h',
     badge: 'bg-rose-50 text-rose-700 border-rose-200',
-    border: 'border-l-rose-500',
+    topBar: 'bg-rose-500',
     icon: '⚡',
+    timeline: 'Immediate (0–48 hours)',
     subtitle: 'Drinking water points, mobile cooling units & public heat alerts',
   },
   2: {
     name: 'Phase 2: Preventive Measures (Weeks 1–2)',
-    short: 'Phase 2 (Weeks 1–2)',
+    short: 'Phase 2 • Weeks 1–2',
     badge: 'bg-amber-50 text-amber-700 border-amber-200',
-    border: 'border-l-amber-500',
+    topBar: 'bg-amber-500',
     icon: '🛠️',
+    timeline: 'Short-term (Weeks 1–2)',
     subtitle: 'Adjust school/work hours, protect vulnerable sites & prepare clinics',
   },
   3: {
     name: 'Phase 3: Ongoing Monitoring & Watch',
-    short: 'Phase 3 (Ongoing Watch)',
+    short: 'Phase 3 • Ongoing Watch',
     badge: 'bg-purple-50 text-purple-700 border-purple-200',
-    border: 'border-l-purple-500',
+    topBar: 'bg-purple-500',
     icon: '👁️',
+    timeline: 'Active Surveillance',
     subtitle: 'Track incoming heat reports and escalate if reports spike',
   },
 };
@@ -663,21 +667,18 @@ export default function AreaInsights() {
         urgency: meta.urgency,
         urgencyStyle: meta.urgencyStyle,
         timeline:
-          planItem?.timeline ||
-          (phaseNumber === 1
+          phaseNumber === 1
             ? 'Immediate (0–48 hours)'
             : phaseNumber === 2
-              ? 'Short-term (1–8 weeks)'
-              : 'Active Surveillance'),
+              ? 'Short-term (Weeks 1–2)'
+              : 'Active Surveillance',
         phaseNumber,
         phaseName:
-          planItem?.phaseName ||
-          meta.phaseName ||
-          (phaseNumber === 1
-            ? 'Phase 1: Emergency Relief'
+          phaseNumber === 1
+            ? 'Phase 1: Immediate Relief'
             : phaseNumber === 2
-              ? 'Phase 2: Civic Intervention'
-              : 'Phase 3: Resilience & Infrastructure'),
+              ? 'Phase 2: Tactical Safeguards'
+              : 'Phase 3: Surveillance Watch',
         targetLocations,
         hotspotCount: targetLocations.length || rec.hotspotCount || 1,
         evidence: planItem?.evidence || (targetLocations.length > 0 ? `Applies to ${targetLocations.length} active hotspot zones` : ''),
@@ -747,12 +748,12 @@ export default function AreaInsights() {
   }, [data?.receptorFlags]);
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 print:space-y-3.5 print:p-0 max-w-7xl mx-auto print-full-width">
-      {/* F5: Official Letterhead Print Header (print only) */}
-      <div className="hidden print:block border-b-2 border-slate-900 pb-4 mb-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 print:space-y-4 print:p-0 max-w-7xl mx-auto print-full-width">
+      {/* 1. Official Letterhead Print Header (print only) */}
+      <header className="hidden print:block border-b-2 border-slate-900 pb-3 mb-4">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-normal text-slate-900">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
               ThermaX — Area Thermal Risk Briefing
             </h1>
             <p className="text-xs text-slate-600 font-semibold mt-0.5">
@@ -768,14 +769,24 @@ export default function AreaInsights() {
             </span>
           </div>
         </div>
-        <div className="mt-3 pt-2 border-t border-slate-200 text-xs flex justify-between text-slate-700 font-medium">
-          <span>Target Scope: <strong>{scopeMode === 'province' ? (data?.scope?.province || selectedProvince) : (data?.scope?.city || selectedCity)}{data?.scope?.area ? ` • ${data.scope.area}` : ''}</strong></span>
-          <span>Observation Window: <strong>Past {data?.scope?.days || days} Days</strong></span>
+        <div className="mt-2.5 pt-2 border-t border-slate-200 text-xs flex justify-between text-slate-700 font-medium">
+          <span>
+            Target Scope:{' '}
+            <strong>
+              {scopeMode === 'province'
+                ? (data?.scope?.province || selectedProvince)
+                : (data?.scope?.city || selectedCity)}
+              {data?.scope?.area ? ` • ${data.scope.area}` : ''}
+            </strong>
+          </span>
+          <span>
+            Observation Window: <strong>Past {data?.scope?.days || days} Days</strong>
+          </span>
         </div>
-      </div>
+      </header>
 
-      {/* Top Banner & Exits Action Bar (screen only) */}
-      <div className="no-print print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      {/* 2. Top Action Banner (screen only) */}
+      <header className="no-print print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Flame className="w-5 h-5 text-emerald-600" />
@@ -788,8 +799,7 @@ export default function AreaInsights() {
           </p>
         </div>
 
-        {/* Exit Action (Controls hidden during print) */}
-        <div className="flex flex-col items-end gap-1.5 no-print print:hidden shrink-0">
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
           <button
             type="button"
             onClick={handleExportReport}
@@ -800,34 +810,36 @@ export default function AreaInsights() {
             <Printer className="w-3.5 h-3.5 text-white" />
             <span>Export Report (PDF)</span>
           </button>
-          <span className="text-[10px] text-slate-400 no-print print:hidden">
+          <span className="text-[10px] text-slate-400">
             In the print dialog, uncheck &apos;Headers and footers&apos; for a clean official copy.
           </span>
         </div>
-      </div>
+      </header>
 
-      {/* Scope Controls Bar (Hidden during print) */}
-      <div className="no-print print:hidden bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-4">
+      {/* 3. Scope Controls Bar (screen only) */}
+      <section className="no-print print:hidden bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-4">
         {/* Scope Mode Switcher Tabs */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg">
             <button
               type="button"
               onClick={() => handleScopeModeChange('city')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${scopeMode === 'city'
-                ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
-                : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                scopeMode === 'city'
+                  ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
               City Search
             </button>
             <button
               type="button"
               onClick={() => handleScopeModeChange('province')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${scopeMode === 'province'
-                ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
-                : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                scopeMode === 'province'
+                  ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
               Province Scope
             </button>
@@ -842,7 +854,6 @@ export default function AreaInsights() {
 
         {/* Filter Controls Form */}
         {scopeMode === 'province' ? (
-          /* Province Scope: ONLY the list of provinces occurs. Admin selects province -> province report occurs */
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             <div className="md:col-span-8">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -864,7 +875,6 @@ export default function AreaInsights() {
               </div>
             </div>
 
-            {/* Time Window Pills */}
             <div className="md:col-span-3">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                 Time Window
@@ -875,10 +885,11 @@ export default function AreaInsights() {
                     key={d}
                     type="button"
                     onClick={() => setDays(d)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${days === d
-                      ? 'bg-white text-emerald-800 shadow-2xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                      days === d
+                        ? 'bg-white text-emerald-800 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
                   >
                     {d}d
                   </button>
@@ -886,7 +897,6 @@ export default function AreaInsights() {
               </div>
             </div>
 
-            {/* Refresh Action */}
             <div className="md:col-span-1 flex items-end">
               <button
                 type="button"
@@ -900,7 +910,6 @@ export default function AreaInsights() {
             </div>
           </div>
         ) : (
-          /* City Scope: ONLY search bar with OpenStreetMap Nominatim live search */
           <form onSubmit={handleCitySearchSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
             <div className="md:col-span-8">
               <div className="flex items-center justify-between mb-1">
@@ -912,48 +921,45 @@ export default function AreaInsights() {
                   Live Location Search
                 </span>
               </div>
-              <div ref={searchContainerRef} className="relative">
-                <div className="relative flex items-center">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={citySearchInput}
-                    onChange={handleCityInputChange}
-                    onFocus={() => setShowDropdown(true)}
-                    placeholder="e.g. Moro, Liaquatpur, F-7, Kharian, Gwadar, Abbottabad..."
-                    className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg pl-8.5 pr-24 py-2.5 focus:bg-white focus:outline-none focus:border-emerald-600 shadow-2xs"
-                  />
-                  <div className="absolute right-1.5 flex items-center gap-1.5">
-                    {searchingOsm && (
-                      <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin mr-0.5" />
-                    )}
-                    {citySearchInput && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCitySearchInput('');
-                          setNominatimResults([]);
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 text-xs cursor-pointer font-bold rounded"
-                        title="Clear input"
-                      >
-                        ✕
-                      </button>
-                    )}
+              <div ref={searchContainerRef} className="relative flex items-center">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                <input
+                  type="text"
+                  value={citySearchInput}
+                  onChange={handleCityInputChange}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="e.g. Moro, Liaquatpur, F-7, Kharian, Gwadar, Abbottabad..."
+                  className="w-full text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg pl-8.5 pr-24 py-2.5 focus:bg-white focus:outline-none focus:border-emerald-600 shadow-2xs"
+                />
+                <div className="absolute right-1.5 flex items-center gap-1.5">
+                  {searchingOsm && (
+                    <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin mr-0.5" />
+                  )}
+                  {citySearchInput && (
                     <button
-                      type="submit"
-                      disabled={loading || !citySearchInput.trim()}
-                      className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                      type="button"
+                      onClick={() => {
+                        setCitySearchInput('');
+                        setNominatimResults([]);
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-600 text-xs cursor-pointer font-bold rounded"
+                      title="Clear input"
                     >
-                      Search
+                      ✕
                     </button>
-                  </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading || !citySearchInput.trim()}
+                    className="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                  >
+                    Search
+                  </button>
                 </div>
 
-                {/* Floating Live Autocomplete Dropdown for Nominatim & National Cities */}
+                {/* Floating Autocomplete Dropdown */}
                 {showDropdown && citySearchInput.trim().length >= 2 && (
                   <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                    {/* Live OpenStreetMap Results */}
                     {nominatimResults.length > 0 && (
                       <div>
                         <div className="px-3 py-1.5 bg-emerald-50/70 text-[10px] font-bold uppercase tracking-wider text-emerald-800 flex items-center justify-between border-b border-emerald-100/60">
@@ -995,16 +1001,12 @@ export default function AreaInsights() {
                         ))}
                       </div>
                     )}
-
-                    {/* Loading State */}
                     {searchingOsm && nominatimResults.length === 0 && (
                       <div className="px-4 py-3 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
                         <span>Searching OpenStreetMap across Pakistan...</span>
                       </div>
                     )}
-
-                    {/* No Results */}
                     {!searchingOsm && nominatimResults.length === 0 && (
                       <div className="px-4 py-3 text-center text-xs text-slate-400">
                         No locations found for &ldquo;{citySearchInput}&rdquo;. Press Search to query database directly.
@@ -1015,7 +1017,6 @@ export default function AreaInsights() {
               </div>
             </div>
 
-            {/* Time Window Pills */}
             <div className="md:col-span-3">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                 Time Window
@@ -1026,10 +1027,11 @@ export default function AreaInsights() {
                     key={d}
                     type="button"
                     onClick={() => setDays(d)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${days === d
-                      ? 'bg-white text-emerald-800 shadow-2xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                      days === d
+                        ? 'bg-white text-emerald-800 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
                   >
                     {d}d
                   </button>
@@ -1037,7 +1039,6 @@ export default function AreaInsights() {
               </div>
             </div>
 
-            {/* Refresh Action */}
             <div className="md:col-span-1 flex items-end">
               <button
                 type="button"
@@ -1071,7 +1072,18 @@ export default function AreaInsights() {
             </span>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Loading state indicator */}
+      {loading && !data && (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs">
+          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-slate-800">Generating Area Heat Insights...</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Aggregating thermal readings, spatial clusters, and municipal response directives.
+          </p>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
@@ -1084,11 +1096,11 @@ export default function AreaInsights() {
         </div>
       )}
 
-      {/* Main content when data is loaded */}
+      {/* Main Content Sections */}
       {data && (
-        <>
-          {/* F8 & F6: Unified Executive Authority Directive & 48h Surge Surveillance Header */}
-          <div className="rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm overflow-hidden print-break-inside-avoid executive-memo-card print:border-slate-300 print:shadow-none print:mb-3">
+        <main className="space-y-6 print:space-y-4">
+          {/* SECTION 1: Unified Executive Decision Memo & 48h Surge Surveillance */}
+          <section className="rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm overflow-hidden print-break-inside-avoid executive-memo-card print:border-slate-300 print:shadow-none">
             {/* Top Masthead Bar */}
             <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 print:bg-slate-100 print:border-slate-300 print:py-2 print:px-4">
               <div className="flex items-center gap-2.5">
@@ -1109,17 +1121,18 @@ export default function AreaInsights() {
                 </div>
               </div>
 
-              {/* Integrated 48-Hour Surveillance Status Chip */}
+              {/* 48-Hour Surveillance Status Chip */}
               {data.escalation && (
                 <div
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 shadow-2xs print:border-slate-300 ${data.escalation.status === 'ESCALATE'
-                    ? 'bg-red-50 border-red-200 text-red-900'
-                    : data.escalation.status === 'WATCH'
-                      ? 'bg-amber-50 border-amber-200 text-amber-900'
-                      : data.escalation.status === 'NO_RECENT_DATA'
-                        ? 'bg-slate-100 border-slate-200 text-slate-700'
-                        : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                    }`}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 shadow-2xs print:border-slate-300 ${
+                    data.escalation.status === 'ESCALATE'
+                      ? 'bg-red-50 border-red-200 text-red-900'
+                      : data.escalation.status === 'WATCH'
+                        ? 'bg-amber-50 border-amber-200 text-amber-900'
+                        : data.escalation.status === 'NO_RECENT_DATA'
+                          ? 'bg-slate-100 border-slate-200 text-slate-700'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  }`}
                 >
                   <div className="relative flex items-center justify-center">
                     {data.escalation.status === 'ESCALATE' ? (
@@ -1151,24 +1164,22 @@ export default function AreaInsights() {
               )}
             </div>
 
-            {/* Command Directive Grid */}
-            <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start print:p-3.5 print:gap-3.5 print:grid-cols-12">
+            {/* Directive & 48-Hour Activity Grid */}
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start print:p-3.5 print:gap-3.5">
               {/* Left Column: Primary Directive */}
               <div className="lg:col-span-7 xl:col-span-8 space-y-3 print:col-span-7 print:space-y-2">
                 <div>
-                  <div className="flex items-center gap-2 mb-1.5 print:mb-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 uppercase tracking-widest">
-                      Top Recommended Action
-                    </span>
-                  </div>
+                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 uppercase tracking-widest mb-1.5">
+                    Top Recommended Action
+                  </span>
                   {data.actionPlan?.[0] ? (
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug print:text-sm">
-                      "{data.actionPlan[0].action}"
-                    </h3>
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug print:text-sm">
+                      &ldquo;{data.actionPlan[0].action}&rdquo;
+                    </h2>
                   ) : (
-                    <h3 className="text-base sm:text-lg font-medium text-slate-600 leading-snug print:text-sm">
+                    <h2 className="text-base sm:text-lg font-medium text-slate-600 leading-snug print:text-sm">
                       No immediate municipal interventions triggered by current data
-                    </h3>
+                    </h2>
                   )}
                 </div>
 
@@ -1179,24 +1190,24 @@ export default function AreaInsights() {
                 {/* Metadata Pills */}
                 <div className="pt-1 flex flex-wrap items-center gap-2 print:gap-1.5 text-slate-800">
                   {data.actionPlan?.[0]?.owner && (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
                       <Building2 className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Suggested lead: <strong className="text-slate-900 font-semibold">{data.actionPlan[0].owner}</strong></span>
-                    </div>
+                    </span>
                   )}
 
                   {data.actionPlan?.[0]?.costBand && (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
                       <Activity className="w-3.5 h-3.5 text-amber-600" />
                       <span>Budget: <strong className="text-slate-900 font-semibold uppercase">{data.actionPlan[0].costBand} Cost</strong></span>
-                    </div>
+                    </span>
                   )}
 
                   {data.dangerWindow?.window && (
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
                       <Clock className="w-3.5 h-3.5 text-rose-600" />
                       <span>Peak Danger Hours: <strong className="text-slate-900 font-semibold">{data.dangerWindow.window}</strong></span>
-                    </div>
+                    </span>
                   )}
                 </div>
               </div>
@@ -1217,14 +1228,15 @@ export default function AreaInsights() {
                   </div>
 
                   <div
-                    className={`p-3 print:p-2 rounded-lg border text-xs print:text-[11px] leading-relaxed ${data.escalation.status === 'ESCALATE'
-                      ? 'bg-red-50/90 border-red-200 text-red-900'
-                      : data.escalation.status === 'WATCH'
-                        ? 'bg-amber-50/90 border-amber-200 text-amber-900'
-                        : data.escalation.status === 'NO_RECENT_DATA'
-                          ? 'bg-slate-50 border-slate-200 text-slate-700'
-                          : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
-                      }`}
+                    className={`p-3 print:p-2 rounded-lg border text-xs print:text-[11px] leading-relaxed ${
+                      data.escalation.status === 'ESCALATE'
+                        ? 'bg-red-50/90 border-red-200 text-red-900'
+                        : data.escalation.status === 'WATCH'
+                          ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+                          : data.escalation.status === 'NO_RECENT_DATA'
+                            ? 'bg-slate-50 border-slate-200 text-slate-700'
+                            : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
+                    }`}
                   >
                     {data.escalation.status === 'ESCALATE' ? (
                       <p className="font-medium">
@@ -1266,11 +1278,138 @@ export default function AreaInsights() {
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* Priority Action Areas (Deduplicated Strategic Takeaways) */}
-          <div className="space-y-3 print:space-y-1.5 print:mt-1 print-break-inside-avoid">
-            <div className="flex items-center justify-between">
+          {/* SECTION 2: Key Metrics Overview & Comparative Rank */}
+          <section className="space-y-3 print:space-y-2 print-break-inside-avoid">
+            {/* Comparative Rank vs City strip */}
+            {data.comparative && data.comparative.areaRank != null && (
+              <div className="bg-white rounded-xl border border-slate-200 px-4 py-2.5 shadow-2xs flex flex-wrap items-center justify-between gap-3 print:border-slate-300 print:shadow-none">
+                <div className="flex items-center gap-2 text-xs print:text-[10.5px] text-slate-800">
+                  <MapPin className="w-4 h-4 print:w-3.5 print:h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Area Comparison:</strong> Ranked <strong className="text-emerald-700 font-mono font-bold">#{data.comparative.areaRank}</strong> of{' '}
+                    <strong>{data.comparative.areasRanked}</strong> areas in {data.scope?.city || 'city'} by overall heat risk.
+                  </span>
+                </div>
+                {data.comparative.areaDeltaC != null && (
+                  <div className="text-[11px] print:text-[10px] font-medium text-slate-600 flex items-center gap-1.5">
+                    <span>City average: <strong className="font-mono text-slate-800">{data.comparative.cityAvgTemp}°C</strong></span>
+                    <span>•</span>
+                    <span>
+                      Difference vs city:{' '}
+                      <strong className={`font-mono ${data.comparative.areaDeltaC > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                        {data.comparative.areaDeltaC > 0 ? `+${data.comparative.areaDeltaC}` : data.comparative.areaDeltaC}°C
+                      </strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* KPI Metric Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 print-grid-5 gap-3.5 print:gap-2">
+              {/* Confirmed Reports */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
+                <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
+                  <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Confirmed Reports</span>
+                  <CheckCircle2 className="w-4 h-4 print:w-3.5 print:h-3.5 text-emerald-600" />
+                </div>
+                <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
+                  {data.summary?.totalReports ?? 0}
+                </p>
+                <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
+                  Verified citizen reports
+                </p>
+              </div>
+
+              {/* Average Temperature */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
+                <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
+                  <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Average Temperature</span>
+                  <Thermometer className="w-4 h-4 print:w-3.5 print:h-3.5 text-amber-500" />
+                </div>
+                <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
+                  {data.summary?.avgTemp != null ? `${data.summary.avgTemp}°C` : 'N/A'}
+                </p>
+                <div className="mt-1 print:mt-0.5 truncate">
+                  {data.scope?.area && data.baseline?.areaAvgTempDelta != null ? (
+                    <span
+                      className={`inline-flex items-center gap-0.5 text-[11px] print:text-[9px] font-semibold ${
+                        data.baseline.areaAvgTempDelta > 0
+                          ? 'text-red-600'
+                          : data.baseline.areaAvgTempDelta < 0
+                            ? 'text-blue-600'
+                            : 'text-slate-600'
+                      }`}
+                    >
+                      {data.baseline.areaAvgTempDelta > 0 ? (
+                        <TrendingUp className="w-3 h-3 print:w-2.5 print:h-2.5" />
+                      ) : data.baseline.areaAvgTempDelta < 0 ? (
+                        <TrendingDown className="w-3 h-3 print:w-2.5 print:h-2.5" />
+                      ) : (
+                        <Minus className="w-3 h-3 print:w-2.5 print:h-2.5" />
+                      )}
+                      {data.baseline.areaAvgTempDelta > 0 ? `+${data.baseline.areaAvgTempDelta}` : data.baseline.areaAvgTempDelta}
+                      °C vs {data.scope?.province || data.scope?.city}
+                    </span>
+                  ) : data.scope?.area && data.baseline?.cityAvgTemp != null ? (
+                    <span className="text-[10px] print:text-[9px] text-slate-400">
+                      Province baseline: {data.baseline.cityAvgTemp}°C
+                    </span>
+                  ) : (
+                    <span className="text-[10px] print:text-[9px] text-slate-400">Observed mean reading</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Highest Temperature */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
+                <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
+                  <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Highest Temperature</span>
+                  <Flame className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-500" />
+                </div>
+                <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
+                  {data.summary?.peakTemp != null ? `${data.summary.peakTemp}°C` : 'N/A'}
+                </p>
+                <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
+                  Highest verified reading
+                </p>
+              </div>
+
+              {/* Active Hotspots */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
+                <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
+                  <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Active Hotspots</span>
+                  <Layers className="w-4 h-4 print:w-3.5 print:h-3.5 text-indigo-500" />
+                </div>
+                <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
+                  {data.summary?.activeHotspots ?? 0}
+                </p>
+                <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
+                  High-heat clusters identified
+                </p>
+              </div>
+
+              {/* Critical Hotspots */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300 col-span-2 md:col-span-1 print:col-span-1">
+                <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
+                  <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Critical Hotspots</span>
+                  <ShieldAlert className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-600" />
+                </div>
+                <p className="text-2xl print:text-xl font-extrabold text-red-600 font-mono">
+                  {data.summary?.criticalHotspots ?? 0}
+                </p>
+                <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
+                  Severe risk zones
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 3: Priority Action Areas (3 Pillars & Trends) */}
+          <section className="space-y-3 print:space-y-2 print-break-inside-avoid">
+            <header className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs print:w-5 print:h-5">
                   <Lightbulb className="w-4 h-4 print:w-3.5 print:h-3.5" />
@@ -1287,12 +1426,12 @@ export default function AreaInsights() {
               <span className="no-print text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-300/60 uppercase tracking-wider">
                 Key Priorities
               </span>
-            </div>
+            </header>
 
             {/* 3 Operational Focus Pillars */}
-            <div className="grid grid-cols-1 md:grid-cols-3 print-grid-3 print:grid-cols-3 gap-3.5 print:gap-2">
-              {/* Pillar 1: Spatial Epicenter & Target Sectors */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-3 print-grid-3 gap-3.5 print:gap-2">
+              {/* Pillar 1: Spatial Epicenter */}
+              <article className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between print:border-slate-300">
                 <div>
                   <div className="flex items-center justify-between mb-2 print:mb-1">
                     <span className="text-[10px] print:text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
@@ -1316,10 +1455,10 @@ export default function AreaInsights() {
                 <div className="pt-2 print:pt-1 border-t border-slate-100 text-[11px] print:text-[10px] font-medium text-emerald-800 bg-emerald-50/60 p-2 print:p-1.5 rounded-lg">
                   🎯 <strong>What to do:</strong> Send water tankers and set up shaded drinking stations here first.
                 </div>
-              </div>
+              </article>
 
               {/* Pillar 2: Thermal Danger Window */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between">
+              <article className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between print:border-slate-300">
                 <div>
                   <div className="flex items-center justify-between mb-2 print:mb-1">
                     <span className="text-[10px] print:text-[9px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
@@ -1351,10 +1490,10 @@ export default function AreaInsights() {
                     ? 'Provide shade and water breaks for outdoor workers; avoid outdoor school activities during peak heat.'
                     : 'Continue routine heat monitoring across standard operational shifts.'}
                 </div>
-              </div>
+              </article>
 
-              {/* Pillar 3: Sensitive Receptors & Inter-Agency Coordination */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between">
+              {/* Pillar 3: Sensitive Receptors & Places at Risk */}
+              <article className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs space-y-2.5 print:space-y-1 flex flex-col justify-between print:border-slate-300">
                 <div>
                   <div className="flex items-center justify-between mb-2 print:mb-1">
                     <span className="text-[10px] print:text-[9px] font-extrabold uppercase tracking-wider text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
@@ -1380,10 +1519,10 @@ export default function AreaInsights() {
                 <div className="pt-2 print:pt-1 border-t border-slate-100 text-[11px] print:text-[10px] font-medium text-sky-800 bg-sky-50/60 p-2 print:p-1.5 rounded-lg">
                   🛡️ <strong>Key Action:</strong> Ensure backup generators are ready at clinics, and set up shaded drinking water stands at bus stops.
                 </div>
-              </div>
+              </article>
             </div>
 
-            {/* Operational Trajectory  & Baseline Intelligence (Deduplicated Trends) */}
+            {/* Operational Trajectory & Baseline Trends */}
             {operationalTakeaways.trends.length > 0 && (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 print:p-2 flex flex-wrap items-center gap-3 print:gap-1.5 text-xs print:text-[10px] text-slate-700">
                 <div className="flex items-center gap-1.5 font-bold text-slate-900 shrink-0">
@@ -1403,676 +1542,683 @@ export default function AreaInsights() {
                 </div>
               </div>
             )}
-          </div>
+          </section>
 
-          {/* ========================================================
-              PAGE 2: Thermal Analytics & Meteorological Trends
-             ======================================================== */}
-          <div className="print-break-before space-y-4 print:space-y-2.5">
-                  {/* F4: Comparative Rank vs City strip near KPIs */}
-                  {data.comparative && data.comparative.areaRank != null && (
-                    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 print:px-3 print:py-1.5 shadow-2xs flex flex-wrap items-center justify-between gap-3 print:border-slate-300 print:shadow-none print-break-inside-avoid">
-                      <div className="flex items-center gap-2 text-xs print:text-[10.5px] text-slate-800">
-                        <MapPin className="w-4 h-4 print:w-3.5 print:h-3.5 text-emerald-600 shrink-0" />
-                        <span>
-                          <strong>Area Comparison:</strong> Ranked <strong className="text-emerald-700 font-mono font-bold">#{data.comparative.areaRank}</strong> of{' '}
-                          <strong>{data.comparative.areasRanked}</strong> areas in {data.scope?.city || 'city'} by overall heat risk.
-                        </span>
-                      </div>
-                      {data.comparative.areaDeltaC != null && (
-                        <div className="text-[11px] print:text-[10px] font-medium text-slate-600 flex items-center gap-1.5">
-                          <span>City average: <strong className="font-mono text-slate-800">{data.comparative.cityAvgTemp}°C</strong></span>
-                          <span>•</span>
-                          <span>
-                            Difference vs city:{' '}
-                            <strong className={`font-mono ${data.comparative.areaDeltaC > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                              {data.comparative.areaDeltaC > 0 ? `+${data.comparative.areaDeltaC}` : data.comparative.areaDeltaC}°C
-                            </strong>
-                          </span>
-                        </div>
-                      )}
-                    </div>
+          {/* SECTION 4: Visual Analytics & Meteorological Trajectory */}
+          <section className="space-y-4 print:space-y-2.5 print-break-inside-avoid">
+            {/* Visual Analytics 3 Cards */}
+            <AnalyticsSection
+              charts={analyticsCharts}
+              days={data.scope?.days || days}
+            />
+
+            {/* Ambient Temperature Trajectory */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5 print:p-3 shadow-2xs print-break-inside-avoid print:border-slate-300 print:shadow-none">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 print:mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Thermometer className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Temperature Trend (Past {data.scope?.days || days} Days)
+                  </h3>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {data.dangerWindow?.window && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] print:text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-100/90 text-red-800 border border-red-300">
+                      <Clock className="w-3 h-3 text-red-600" />
+                      Peak Heat Hours: {data.dangerWindow.window} (High of {data.dangerWindow.peakMeanTemp}°C)
+                    </span>
                   )}
+                  {data.dangerWindow?.reason === 'insufficient-data' && (
+                    <span className="text-[10px] text-slate-400 italic">
+                      Not enough readings to determine peak hours
+                    </span>
+                  )}
+                  <span className="text-[11px] print:text-[10px] text-slate-400 font-mono">
+                    {formatDate(data.scope?.from)} — {formatDate(data.scope?.to)}
+                  </span>
+                </div>
+              </div>
 
-                  {/* Key Metrics / KPI Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 print-grid-5 print:grid-cols-5 gap-3.5 print:gap-2 print-break-inside-avoid">
-                    {/* Total Verified Reports */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
-                      <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
-                        <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Confirmed Reports</span>
-                        <CheckCircle2 className="w-4 h-4 print:w-3.5 print:h-3.5 text-emerald-600" />
-                      </div>
-                      <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
-                        {data.summary?.totalReports ?? 0}
-                      </p>
-                      <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
-                        Verified citizen reports
-                      </p>
+              {!data.dataQuality?.trendEligible ? (
+                <div className="my-auto py-8 px-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-2.5">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-1">
+                    Not Enough Data for Trend Line
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                    This area currently has <strong className="text-slate-700">{data.dataQuality?.verifiedCount ?? 0} verified reports</strong>.
+                    A minimum of <strong className="text-slate-700">{data.dataQuality?.minReportsForTrend ?? 0} verified reports</strong> is
+                    required to show an accurate daily trend line.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-52 print:h-36 w-full min-w-0">
+                    {/* Screen version: responsive */}
+                    <div className="print:hidden w-full h-full">
+                      <ResponsiveContainer width="100%" height={208} minWidth={0} minHeight={200} initialDimension={{ width: 500, height: 208 }}>
+                        <LineChart data={data.tempSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={formatDate}
+                            tick={{ fontSize: 10, fill: '#94a3b8' }}
+                            stroke="#e2e8f0"
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: '#94a3b8' }}
+                            stroke="#e2e8f0"
+                            domain={['dataMin - 2', 'dataMax + 2']}
+                          />
+                          <Tooltip content={<CustomTooltip unit="°C" />} />
+                          <Line
+                            type="monotone"
+                            dataKey="avgTemp"
+                            stroke="#f59e0b"
+                            strokeWidth={2.5}
+                            connectNulls
+                            dot={{ r: 3, fill: '#f59e0b' }}
+                            activeDot={{ r: 5 }}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
                     </div>
 
-                    {/* Average Temperature & Delta vs Baseline */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
-                      <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
-                        <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Average Temperature</span>
-                        <Thermometer className="w-4 h-4 print:w-3.5 print:h-3.5 text-amber-500" />
-                      </div>
-                      <div className="flex items-baseline gap-1">
-                        <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
-                          {data.summary?.avgTemp != null ? `${data.summary.avgTemp}°C` : 'N/A'}
-                        </p>
-                      </div>
-                      <div className="mt-1 print:mt-0.5 truncate">
-                        {data.scope?.area && data.baseline?.areaAvgTempDelta != null ? (
-                          <span
-                            className={`inline-flex items-center gap-0.5 text-[11px] print:text-[9px] font-semibold ${data.baseline.areaAvgTempDelta > 0
-                              ? 'text-red-600'
-                              : data.baseline.areaAvgTempDelta < 0
-                                ? 'text-blue-600'
-                                : 'text-slate-600'
-                              }`}
-                          >
-                            {data.baseline.areaAvgTempDelta > 0 ? (
-                              <TrendingUp className="w-3 h-3 print:w-2.5 print:h-2.5" />
-                            ) : data.baseline.areaAvgTempDelta < 0 ? (
-                              <TrendingDown className="w-3 h-3 print:w-2.5 print:h-2.5" />
-                            ) : (
-                              <Minus className="w-3 h-3 print:w-2.5 print:h-2.5" />
-                            )}
-                            {data.baseline.areaAvgTempDelta > 0 ? `+${data.baseline.areaAvgTempDelta}` : data.baseline.areaAvgTempDelta}
-                            °C vs {data.scope?.province || data.scope?.city}
-                          </span>
-                        ) : data.scope?.area && data.baseline?.cityAvgTemp != null ? (
-                          <span className="text-[10px] print:text-[9px] text-slate-400">
-                            Province baseline: {data.baseline.cityAvgTemp}°C
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Peak Ambient Temp */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
-                      <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
-                        <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Highest Temperature</span>
-                        <Flame className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-500" />
-                      </div>
-                      <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
-                        {data.summary?.peakTemp != null ? `${data.summary.peakTemp}°C` : 'N/A'}
-                      </p>
-                      <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
-                        Highest verified reading
-                      </p>
-                    </div>
-
-                    {/* Active Hotspots */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300">
-                      <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
-                        <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Active Heat Hotspots</span>
-                        <Layers className="w-4 h-4 print:w-3.5 print:h-3.5 text-indigo-500" />
-                      </div>
-                      <p className="text-2xl print:text-xl font-extrabold text-slate-900 font-mono">
-                        {data.summary?.activeHotspots ?? 0}
-                      </p>
-                      <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
-                        High-heat clusters identified
-                      </p>
-                    </div>
-
-                    {/* Critical Hotspots */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300 col-span-2 md:col-span-1 print:col-span-1">
-                      <div className="flex items-center justify-between text-slate-400 mb-1 print:mb-0.5">
-                        <span className="text-[11px] print:text-[10px] font-bold uppercase tracking-wider">Critical Danger Hotspots</span>
-                        <ShieldAlert className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-600" />
-                      </div>
-                      <p className="text-2xl print:text-xl font-extrabold text-red-600 font-mono">
-                        {data.summary?.criticalHotspots ?? 0}
-                      </p>
-                      <p className="text-[10px] print:text-[9px] text-slate-400 mt-1 print:mt-0.5 truncate">
-                        Severe risk zones
-                      </p>
+                    {/* Print version: fixed vector chart */}
+                    <div className="hidden print:block w-full">
+                      <LineChart width={680} height={140} data={data.tempSeries} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={formatDate}
+                          tick={{ fontSize: 9, fill: '#64748b' }}
+                          stroke="#cbd5e1"
+                        />
+                        <YAxis
+                          tick={{ fontSize: 9, fill: '#64748b' }}
+                          stroke="#cbd5e1"
+                          domain={['dataMin - 2', 'dataMax + 2']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="avgTemp"
+                          stroke="#f59e0b"
+                          strokeWidth={2.5}
+                          connectNulls
+                          dot={{ r: 2.5, fill: '#f59e0b' }}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
                     </div>
                   </div>
-
-                  {/* Area Analytics Overview Cards (Report Trend, Severity Mix, Area Heat Index) */}
-                  <div className="print-break-inside-avoid print:mt-1 print:mb-1.5">
-                    <AnalyticsSection
-                      charts={analyticsCharts}
-                      days={data.scope?.days || days}
-                    />
-                  </div>
-
-                  {/* Ambient Temperature Trajectory */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-5 print:p-3 shadow-2xs print-break-inside-avoid print:border-slate-300 print:shadow-none">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 print:mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <Thermometer className="w-4 h-4 text-amber-500" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          Temperature Trend (Past {data.scope?.days || days} Days)
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        {data.dangerWindow?.window && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] print:text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-100/90 text-red-800 border border-red-300">
-                            <Clock className="w-3 h-3 text-red-600" />
-                            Peak Heat Hours: {data.dangerWindow.window} (High of {data.dangerWindow.peakMeanTemp}°C)
-                          </span>
-                        )}
-                        {data.dangerWindow?.reason === 'insufficient-data' && (
-                          <span className="text-[10px] text-slate-400 italic">
-                            Not enough readings to determine peak hours
-                          </span>
-                        )}
-                        <span className="text-[11px] print:text-[10px] text-slate-400 font-mono">
-                          {formatDate(data.scope?.from)} — {formatDate(data.scope?.to)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {!data.dataQuality?.trendEligible ? (
-                      // Honest Insufficient Data State
-                      <div className="my-auto py-8 px-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
-                        <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-2.5">
-                          <Info className="w-5 h-5" />
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-800 mb-1">
-                          Not Enough Data for Trend Line
-                        </h4>
-                        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                          This area currently has <strong className="text-slate-700">{data.dataQuality?.verifiedCount ?? 0} verified reports</strong>.
-                          A minimum of <strong className="text-slate-700">{data.dataQuality?.minReportsForTrend ?? 0} verified reports</strong> is
-                          required to show an accurate daily trend line.
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="h-52 print:h-36 w-full min-w-0">
-                          {/* Screen version: responsive */}
-                          <div className="print:hidden w-full h-full">
-                            <ResponsiveContainer width="100%" height={208} minWidth={0} minHeight={200} initialDimension={{ width: 500, height: 208 }}>
-                              <LineChart data={data.tempSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis
-                                  dataKey="date"
-                                  tickFormatter={formatDate}
-                                  tick={{ fontSize: 10, fill: '#94a3b8' }}
-                                  stroke="#e2e8f0"
-                                />
-                                <YAxis
-                                  tick={{ fontSize: 10, fill: '#94a3b8' }}
-                                  stroke="#e2e8f0"
-                                  domain={['dataMin - 2', 'dataMax + 2']}
-                                />
-                                <Tooltip content={<CustomTooltip unit="°C" />} />
-                                <Line
-                                  type="monotone"
-                                  dataKey="avgTemp"
-                                  stroke="#f59e0b"
-                                  strokeWidth={2.5}
-                                  connectNulls
-                                  dot={{ r: 3, fill: '#f59e0b' }}
-                                  activeDot={{ r: 5 }}
-                                  isAnimationActive={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-
-                          {/* Print version: fixed vector chart */}
-                          <div className="hidden print:block w-full">
-                            <LineChart width={680} height={140} data={data.tempSeries} margin={{ top: 8, right: 10, left: -20, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                              <XAxis
-                                dataKey="date"
-                                tickFormatter={formatDate}
-                                tick={{ fontSize: 9, fill: '#64748b' }}
-                                stroke="#cbd5e1"
-                              />
-                              <YAxis
-                                tick={{ fontSize: 9, fill: '#64748b' }}
-                                stroke="#cbd5e1"
-                                domain={['dataMin - 2', 'dataMax + 2']}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="avgTemp"
-                                stroke="#f59e0b"
-                                strokeWidth={2.5}
-                                connectNulls
-                                dot={{ r: 2.5, fill: '#f59e0b' }}
-                                isAnimationActive={false}
-                              />
-                            </LineChart>
-                          </div>
-                        </div>
-                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs print:text-[10px] text-slate-500">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
-                            Daily Average Temperature
-                          </span>
-                          {data.baseline?.areaAvgTempDelta != null && (
-                            <span className="text-[11px] print:text-[10px] font-medium text-slate-600">
-                              Difference vs {data.scope?.province || data.scope?.city} baseline:{' '}
-                              <strong className={data.baseline.areaAvgTempDelta > 0 ? 'text-red-600' : 'text-blue-600'}>
-                                {data.baseline.areaAvgTempDelta > 0 ? `+${data.baseline.areaAvgTempDelta}` : data.baseline.areaAvgTempDelta}°C
-                              </strong>
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs print:text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                      Daily Average Temperature
+                    </span>
+                    {data.baseline?.areaAvgTempDelta != null && (
+                      <span className="text-[11px] print:text-[10px] font-medium text-slate-600">
+                        Difference vs {data.scope?.province || data.scope?.city} baseline:{' '}
+                        <strong className={data.baseline.areaAvgTempDelta > 0 ? 'text-red-600' : 'text-blue-600'}>
+                          {data.baseline.areaAvgTempDelta > 0 ? `+${data.baseline.areaAvgTempDelta}` : data.baseline.areaAvgTempDelta}°C
+                        </strong>
+                      </span>
                     )}
                   </div>
+                </>
+              )}
+            </div>
 
-                  {/* F7: Root-Cause Breakdown — Why is this area hot? */}
-                  {data.causeBreakdown && data.causeBreakdown.length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:border-slate-300 print:shadow-none space-y-3 print:space-y-1.5 print-break-inside-avoid">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2 print:pb-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                            <Flame className="w-3.5 h-3.5" />
-                          </div>
-                          <h3 className="text-xs font-bold text-slate-900 tracking-tight">
-                            Why Is This Area Hot? (Reported by Citizens)
-                          </h3>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          Top {data.causeBreakdown.length} causes cited (% of reports providing causes)
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 print-grid-2 print:grid-cols-2 gap-x-4 gap-y-2 pt-1">
-                        {data.causeBreakdown.map((item, idx) => (
-                          <div key={idx} className="space-y-0.5">
-                            <div className="flex items-center justify-between text-[11px] print:text-[10px]">
-                              <span className="font-semibold text-slate-800 capitalize">
-                                {item.cause}
-                              </span>
-                              <div className="flex items-center gap-1.5 font-mono">
-                                <span className="text-slate-500 text-[10px]">
-                                  {item.count} {item.count === 1 ? 'report' : 'reports'}
-                                </span>
-                                <span className="font-bold text-slate-900">
-                                  {item.pct}%
-                                </span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(100, Math.max(3, item.pct))}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+            {/* Root-Cause Breakdown — Why is this area hot? */}
+            {data.causeBreakdown && data.causeBreakdown.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:border-slate-300 print:shadow-none space-y-3 print:space-y-1.5 print-break-inside-avoid">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2 print:pb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                      <Flame className="w-3.5 h-3.5" />
                     </div>
-                  )}
+                    <h3 className="text-xs font-bold text-slate-900 tracking-tight">
+                      Why Is This Area Hot? (Reported by Citizens)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Top {data.causeBreakdown.length} causes cited (% of reports providing causes)
+                  </span>
                 </div>
 
-                {/* ========================================================
-              PAGE 3: Operational Action Matrix & Jurisdictional Directives
-             ======================================================== */}
-                <div className="print-break-before space-y-4 print:space-y-2.5">
-                  {/* Ranked Hotspots Table */}
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs print:border-slate-300 print:shadow-none print-break-inside-avoid">
-                    <div className="p-4 print:p-2.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          Ranked Heat Hotspots
-                        </h3>
-                        <p className="text-[11px] text-slate-500">
-                          Sorted from highest to lowest heat risk.
-                        </p>
-                      </div>
-                      <div className="text-[11px] print:text-[10px] text-slate-500 font-mono bg-slate-50 border border-slate-200 px-2.5 py-1 print:py-0.5 rounded-lg">
-                        Active Model: <strong className="text-slate-800">{data.dataQuality?.hotspotRunId ? 'Active' : 'Live Report Run'}</strong>
-                      </div>
-                    </div>
-
-                    {/* F2: Critical Receptor Alert (one summary line when any critical hotspot has flags) */}
-                    {(() => {
-                      const criticalWithFlags = (data.receptorFlags || []).filter(
-                        (rf) => rf.riskTier === 'critical' && rf.receptors && rf.receptors.length > 0
-                      );
-                      if (criticalWithFlags.length === 0) return null;
-                      return (
-                        <div className="mx-4 my-2 p-3 print:p-2 rounded-lg bg-red-50/90 border border-red-200 text-xs print:text-[10px] text-red-900 flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-600 shrink-0" />
-                          <span>
-                            <strong>High Danger Facility Alert:</strong> {criticalWithFlags.length} critical hotspot(s) overlap school, healthcare, or market/labor areas ({criticalWithFlags.map((c) => c.area).join(', ')}).
+                <div className="grid grid-cols-1 md:grid-cols-2 print-grid-2 gap-x-4 gap-y-2 pt-1">
+                  {data.causeBreakdown.map((item, idx) => (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="flex items-center justify-between text-[11px] print:text-[10px]">
+                        <span className="font-semibold text-slate-800 capitalize">
+                          {item.cause}
+                        </span>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-slate-500 text-[10px]">
+                            {item.count} {item.count === 1 ? 'report' : 'reports'}
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {item.pct}%
                           </span>
                         </div>
-                      );
-                    })()}
-
-                    {(data.hotspots || []).length === 0 ? (
-                      <div className="p-8 text-center bg-slate-50/60 m-4 rounded-xl border border-dashed border-slate-200">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-2.5">
-                          <Info className="w-5 h-5 text-slate-600" />
-                        </div>
-                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                          {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
-                            ? 'No Active Hotspot Run'
-                            : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
-                              ? 'No Hotspots in Selected Area'
-                              : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
-                                ? 'Below Hotspot Threshold'
-                                : 'No Concentrated Heat Zones'}
-                        </h4>
-                        <p className="text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
-                          {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
-                            ? 'No hotspot models have been published for these cities in this window yet. Reports below are shown individually.'
-                            : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
-                              ? 'Hotspots exist in this city/province, but none fall within the specified area filter.'
-                              : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
-                                ? 'No areas exceeded the heat clustering threshold — reports did not reach extreme cluster levels.'
-                                : 'No concentrated heat zones recorded for this scope in the selected observation window.'}
-                        </p>
                       </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs text-slate-700 print-compact-table">
-                          <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-bold border-b border-slate-200">
-                            <tr>
-                              <th className="py-2.5 px-3">#</th>
-                              <th className="py-2.5 px-3 whitespace-nowrap">Zone Code</th>
-                              <th className="py-2.5 px-3">Area &amp; City</th>
-                              <th className="py-2.5 px-3">TVI Score (0–1)</th>
-                              <th className="py-2.5 px-3">Risk Level</th>
-                              <th className="py-2.5 px-3">Nearby Places</th>
-                              <th className="py-2.5 px-3">Confirmed Reports</th>
-                              <th className="py-2.5 px-3">Highest Temp</th>
-                              <th className="py-2.5 px-3">Heat Index</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {(data.hotspots || []).map((h, i) => {
-                              const tier = h.riskTier || 'unknown';
-                              const receptors = receptorMap.get(String(h.id || h.clusterId)) || receptorMap.get(String(h.area || '').toLowerCase()) || [];
-                              return (
-                                <tr key={h.id || h._id || `${h.clusterId || 'hs'}-${i}`} className="group hover:bg-slate-50/60 transition-colors">
-                                  <td className="py-2.5 px-3 font-mono font-bold text-slate-400">{i + 1}</td>
-                                  <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
-                                    <span
-                                      className="inline-block whitespace-nowrap px-2 py-0.5 rounded bg-slate-100 border border-slate-200/80 font-bold text-[11px] print:text-[10px] font-mono tracking-tight"
-                                      title={`Internal Cluster: ${h.clusterId || ''} • ${h.city || ''}`}
-                                    >
-                                      {formatClusterCode(h, scopeMode, i)}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 font-medium text-slate-800">
-                                    {formatClusterLocation(h, h.area || h.city, scopeMode)}
-                                  </td>
-                                  <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                                    {h.tvi != null ? (
-                                      <>
-                                        <span>{h.tvi.toFixed(2)}</span>
-                                        {h.tviComponents && !h.tviComponents.includes('population') && (
-                                          <span className="block font-sans text-[9px] font-normal text-slate-400">
-                                            2-component TVI (population unavailable for this city)
-                                          </span>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <span className="text-slate-400 font-normal italic">Unscored</span>
-                                    )}
-                                  </td>
-                                  <td className="py-2.5 px-3">
-                                    <span
-                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border capitalize ${TIER_STYLES[tier] || TIER_STYLES.unknown
-                                        }`}
-                                    >
-                                      {tier}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3">
-                                    {receptors.length === 0 ? (
-                                      <span className="text-slate-400 text-[11px]">—</span>
-                                    ) : (
-                                      <div className="flex flex-wrap gap-1">
-                                        {receptors.map((rec) => (
-                                          <span
-                                            key={rec}
-                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${rec === 'school'
-                                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                              : rec === 'health'
-                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                                              }`}
-                                          >
-                                            {rec === 'market_labor' ? 'market/labor' : rec}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="py-2.5 px-3 font-mono">{h.reportCount}</td>
-                                  <td className="py-2.5 px-3 font-mono">{h.peakTemp != null ? `${h.peakTemp}°C` : '—'}</td>
-                                  <td className="py-2.5 px-3 font-mono font-medium text-slate-900">
-                                    {h.heatIndexMean != null ? `${h.heatIndexMean}°C` : '—'}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(3, item.pct))}%` }}
+                        />
                       </div>
-                    )}
-
-                    {/* F2: Honesty Caption */}
-                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] print:text-[9.5px] text-slate-500 italic">
-                      <span>Nearby places are identified from descriptions in citizen reports.</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* SECTION 5: Ranked Heat Hotspots & Area Dossiers */}
+          <section className="space-y-4 print:space-y-2.5">
+            {/* Ranked Hotspots Table */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs print:border-slate-300 print:shadow-none print-break-inside-avoid">
+              <div className="p-4 print:p-2.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Ranked Heat Hotspots
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Sorted from highest to lowest heat risk.
+                  </p>
+                </div>
+                <div className="text-[11px] print:text-[10px] text-slate-500 font-mono bg-slate-50 border border-slate-200 px-2.5 py-1 print:py-0.5 rounded-lg">
+                  Active Model: <strong className="text-slate-800">{data.dataQuality?.hotspotRunId ? 'Active' : 'Live Report Run'}</strong>
+                </div>
+              </div>
+
+              {/* Critical Receptor Alert */}
+              {(() => {
+                const criticalWithFlags = (data.receptorFlags || []).filter(
+                  (rf) => rf.riskTier === 'critical' && rf.receptors && rf.receptors.length > 0
+                );
+                if (criticalWithFlags.length === 0) return null;
+                return (
+                  <div className="mx-4 my-2 p-3 print:p-2 rounded-lg bg-red-50/90 border border-red-200 text-xs print:text-[10px] text-red-900 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 print:w-3.5 print:h-3.5 text-red-600 shrink-0" />
+                    <span>
+                      <strong>High Danger Facility Alert:</strong> {criticalWithFlags.length} critical hotspot(s) overlap school, healthcare, or market/labor areas ({criticalWithFlags.map((c) => c.area).join(', ')}).
+                    </span>
                   </div>
+                );
+              })()}
 
-                  {/* Automated Hotspot Action & Advisory Dossiers */}
-                  {(data.hotspots || []).length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300 space-y-3 print:space-y-2">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                            Detailed Area Summaries &amp; Safety Instructions
-                          </h4>
-                          <p className="text-[11px] text-slate-500">
-                            Clear action guidelines for city teams and public safety advice for each active heat zone.
-                          </p>
-                        </div>
-                        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100/70 text-emerald-800 border border-emerald-300">
-                          {data.hotspots.length} Active {data.hotspots.length === 1 ? 'Heat Zone' : 'Heat Zones'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 dossier-grid print-grid-2 gap-4 print:gap-2.5">
-                        {data.hotspots.map((h, i) => (
-                          <div
-                            key={h.id || h._id || `${h.clusterId || 'hs'}-${i}`}
-                            id={`dossier-${h.clusterId || i}`}
-                            className="bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs print:shadow-none print:border-slate-300 print-break-inside-avoid"
-                          >
-                            <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-2 print:py-1.5 print:px-2.5">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="text-xs print:text-[11px] font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs whitespace-nowrap shrink-0"
-                                  title={`Internal Cluster: ${h.clusterId || ''} • ${h.city || ''}`}
-                                >
-                                  {formatClusterCode(h, scopeMode, i)}
-                                </span>
-                                <span className="text-xs print:text-[11px] font-bold text-slate-800 truncate">
-                                  {formatClusterLocation(h, 'Cluster Zone', scopeMode)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="p-3 print:p-2">
-                              <HotspotDetailPanel hotspot={h} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Unified Operational Municipal Heat Action Plan */}
-                  {synthesizedPlan.length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs print:border-slate-300 print:shadow-none space-y-0 print-break-inside-avoid">
-                      <div className="p-4 py-2.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <h3 className="text-slate-900 text-xs font-bold flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-emerald-600" />
-                            City Heat Action Plan
-                          </h3>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            Step-by-step actions for municipal teams, emergency workers, and health departments.
-                          </p>
-                        </div>
-                        <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                          {synthesizedPlan.length} Action {synthesizedPlan.length === 1 ? 'Step' : 'Steps'}
-                        </span>
-                      </div>
-
-                      {/* Action Plan Cards */}
-                      <div className="p-4 print:p-2.5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 print-grid-3 print:grid-cols-3 gap-3.5 print:gap-2">
-                          {synthesizedPlan.map((action, idx) => {
-                            const cfg = PHASE_CONFIG[action.phaseNumber] || PHASE_CONFIG[1];
-                            return (
-                              <div
-                                key={action.id || idx}
-                                className={`rounded-xl border border-slate-200 bg-white p-3.5 print:p-2.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between space-y-2.5 print:space-y-1.5 border-l-4 ${cfg.border} print:border-slate-300`}
+              {(data.hotspots || []).length === 0 ? (
+                <div className="p-8 text-center bg-slate-50/60 m-4 rounded-xl border border-dashed border-slate-200">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-2.5">
+                    <Info className="w-5 h-5 text-slate-600" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+                    {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
+                      ? 'No Active Hotspot Run'
+                      : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
+                        ? 'No Hotspots in Selected Area'
+                        : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
+                          ? 'Below Hotspot Threshold'
+                          : 'No Concentrated Heat Zones'}
+                  </h4>
+                  <p className="text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
+                    {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
+                      ? 'No hotspot models have been published for these cities in this window yet. Reports below are shown individually.'
+                      : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
+                        ? 'Hotspots exist in this city/province, but none fall within the specified area filter.'
+                        : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
+                          ? 'No areas exceeded the heat clustering threshold — reports did not reach extreme cluster levels.'
+                          : 'No concentrated heat zones recorded for this scope in the selected observation window.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700 print-compact-table">
+                    <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3">#</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Zone Code</th>
+                        <th className="py-2.5 px-3">Area &amp; City</th>
+                        <th className="py-2.5 px-3">TVI Score (0–1)</th>
+                        <th className="py-2.5 px-3">Risk Level</th>
+                        <th className="py-2.5 px-3">Nearby Places</th>
+                        <th className="py-2.5 px-3">Confirmed Reports</th>
+                        <th className="py-2.5 px-3">Highest Temp</th>
+                        <th className="py-2.5 px-3">Heat Index</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(data.hotspots || []).map((h, i) => {
+                        const tier = h.riskTier || 'unknown';
+                        const receptors = receptorMap.get(String(h.id || h.clusterId)) || receptorMap.get(String(h.area || '').toLowerCase()) || [];
+                        return (
+                          <tr key={h.id || h._id || `${h.clusterId || 'hs'}-${i}`} className="group hover:bg-slate-50/60 transition-colors">
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-400">{i + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
+                              <span
+                                className="inline-block whitespace-nowrap px-2 py-0.5 rounded bg-slate-100 border border-slate-200/80 font-bold text-[11px] print:text-[10px] font-mono tracking-tight"
+                                title={`Internal Cluster: ${h.clusterId || ''} • ${h.city || ''}`}
                               >
-                                <div className="space-y-2 print:space-y-1">
-                                  {/* Phase Pill + Urgency + Cost + Rank */}
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      {action.rank != null && (
-                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                                          Rank #{action.rank}
-                                        </span>
-                                      )}
-                                      <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                                        {action.phaseName || cfg.short}
-                                      </span>
-                                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${action.urgencyStyle}`}>
-                                        {action.urgency}
-                                      </span>
-                                      {action.costBand && (
-                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                          Budget: {action.costBand} Cost
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Lead Agency */}
-                                  <div className="flex items-center gap-1.5 text-[11px] print:text-[10px] font-medium text-slate-700">
-                                    <span className="text-slate-400 font-normal">Suggested lead:</span>
-                                    <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 rounded truncate max-w-52.5" title={action.leadAgency}>
-                                      {action.leadAgency}
-                                    </span>
-                                  </div>
-
-                                  {/* Title & Directive Text */}
-                                  <div>
-                                    <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                                      {action.title}
-                                    </h4>
-                                    <p className="text-[11.5px] print:text-[10.5px] text-slate-600 mt-1 print:mt-0.5 leading-relaxed">
-                                      {action.text}
-                                    </p>
-                                    {action.evidence && (
-                                      <p className="text-[10px] print:text-[9.5px] text-slate-500 italic mt-1 leading-snug">
-                                        Evidence: {action.evidence}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Geographic Target Locations & Timing */}
-                                <div className="pt-2 border-t border-slate-100 text-[11px] print:text-[10px]">
-                                  <div className="flex items-center justify-between text-slate-700 mb-1">
-                                    <span className="flex items-center gap-1 font-bold">
-                                      <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                                      Target Areas ({action.hotspotCount}):
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {action.timeline}
-                                    </span>
-                                  </div>
-                                  {action.targetLocations.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {action.targetLocations.map((loc, lIdx) => (
-                                        <span
-                                          key={lIdx}
-                                          className="inline-flex items-center gap-1 text-[10px] print:text-[9px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap"
-                                        >
-                                          <span>{loc.area}</span>
-                                          <span className="font-mono text-slate-500 text-[9px] whitespace-nowrap">
-                                            ({loc.clusterId})
-                                          </span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-400 italic">
-                                      Applies across all monitored areas.
+                                {formatClusterCode(h, scopeMode, i)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-slate-800">
+                              {formatClusterLocation(h, h.area || h.city, scopeMode)}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                              {h.tvi != null ? (
+                                <>
+                                  <span>{h.tvi.toFixed(2)}</span>
+                                  {(Array.isArray(h.tviComponentsMissing)
+                                    ? h.tviComponentsMissing.includes('population')
+                                    : (Array.isArray(h.tviComponents)
+                                        ? !h.tviComponents.includes('population')
+                                        : h.tviComponents?.population == null)) && (
+                                    <span className="block font-sans text-[9px] font-normal text-slate-400">
+                                      2-component TVI (population unavailable for this city)
                                     </span>
                                   )}
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-normal italic">Unscored</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border capitalize ${
+                                  TIER_STYLES[tier] || TIER_STYLES.unknown
+                                }`}
+                              >
+                                {tier}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {receptors.length === 0 ? (
+                                <span className="text-slate-400 text-[11px]">—</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {receptors.map((rec) => (
+                                    <span
+                                      key={rec}
+                                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${
+                                        rec === 'school'
+                                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                          : rec === 'health'
+                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                                      }`}
+                                    >
+                                      {rec === 'market_labor' ? 'market/labor' : rec}
+                                    </span>
+                                  ))}
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">{h.reportCount}</td>
+                            <td className="py-2.5 px-3 font-mono">{h.peakTemp != null ? `${h.peakTemp}°C` : '—'}</td>
+                            <td className="py-2.5 px-3 font-mono font-medium text-slate-900">
+                              {h.heatIndexMean != null ? `${h.heatIndexMean}°C` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-                        {/* Operational Guidance Footnote */}
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] print:text-[9.5px] text-slate-500">
-                          <span className="flex items-center gap-1.5">
-                            <Info className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Actions are prioritized by heat severity and population density. Cost estimates are provided for planning.</span>
-                          </span>
-                          {data.dangerWindow && data.dangerWindow.window && (
-                            <span className="font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
-                              Peak Danger Hours: {data.dangerWindow.window} (Pause outdoor labor)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+              <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] print:text-[9.5px] text-slate-500 italic">
+                <span>Nearby places are identified from descriptions in citizen reports.</span>
+              </div>
+            </div>
 
-                  {/* Data Quality & Governance Footnote */}
-                  <div className="bg-slate-50/80 rounded-xl border border-slate-200 p-3.5 print:p-2 text-[11px] print:text-[9.5px] text-slate-500 space-y-1.5 print:space-y-1 print:border-slate-300 print-break-inside-avoid">
-                    <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                      <Info className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Data Summary &amp; Verification Notes</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 print-grid-5 print:grid-cols-5 gap-2 pt-1 border-t border-slate-200/60">
-                      <div>
-                        <span className="text-slate-400">Report ID:</span>{' '}
-                        <strong className="text-slate-700 font-mono">{data.scope?.briefRef || 'HTX-BRIEF'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Total Reports:</span>{' '}
-                        <strong className="text-slate-700">{data.dataQuality?.verifiedCount ?? 0} verified</strong> of{' '}
-                        {data.dataQuality?.reportCount ?? 0} total ({data.dataQuality?.flaggedCount ?? 0} flagged by quality control checks excluded)
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Time Period:</span>{' '}
-                        <strong className="text-slate-700">{data.scope?.days || days} days</strong> ({formatDate(data.scope?.from)} — {formatDate(data.scope?.to)})
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Data Quality:</span>{' '}
-                        <strong className="text-slate-700">100% Verified Citizen Reports</strong> (Quality Checked)
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Analysis Run:</span>{' '}
-                        <strong className="text-slate-700 font-mono">{data.dataQuality?.hotspotRunId || 'Current'}</strong>
-                      </div>
-                    </div>
-                    <p className="text-[10px] print:text-[9px] text-slate-400 pt-0.5 italic">
-                      Comparison is based on {data.baseline?.cityReportCount ?? 0} verified reports across {data.scope?.province || data.scope?.city} during the same time period.
+            {/* Detailed Area Summaries & Safety Instructions (Dossiers) */}
+            {(data.hotspots || []).length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-4 print:p-2.5 shadow-2xs print:shadow-none print:border-slate-300 space-y-3 print:space-y-2 print-break-inside-avoid">
+                <header className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Detailed Area Summaries &amp; Safety Instructions
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Clear action guidelines for city teams and public safety advice for each active heat zone.
                     </p>
                   </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100/70 text-emerald-800 border border-emerald-300">
+                    {data.hotspots.length} Active {data.hotspots.length === 1 ? 'Heat Zone' : 'Heat Zones'}
+                  </span>
+                </header>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 dossier-grid print-grid-2 gap-4 print:gap-2.5">
+                  {data.hotspots.map((h, i) => (
+                    <article
+                      key={h.id || h._id || `${h.clusterId || 'hs'}-${i}`}
+                      id={`dossier-${h.clusterId || i}`}
+                      className="bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs print:shadow-none print:border-slate-300 print-break-inside-avoid"
+                    >
+                      <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-2 print:py-1.5 print:px-2.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-xs print:text-[11px] font-mono font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs whitespace-nowrap shrink-0"
+                            title={`Internal Cluster: ${h.clusterId || ''} • ${h.city || ''}`}
+                          >
+                            {formatClusterCode(h, scopeMode, i)}
+                          </span>
+                          <span className="text-xs print:text-[11px] font-bold text-slate-800 truncate">
+                            {formatClusterLocation(h, 'Cluster Zone', scopeMode)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-3 print:p-2">
+                        <HotspotDetailPanel hotspot={h} embedded />
+                      </div>
+                    </article>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
-          </div>
-          );
+          </section>
+
+          {/* SECTION 6: Unified Operational Municipal Heat Action Plan */}
+          {synthesizedPlan.length > 0 && (
+            <section className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs print:border-slate-300 print:shadow-none print-break-inside-avoid">
+              <header className="p-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-slate-900 text-xs font-bold flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-600" />
+                    City Heat Action Plan
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Step-by-step actions for municipal teams, emergency workers, and health departments.
+                  </p>
+                </div>
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                  {synthesizedPlan.length} Action {synthesizedPlan.length === 1 ? 'Step' : 'Steps'}
+                </span>
+              </header>
+
+              <div className="p-4 print:p-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 print-grid-3 gap-4 print:gap-2.5">
+                  {synthesizedPlan.map((action, idx) => {
+                    const cfg = PHASE_CONFIG[action.phaseNumber] || PHASE_CONFIG[1];
+                    return (
+                      <article
+                        key={action.id || idx}
+                        className="rounded-xl border border-slate-200/90 bg-white shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between overflow-hidden print:border-slate-300 print-break-inside-avoid"
+                      >
+                        {/* Top Accent Bar */}
+                        <div className={`h-1.5 w-full ${cfg.topBar}`} />
+
+                        <div className="p-4 print:p-2.5 flex-1 flex flex-col justify-between space-y-3 print:space-y-2">
+                          <div className="space-y-2.5 print:space-y-1.5">
+                            {/* Badges Bar: Phase + Urgency + Cost */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${cfg.badge}`}>
+                                <span>{cfg.icon}</span>
+                                <span>{cfg.short}</span>
+                              </span>
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${action.urgencyStyle}`}>
+                                  {action.urgency}
+                                </span>
+                                {action.costBand && (
+                                  <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                    Budget: {action.costBand} Cost
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Lead Agency */}
+                            <div className="flex items-center gap-2 text-xs bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span className="text-slate-400 font-medium shrink-0">Lead Agency:</span>
+                              <span className="font-semibold text-slate-800 leading-tight">
+                                {action.leadAgency}
+                              </span>
+                            </div>
+
+                            {/* Title & Directive Text */}
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                                {action.title}
+                              </h4>
+                              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                {action.text}
+                              </p>
+                              {action.evidence && (
+                                <p className="text-[10.5px] text-slate-500 italic mt-1.5 leading-snug">
+                                  {action.evidence}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Geographic Target Locations & Timing */}
+                          <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-slate-700">
+                              <span className="flex items-center gap-1 font-bold">
+                                <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                Target Areas ({action.hotspotCount}):
+                              </span>
+                              <span className="text-[11px] font-medium text-slate-500 font-mono">
+                                {action.timeline}
+                              </span>
+                            </div>
+                            {action.targetLocations.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {action.targetLocations.map((loc, lIdx) => (
+                                  <span
+                                    key={lIdx}
+                                    className="inline-flex items-center gap-1 text-[10px] print:text-[9px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap"
+                                  >
+                                    <span>{loc.area}</span>
+                                    <span className="font-mono text-slate-500 text-[9px] whitespace-nowrap">
+                                      ({loc.clusterId})
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">
+                                Applies across all monitored areas.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {/* Operational Guidance Footnote */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] print:text-[9.5px] text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Actions are prioritized by heat severity and population density. Cost estimates are provided for planning.</span>
+                  </span>
+                  {data.dangerWindow && data.dangerWindow.window && (
+                    <span className="font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
+                      Peak Danger Hours: {data.dangerWindow.window} (Pause outdoor labor)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* SECTION 7: Data Summary & Verification Notes */}
+          <footer className="bg-slate-50/70 rounded-xl border border-slate-200/90 p-3.5 sm:p-4 shadow-2xs print:bg-slate-50/50 print:border-slate-300 print:p-2.5 print:shadow-none space-y-3 print:space-y-1.5 print-break-inside-avoid">
+            {/* Header: Title & Certification Badges */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200/60 print:pb-1 print:border-slate-300/80">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 flex items-center justify-center print:w-4 print:h-4">
+                  <Info className="w-3.5 h-3.5 text-blue-600 print:w-3 print:h-3" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 tracking-tight flex items-center gap-1.5">
+                    <span>Data Summary &amp; Verification Notes</span>
+                    <span className="text-[10px] font-normal text-slate-400 print:hidden">• Quality Control Audit</span>
+                  </h4>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-[10px] print:text-[8.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                  100% Verified Citizen Reports
+                </span>
+                <span className="text-[10px] print:text-[8.5px] font-medium px-2 py-0.5 rounded-full bg-white text-slate-600 border border-slate-200 hidden sm:inline-block">
+                  Quality Checked
+                </span>
+              </div>
+            </div>
+
+            {/* 5-Column Audit Parameter Tiles */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 print-grid-5 gap-2.5 print:gap-1.5">
+              {/* Tile 1: Report ID */}
+              <div className="bg-white rounded-lg p-2.5 border border-slate-200/70 shadow-2xs print:bg-white print:border-slate-200 print:p-1.5 print:shadow-none flex flex-col justify-between min-w-0">
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400 block">
+                      Report ID
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ref = data.scope?.briefRef || 'HTX-BRIEF';
+                        navigator.clipboard?.writeText(ref);
+                        toast.success('Report ID copied');
+                      }}
+                      className="text-slate-400 hover:text-slate-700 p-0.5 rounded print:hidden transition-colors"
+                      title="Copy full Report ID"
+                      aria-label="Copy full Report ID"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <strong
+                    className="text-[11px] sm:text-xs font-bold font-mono tracking-tight text-slate-800 break-all select-all block leading-snug print:text-[10px]"
+                    title={data.scope?.briefRef || 'HTX-BRIEF'}
+                  >
+                    {data.scope?.briefRef || 'HTX-BRIEF'}
+                  </strong>
+                </div>
+                <span className="text-[9px] text-slate-400 block mt-1.5">
+                  Official Brief Reference
+                </span>
+              </div>
+
+              {/* Tile 2: Total Reports */}
+              <div className="bg-white rounded-lg p-2.5 border border-slate-200/70 shadow-2xs print:bg-white print:border-slate-200 print:p-1.5 print:shadow-none flex flex-col justify-between min-w-0">
+                <div>
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400 block mb-1">
+                    Total Reports
+                  </span>
+                  <div className="text-xs font-bold text-slate-800 block leading-snug print:text-[10px]">
+                    {data.dataQuality?.verifiedCount ?? 0} verified{' '}
+                    <span className="font-normal text-slate-500 text-[10px] whitespace-nowrap">
+                      of {data.dataQuality?.reportCount ?? 0} total
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[9px] text-slate-400 block mt-1.5">
+                  {data.dataQuality?.flaggedCount ?? 0} flagged by QC excluded
+                </span>
+              </div>
+
+              {/* Tile 3: Time Period */}
+              <div className="bg-white rounded-lg p-2.5 border border-slate-200/70 shadow-2xs print:bg-white print:border-slate-200 print:p-1.5 print:shadow-none flex flex-col justify-between min-w-0">
+                <div>
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400 block mb-1">
+                    Time Period
+                  </span>
+                  <strong className="text-xs font-bold text-slate-800 block print:text-[10px]">
+                    {data.scope?.days || days} days
+                  </strong>
+                </div>
+                <span
+                  className="text-[9.5px] text-slate-400 block mt-1.5 font-mono wrap-break-word leading-tight"
+                  title={`${formatDate(data.scope?.from)} — ${formatDate(data.scope?.to)}`}
+                >
+                  {formatDate(data.scope?.from)} — {formatDate(data.scope?.to)}
+                </span>
+              </div>
+
+              {/* Tile 4: Data Quality */}
+              <div className="bg-white rounded-lg p-2.5 border border-slate-200/70 shadow-2xs print:bg-white print:border-slate-200 print:p-1.5 print:shadow-none flex flex-col justify-between min-w-0">
+                <div>
+                  <span className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400 block mb-1">
+                    Data Quality
+                  </span>
+                  <div className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 print:text-[10px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                    <span>100% Verified Reports</span>
+                  </div>
+                </div>
+                <span className="text-[9px] text-slate-400 block mt-1.5">
+                  Quality Checked
+                </span>
+              </div>
+
+              {/* Tile 5: Analysis Run */}
+              <div className="bg-white rounded-lg p-2.5 border border-slate-200/70 shadow-2xs print:bg-white print:border-slate-200 print:p-1.5 print:shadow-none flex flex-col justify-between min-w-0">
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[9.5px] uppercase font-bold tracking-wider text-slate-400 block">
+                      Analysis Run
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const run = data.dataQuality?.hotspotRunId || 'Current Pipeline';
+                        navigator.clipboard?.writeText(run);
+                        toast.success('Run ID copied');
+                      }}
+                      className="text-slate-400 hover:text-slate-700 p-0.5 rounded print:hidden transition-colors"
+                      title="Copy full Run ID"
+                      aria-label="Copy full Run ID"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <strong
+                    className="text-[10.5px] sm:text-[11px] font-bold font-mono tracking-tight text-slate-800 break-all select-all block leading-snug print:text-[9.5px]"
+                    title={data.dataQuality?.hotspotRunId || 'Current Pipeline'}
+                  >
+                    {data.dataQuality?.hotspotRunId || 'Live Pipeline'}
+                  </strong>
+                </div>
+                <span className="text-[9px] text-slate-400 block mt-1.5">
+                  Cluster Model Pipeline
+                </span>
+              </div>
+            </div>
+
+            {/* Bottom Footnote & Comparison Baseline */}
+            <div className="pt-2 border-t border-slate-200/60 print:border-slate-300/80 flex items-center justify-between text-[10.5px] print:text-[8.5px] text-slate-400 flex-wrap gap-2">
+              <p className="italic">
+                Comparison is based on{' '}
+                <strong className="font-semibold text-slate-600">
+                  {data.baseline?.cityReportCount ?? 0} verified reports
+                </strong>{' '}
+                across {data.scope?.province || data.scope?.city || 'Sindh'} during the same time period.
+              </p>
+              <div className="flex items-center gap-1.5 font-mono text-[9.5px] print:text-[8px] text-slate-400 shrink-0">
+                <span>ThermaX Intelligence</span>
+                <span>•</span>
+                <span>Official Verification Stamp</span>
+              </div>
+            </div>
+          </footer>
+        </main>
+      )}
+    </div>
+  );
 }
