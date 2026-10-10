@@ -20,6 +20,19 @@ function severityToLevel(severity) {
 }
 
 export function toDto(h) {
+  const TVI_DIMENSIONS = ['heat', 'reports', 'population'];
+  const tviComponents = Array.isArray(h.tviComponents)
+    ? h.tviComponents
+    : (h.tviWeightsUsed && Object.keys(h.tviWeightsUsed).length > 0
+        ? Object.keys(h.tviWeightsUsed)
+        : (h.tviComponents && typeof h.tviComponents === 'object'
+            ? Object.keys(h.tviComponents).filter((k) => h.tviComponents[k] != null)
+            : null));
+
+  const tviComponentsMissing = Array.isArray(tviComponents)
+    ? TVI_DIMENSIONS.filter((d) => !tviComponents.includes(d))
+    : [...TVI_DIMENSIONS];
+
   return {
     id: h._id,
     clusterId: h.clusterId,
@@ -43,13 +56,8 @@ export function toDto(h) {
     // Phase 5 TVI-lite: score + the three normalized components, so the UI
     // and the FYP report can show the math. Null when unscored.
     tvi: h.tvi ?? null,
-    tviComponents: h.tviComponents
-      ? {
-          heat: h.tviComponents.heat ?? null,
-          reports: h.tviComponents.reports ?? null,
-          population: h.tviComponents.population ?? null,
-        }
-      : null,
+    tviComponents,
+    tviComponentsMissing,
     tviWeightsUsed: h.tviWeightsUsed ?? null,
     tviNote: h.tviNote ?? null,
     // Phase 6: canonical risk tier (TVI-derived), deterministic admin

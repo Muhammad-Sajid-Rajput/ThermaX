@@ -5,7 +5,7 @@
 // reads — so the backend and ML can never disagree about what "Karachi"
 // means.
 //
-// Uniform Bounding Box model (Pakistan-wide scope, 12 cities):
+// Uniform Bounding Box model (Pakistan-wide scope, 14 cities):
 // All cities resolve via their metropolitan bounding boxes. Points inside
 // a bbox resolve to that city. In cases of overlapping metro bboxes
 // (e.g. nearby Gujranwala / Sialkot), ties are broken deterministically

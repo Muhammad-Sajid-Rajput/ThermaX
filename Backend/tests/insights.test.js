@@ -589,7 +589,7 @@ describe('insights — exports', () => {
     expect(res.text).toContain('dataQuality.syntheticExcluded,true');
     expect(res.text).toContain('dataQuality.hotspotRunId,"run-new"');
     // TVI / tier / directive ids appear in the ranking.
-    expect(res.text).toContain('1,"CL-01","Gulshan-e-Iqbal",12,0.72,"critical",46.2,44.1,24.9,67.1,"open-cooling-centers;water-points"');
+    expect(res.text).toContain('1,"CL-01","Gulshan-e-Iqbal",12,0.72,"","heat;reports;population","critical",46.2,44.1,24.9,67.1,"open-cooling-centers;water-points"');
   });
 
   it('neutralizes formula injection in free-text cells', async () => {
@@ -750,6 +750,19 @@ describe('insights — actionability upgrade (F1–F8)', () => {
     expect(flags).toHaveLength(2);
     expect(flags[0].receptors).toContain('school');
     expect(flags[1].receptors).toEqual(expect.arrayContaining(['health', 'market_labor']));
+  });
+
+  it('F2: requires non-empty area overlap and gives empty receptors for hotspot with no area', () => {
+    const hotspots = [
+      { id: 'hs-no-area', area: null, riskTier: 'critical' },
+      { id: 'hs-empty-area', area: '   ', riskTier: 'moderate' },
+      { id: 'hs-different-area', area: 'Gulberg', riskTier: 'high' },
+    ];
+    const reports = [
+      { areaName: 'Clifton', description: 'Major school and hospital nearby' },
+    ];
+    const flags = flagReceptors(hotspots, reports);
+    expect(flags).toHaveLength(0);
   });
 
   it('F3: withholds danger window below 10 reports and detects peak hour when eligible', () => {
@@ -970,13 +983,52 @@ describe('insights — empty report fixes (Fixes 1–7)', () => {
     expect(res.body.dataQuality.hotspotEmptyReason).toBe('below-threshold');
   });
 
+  it('Fix 2b: sets hotspotEmptyReason to "no-area-match" when publication and hotspots exist but area filter yields 0 matches', async () => {
+    const token = await adminToken();
+    await seedReports(12, { city: 'Karachi', latitude: 24.86, longitude: 67.0 });
+    await publish('run-new', 'Karachi');
+    await seedHotspot({ city: 'Karachi', district: 'Gulshan-e-Iqbal', runId: 'run-new' });
+
+    const res = await authed(token, '/api/v1/insights', { city: 'Karachi', area: 'NonExistentAreaXYZ', days: 30 });
+    expect(res.status).toBe(200);
+    expect(res.body.hotspots).toHaveLength(0);
+    expect(res.body.dataQuality.hotspotEmptyReason).toBe('no-area-match');
+  });
+
   it('Fix 3: escalation returns NO_RECENT_DATA on 0 recent reports and never STABLE without data', async () => {
     const now = new Date('2026-06-15T12:00:00Z');
     const noReports = [];
     const status = await buildEscalationWatch(noReports, now);
     expect(status.status).toBe('NO_RECENT_DATA');
-    expect(status.reason).toContain('No verified reports in the last 48h');
-    expect(status.reason).not.toContain('within normal baseline range');
+    expect(status.reason).toBe(
+      'No verified reports in the last 48h — escalation cannot be assessed; check the reporting pipeline.'
+    );
+  });
+
+  it('P1-4: exposes tviComponents component list in /api/v1/insights and /api/v1/hotspots DTOs', async () => {
+    const token = await adminToken();
+    await seedReports(12, { city: 'Karachi', latitude: 24.86, longitude: 67.0 });
+    await publish('run-new', 'Karachi');
+    await seedHotspot({
+      city: 'Karachi',
+      district: 'Gulshan-e-Iqbal',
+      runId: 'run-new',
+      tvi: 0.72,
+      tviComponents: ['heat', 'reports'],
+      tviWeightsUsed: { heat: 0.6, reports: 0.4 },
+    });
+
+    const insightsRes = await authed(token, '/api/v1/insights', { city: 'Karachi', days: 30 });
+    expect(insightsRes.status).toBe(200);
+    expect(insightsRes.body.hotspots).toHaveLength(1);
+    expect(insightsRes.body.hotspots[0].tviComponents).toEqual(['heat', 'reports']);
+    expect(insightsRes.body.hotspots[0].tviComponentsMissing).toEqual(['population']);
+
+    const hotspotsRes = await request(app).get('/api/v1/hotspots?city=Karachi');
+    expect(hotspotsRes.status).toBe(200);
+    expect(hotspotsRes.body.hotspots).toHaveLength(1);
+    expect(hotspotsRes.body.hotspots[0].tviComponents).toEqual(['heat', 'reports']);
+    expect(hotspotsRes.body.hotspots[0].tviComponentsMissing).toEqual(['population']);
   });
 
   it('Fix 4: minister paragraph for province scope contains no doubled name and handles 0 hotspots', () => {

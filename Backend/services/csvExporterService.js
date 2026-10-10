@@ -169,6 +169,8 @@ export function generateInsightsCSV(payload) {
       'area',
       'reportCount',
       'tvi',
+      'tviComponents',
+      'tviComponentsMissing',
       'riskTier',
       'peakTemp',
       'heatIndexMean',
@@ -182,6 +184,8 @@ export function generateInsightsCSV(payload) {
       h.area,
       h.reportCount,
       h.tvi,
+      Array.isArray(h.tviComponents) ? h.tviComponents.join(';') : (h.tviComponents || ''),
+      Array.isArray(h.tviComponentsMissing) ? h.tviComponentsMissing.join(';') : (h.tviComponentsMissing || ''),
       // Unscored hotspots are labeled, never zeroed.
       h.tvi == null ? 'unscored' : h.riskTier,
       h.peakTemp,

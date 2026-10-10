@@ -82,9 +82,8 @@ const hotspotSchema = new Schema(
       index: true,
     },
     tviComponents: {
-      heat: { type: Number, default: null },
-      reports: { type: Number, default: null },
-      population: { type: Number, default: null },
+      type: Schema.Types.Mixed,
+      default: undefined,
     },
     tviWeightsUsed: {
       type: Schema.Types.Mixed,

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Report from '../models/Report.js';
 import Hotspot from '../models/Hotspot.js';
 import HotspotPublication from '../models/HotspotPublication.js';
@@ -5,7 +6,6 @@ import AdminNotification from '../models/AdminNotification.js';
 import { currentHotspotRunFilter } from '../utils/currentHotspotRunFilter.js';
 import { getCities } from './boundaryService.js';
 import { toDto } from '../routes/hotspots.js';
-import { calculateHeatIndex } from './weatherService.js';
 
 /**
  * Area Insights — a decision-oriented, area-scoped report built from
@@ -541,71 +541,19 @@ function buildSeries(reports, from, to, dayKey) {
   };
 }
 
-export function getUniversalHumidity(city, centroid) {
-  // 1. Precise GPS coordinate calculation for ANY location in Pakistan
-  if (centroid && typeof centroid.lat === 'number' && typeof centroid.lng === 'number') {
-    const { lat, lng } = centroid;
-    // Coastal zone (Southern Sindh / Makran coast along Arabian Sea)
-    if (lat <= 26.2 && lng >= 61.0 && lng <= 69.5) {
-      return 60;
-    }
-    // High mountain northern terrain (KPK highlands, Gilgit, Azad Kashmir)
-    if (lat >= 34.0) {
-      return 42;
-    }
-    // Western arid desert/plateau (Balochistan dry belt)
-    if (lng <= 66.5 && lat < 33.5) {
-      return 28;
-    }
-    // Central plains & agricultural Indus basin (Punjab & Interior Sindh)
-    return 40;
-  }
-
-  // 2. Text keyword matching if centroid coordinates are unavailable
-  if (city) {
-    const c = String(city).toLowerCase();
-    if (/coast|sea|beach|karachi|thatta|badin|gwadar|pasni|ormara|hub|keamari|korangi/i.test(c)) return 60;
-    if (/desert|thar|cholistan|nushki|chagai|kharan|panjgur|sibi|jacobabad/i.test(c)) return 28;
-    if (/quetta|ziarat|kalat|pishin|zhob|loralai/i.test(c)) return 30;
-    if (/gilgit|skardu|hunza|chitral|swat|kaghan|murree|abbottabad|muzaffarabad/i.test(c)) return 42;
-  }
-
-  // 3. National baseline summer daytime relative humidity in Pakistan
-  return 40;
-}
-
 function toInsightHotspot(h) {
-  let heatIndex = h.heatIndexMean ?? null;
-  if (heatIndex == null) {
-    const temp = h.peakTemp ?? h.avgTemp;
-    if (temp != null && temp >= 20) {
-      const humidity = getUniversalHumidity(h.city, h.centroid);
-      heatIndex = calculateHeatIndex(temp, humidity);
-    }
-  }
+  const TVI_DIMENSIONS = ['heat', 'reports', 'population'];
+  const tviComponents = Array.isArray(h.tviComponents)
+    ? h.tviComponents
+    : (h.tviWeightsUsed && Object.keys(h.tviWeightsUsed).length > 0
+        ? Object.keys(h.tviWeightsUsed)
+        : (h.tviComponents && typeof h.tviComponents === 'object'
+            ? Object.keys(h.tviComponents).filter((k) => h.tviComponents[k] != null)
+            : null));
 
-  let tviComponents = h.tviComponents ? { ...h.tviComponents } : null;
-  if (tviComponents) {
-    if (tviComponents.heat == null) {
-      const temp = h.peakTemp ?? h.avgTemp;
-      if (temp != null && isNum(temp)) {
-        tviComponents.heat = round1(Math.min(1.0, Math.max(0.0, temp / 50.0)));
-      }
-    }
-    if (tviComponents.reports == null && h.reportCount != null) {
-      tviComponents.reports = round1(Math.min(1.0, Math.max(0.0, h.reportCount / 20.0)));
-    }
-    if (tviComponents.population == null && h.tvi != null) {
-      tviComponents.population = round1(Math.min(1.0, Math.max(0.0, h.tvi * 1.1)));
-    }
-  } else if (h.tvi != null) {
-    const temp = h.peakTemp ?? h.avgTemp;
-    tviComponents = {
-      heat: temp != null && isNum(temp) ? round1(Math.min(1.0, Math.max(0.0, temp / 50.0))) : round1(h.tvi),
-      reports: h.reportCount != null ? round1(Math.min(1.0, Math.max(0.0, h.reportCount / 20.0))) : round1(h.tvi * 0.8),
-      population: round1(Math.min(1.0, Math.max(0.0, h.tvi * 1.1))),
-    };
-  }
+  const tviComponentsMissing = Array.isArray(tviComponents)
+    ? TVI_DIMENSIONS.filter((d) => !tviComponents.includes(d))
+    : [...TVI_DIMENSIONS];
 
   return {
     id: String(h.id),
@@ -617,11 +565,12 @@ function toInsightHotspot(h) {
     reportCount: h.reportCount,
     tvi: h.tvi,
     tviComponents,
+    tviComponentsMissing,
     tviWeightsUsed: h.tviWeightsUsed ?? null,
     tviNote: h.tviNote ?? null,
     riskTier: h.riskTier,
     peakTemp: h.peakTemp ?? null,
-    heatIndexMean: heatIndex,
+    heatIndexMean: h.heatIndexMean ?? null,
     directives: h.directives,
     advisory: h.advisory ? { en: h.advisory.en ?? null, ur: h.advisory.ur ?? null } : null,
   };
@@ -822,18 +771,25 @@ const RECEPTOR_KEYWORDS = {
 export function flagReceptors(hotspots = [], verifiedReports = []) {
   const flags = [];
   for (const h of hotspots) {
-    const areaLower = String(h.area || '').toLowerCase();
+    const rawArea = typeof h.area === 'string' ? h.area.trim() : '';
+    // A hotspot with no area gets receptors: [], never inferred flags.
+    if (!rawArea) {
+      continue;
+    }
+    const areaLower = rawArea.toLowerCase();
+    const areaPattern = new RegExp(escapeRegex(rawArea), 'i');
     const texts = [areaLower];
 
     for (const r of verifiedReports) {
-      const rArea = String(r.areaName || '').toLowerCase();
+      const rArea = String(r.areaName || '').trim();
+      const rDistrict = String(r.district || '').trim();
       const isAreaMatch =
-        !h.area ||
-        !rArea ||
-        rArea.includes(areaLower) ||
-        areaLower.includes(rArea);
+        (rArea && (areaPattern.test(rArea) || rArea.toLowerCase().includes(areaLower))) ||
+        (rDistrict && (areaPattern.test(rDistrict) || rDistrict.toLowerCase().includes(areaLower)));
+
       if (isAreaMatch) {
         if (r.areaName) texts.push(String(r.areaName).toLowerCase());
+        if (r.district) texts.push(String(r.district).toLowerCase());
         if (r.description) texts.push(String(r.description).toLowerCase());
       }
     }
@@ -1031,11 +987,13 @@ export async function buildEscalationWatch(verifiedReports = [], now = new Date(
     reason = `${last48hCount} verified reports in the last 48h — below watch threshold.`;
   } else {
     status = 'NO_RECENT_DATA';
-    reason = 'No verified reports in the last 48h — standard surveillance baseline active; no acute surge detected.';
+    reason = 'No verified reports in the last 48h — escalation cannot be assessed; check the reporting pipeline.';
   }
 
   const outlierNotifications = { extreme_contradiction: 0, enrichment_failed: 0 };
-  const reportIds = verifiedReports.map((r) => r._id || r.id).filter(Boolean);
+  const reportIds = verifiedReports
+    .map((r) => r._id || r.id)
+    .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)));
   if (reportIds.length > 0) {
     try {
       const notifs = await AdminNotification.find({
@@ -1047,7 +1005,9 @@ export async function buildEscalationWatch(verifiedReports = [], now = new Date(
         if (n.type === 'extreme_contradiction') outlierNotifications.extreme_contradiction += 1;
         else if (n.type === 'enrichment_failed') outlierNotifications.enrichment_failed += 1;
       }
-    } catch {}
+    } catch (err) {
+      console.error('Failed to query AdminNotification in buildEscalationWatch:', err);
+    }
   }
 
   return {
@@ -1420,6 +1380,8 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
   if (hotspotDocs.length === 0 || hotspots.length === 0) {
     if (validPublications.length === 0) {
       hotspotEmptyReason = 'no-published-run';
+    } else if (hotspotDocs.length > 0 && needle && hotspots.length === 0) {
+      hotspotEmptyReason = 'no-area-match';
     } else {
       hotspotEmptyReason = 'below-threshold';
     }
