@@ -191,6 +191,38 @@
         "maxLat": 29.75
       },
       "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added 2026-10-05 for Pakistan-wide scope"
+    },
+    {
+      "name": "Muzaffarabad",
+      "slug": "muzaffarabad",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 34.37,
+        "lng": 73.4711
+      },
+      "bbox": {
+        "minLng": 73.2,
+        "minLat": 34.15,
+        "maxLng": 73.75,
+        "maxLat": 34.6
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added for Azad Kashmir territorial coverage"
+    },
+    {
+      "name": "Gilgit",
+      "slug": "gilgit",
+      "timezone": "Asia/Karachi",
+      "center": {
+        "lat": 35.9208,
+        "lng": 74.3144
+      },
+      "bbox": {
+        "minLng": 74.1,
+        "minLat": 35.75,
+        "maxLng": 74.55,
+        "maxLat": 36.1
+      },
+      "boundarySource": "Approximate metro bounding box (+/-0.35 deg) around city center; added for Gilgit-Baltistan territorial coverage"
     }
   ]
 }

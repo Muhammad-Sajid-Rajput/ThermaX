@@ -6,10 +6,18 @@ import { Report } from '../models/Report.js';
 import Hotspot from '../models/Hotspot.js';
 import HotspotPublication from '../models/HotspotPublication.js';
 import { generateAccessToken } from '../utils/jwt.js';
+import AdminNotification from '../models/AdminNotification.js';
 import {
   buildInsights,
   minReportsForTrend,
   DEFAULT_MIN_REPORTS_FOR_TREND,
+  buildActionPlan,
+  flagReceptors,
+  buildDangerWindows,
+  buildComparative,
+  buildEscalationWatch,
+  buildCauseBreakdown,
+  buildMinisterParagraph,
 } from '../services/insightsService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +85,8 @@ const BAD_TEXT = /null|undefined|NaN/;
 
 afterEach(() => {
   delete process.env.INSIGHTS_MIN_REPORTS_FOR_TREND;
+  delete process.env.INSIGHTS_ESCALATE_COUNT;
+  delete process.env.INSIGHTS_WATCH_COUNT;
   vi.restoreAllMocks();
 });
 
@@ -172,6 +182,13 @@ describe('insights — payload shape', () => {
       'hotspots',
       'topDirectives',
       'takeaways',
+      'ministerBrief',
+      'escalation',
+      'comparative',
+      'dangerWindow',
+      'receptorFlags',
+      'actionPlan',
+      'causeBreakdown',
     ]);
     expect(p.scope).toMatchObject({ city: 'Karachi', area: null, days: 30 });
     expect(new Date(p.scope.to) - new Date(p.scope.from)).toBe(30 * DAY_MS);
@@ -183,6 +200,8 @@ describe('insights — payload shape', () => {
       minReportsForTrend: DEFAULT_MIN_REPORTS_FOR_TREND,
       syntheticExcluded: true,
       hotspotRunId: 'run-new',
+      hotspotRuns: [{ city: 'Karachi', runId: 'run-new' }],
+      hotspotEmptyReason: null,
     });
     expect(p.summary).toMatchObject({
       totalReports: 12,
@@ -501,6 +520,7 @@ describe('insights — hotspots, directives and takeaways', () => {
     expect(res.body.takeaways).toEqual([
       'Highest-risk zone: Gulshan-e-Iqbal (TVI 0.72, critical). 12 verified reports, peak 46.2°C.',
       'This area averages 2.0°C above the Karachi city average over the same period.',
+      'Ranked #1 of 2 areas in Karachi by mean hotspot TVI.',
       'Recommended focus: Open public cooling centers — relevant to 2 of 2 hotspots in this area.',
       'Based on 10 verified reports (0 flagged reports excluded from scoring).',
     ]);
@@ -667,5 +687,338 @@ describe('insights — database failures', () => {
       expect(res.body.summary).toBeUndefined();
       expect(res.body.message).toBe('Database unavailable');
     }
+  });
+});
+
+describe('insights — actionability upgrade (F1–F8)', () => {
+  it('F1: ranks action plan by weighted tier score and derives owner/cost/timeline', () => {
+    const hotspots = [
+      {
+        id: 'hs-1',
+        area: 'Gulshan',
+        riskTier: 'critical',
+        reportCount: 10,
+        tvi: 0.85,
+        directives: [
+          { id: 'water-points', text: 'Deploy drinking-water points.' },
+          { id: 'tree-planting', text: 'Urban tree plantation.' },
+        ],
+      },
+      {
+        id: 'hs-2',
+        area: 'Saddar',
+        riskTier: 'moderate',
+        reportCount: 10,
+        tvi: 0.45,
+        directives: [
+          { id: 'water-points', text: 'Deploy drinking-water points.' },
+        ],
+      },
+    ];
+    const topDirectives = [
+      { id: 'tree-planting', text: 'Urban tree plantation.', hotspotCount: 1 },
+      { id: 'water-points', text: 'Deploy drinking-water points.', hotspotCount: 2 },
+    ];
+
+    const plan = buildActionPlan(hotspots, topDirectives);
+    expect(plan).toHaveLength(2);
+    // water-points: (critical: 4*10) + (moderate: 2*10) = 60
+    // tree-planting: (critical: 4*10) = 40
+    expect(plan[0].directiveId).toBe('water-points');
+    expect(plan[0].rank).toBe(1);
+    expect(plan[0].owner).toBe('Municipal Corporation / PDMA');
+    expect(plan[0].costBand).toBe('medium');
+    expect(plan[0].timeline).toBe('Short-term (1–8 weeks)');
+    expect(plan[0].evidence).toContain('strongest: Gulshan (TVI 0.85, critical)');
+
+    expect(plan[1].directiveId).toBe('tree-planting');
+    expect(plan[1].rank).toBe(2);
+    expect(plan[1].owner).toBe('Parks & Horticulture Authority');
+    expect(plan[1].costBand).toBe('high');
+    expect(plan[1].timeline).toBe('Long-term (2–12 months)');
+  });
+
+  it('F2: flags vulnerable receptors from hotspot names and verified report notes', () => {
+    const hotspots = [
+      { id: 'hs-1', area: 'Model Colony School Road', riskTier: 'critical' },
+      { id: 'hs-2', area: 'Industrial Area', riskTier: 'high' },
+    ];
+    const reports = [
+      { areaName: 'Industrial Area', description: 'Laborers fainting near hospital gate' },
+    ];
+    const flags = flagReceptors(hotspots, reports);
+    expect(flags).toHaveLength(2);
+    expect(flags[0].receptors).toContain('school');
+    expect(flags[1].receptors).toEqual(expect.arrayContaining(['health', 'market_labor']));
+  });
+
+  it('F3: withholds danger window below 10 reports and detects peak hour when eligible', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    const sparseReports = [
+      { ambientTemp: 42, createdAt: new Date('2026-06-15T09:00:00Z') },
+    ];
+    const withheld = buildDangerWindows(sparseReports, 'Asia/Karachi', 10);
+    expect(withheld).toEqual({ window: null, reason: 'insufficient-data' });
+
+    // 12 reports: 6 at 14:00 (PKT) and 6 at 15:00 (PKT) with temp 40
+    // UTC 09:00 is 14:00 PKT (+5), UTC 10:00 is 15:00 PKT (+5)
+    const reports = [
+      ...Array.from({ length: 6 }, () => ({ ambientTemp: 41, createdAt: new Date('2026-06-15T09:10:00Z') })),
+      ...Array.from({ length: 6 }, () => ({ ambientTemp: 43, createdAt: new Date('2026-06-15T10:10:00Z') })),
+    ];
+    const detected = buildDangerWindows(reports, 'Asia/Karachi', 10);
+    expect(detected).not.toBeNull();
+    expect(detected.window).toBe('14:00–16:00');
+    expect(detected.peakHour).toBe(15);
+    expect(detected.peakMeanTemp).toBe(43);
+  });
+
+  it('F4: withholds comparative rank when < 2 areas and ranks correctly when >= 2', () => {
+    const oneAreaHotspots = [
+      { area: 'Gulshan', tvi: 0.8 },
+      { area: 'Gulshan', tvi: 0.6 },
+    ];
+    const withheld = buildComparative(oneAreaHotspots, 'Gulshan', { cityAvgTemp: 38, areaAvgTempDelta: 2 });
+    expect(withheld.areaRank).toBeNull();
+    expect(withheld.areasRanked).toBe(1);
+
+    const twoAreaHotspots = [
+      { area: 'Gulshan', tvi: 0.8 },
+      { area: 'Saddar', tvi: 0.6 },
+      { area: 'Clifton', tvi: null }, // unscored excluded from ranking
+    ];
+    const comparative = buildComparative(twoAreaHotspots, 'Saddar', { cityAvgTemp: 38, areaAvgTempDelta: -1 });
+    expect(comparative.areaRank).toBe(2);
+    expect(comparative.areasRanked).toBe(2);
+    expect(comparative.cityAvgTemp).toBe(38);
+    expect(comparative.areaDeltaC).toBe(-1);
+  });
+
+  it('F6: checks escalation watch thresholds and tracks admin notifications', async () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    // Reports within 48h
+    const reports48h = Array.from({ length: 12 }, (_, i) => ({
+      _id: `rep-${i}`,
+      createdAt: new Date('2026-06-14T12:00:00Z'),
+    }));
+    // Default thresholds: watch=10, escalate=20 -> 12 reports is WATCH
+    const watchStatus = await buildEscalationWatch(reports48h, now);
+    expect(watchStatus.status).toBe('WATCH');
+    expect(watchStatus.last48hCount).toBe(12);
+
+    // Override thresholds via env
+    process.env.INSIGHTS_ESCALATE_COUNT = '10';
+    const escalateStatus = await buildEscalationWatch(reports48h, now);
+    expect(escalateStatus.status).toBe('ESCALATE');
+
+    // Notification integration
+    const user = await User.create({
+      name: 'Notifier',
+      email: 'notifier@test.com',
+      password: 'password123',
+    });
+    const rep = await Report.create({
+      latitude: 24.86,
+      longitude: 67.0,
+      severityLevel: 5,
+      city: 'Karachi',
+      status: 'verified',
+    });
+    await AdminNotification.create({
+      reportId: rep._id,
+      type: 'extreme_contradiction',
+      reason: 'Gap >= 15C',
+    });
+
+    const notifWatch = await buildEscalationWatch([rep], now);
+    expect(notifWatch.outlierNotifications.extreme_contradiction).toBe(1);
+    expect(notifWatch.outlierNotifications.enrichment_failed).toBe(0);
+  });
+
+  it('F7: withholds cause breakdown below threshold and computes accurate top-8 percentage', () => {
+    const sparse = Array.from({ length: 5 }, () => ({
+      causes: ['Lack of shade', 'Concrete density'],
+    }));
+    expect(buildCauseBreakdown(sparse, 10)).toEqual([]);
+
+    // 10 reports with causes
+    const reports = [
+      ...Array.from({ length: 8 }, () => ({
+        causes: ['lack of shade', 'Concrete Density'],
+      })),
+      ...Array.from({ length: 2 }, () => ({
+        causes: ['Lack of Shade', 'Traffic congestion'],
+      })),
+    ];
+    const breakdown = buildCauseBreakdown(reports, 10);
+    expect(breakdown).toHaveLength(3);
+    // 'Lack of shade' was cited in all 10 reports -> 100%
+    expect(breakdown[0].cause.toLowerCase()).toBe('lack of shade');
+    expect(breakdown[0].count).toBe(10);
+    expect(breakdown[0].pct).toBe(100);
+
+    // 'Concrete Density' was cited in 8 reports -> 80%
+    expect(breakdown[1].cause.toLowerCase()).toBe('concrete density');
+    expect(breakdown[1].count).toBe(8);
+    expect(breakdown[1].pct).toBe(80);
+  });
+
+  it('F8: builds a 3-sentence minister briefing and respects omissions', () => {
+    const full = buildMinisterParagraph({
+      area: 'Gulshan',
+      city: 'Karachi',
+      verifiedCount: 25,
+      days: 30,
+      hotspots: [{ id: 'h1' }, { id: 'h2' }],
+      peakTemp: 44.5,
+      areaAvgTempDelta: 2.1,
+      criticalHotspots: 1,
+      receptorFlags: [{ hotspotId: 'h1' }],
+      actionPlan: [{ action: 'Deploy mist fans', costBand: 'medium', owner: 'PDMA' }],
+      dangerWindow: { window: '13:00–16:00' },
+    });
+    expect(full).toContain('Gulshan (Karachi) recorded 25 verified heat reports in the last 30 days across 2 hotspots, peaking at 44.5°C, 2.1°C above the Karachi average.');
+    expect(full).toContain('1 hotspot rated critical, 1 overlapping schools, clinics or markets.');
+    expect(full).toContain('Recommended first step: Deploy mist fans (medium cost, PDMA lead), timed outside the 13:00–16:00 danger window.');
+
+    const empty = buildMinisterParagraph({
+      area: null,
+      city: 'Karachi',
+      verifiedCount: null,
+      days: 30,
+      hotspots: [],
+      peakTemp: null,
+      criticalHotspots: 0,
+      actionPlan: [],
+    });
+    expect(empty).toBeNull();
+  });
+
+  it('end-to-end: scope.briefRef format and CSV export contains new ACTION_PLAN and CAUSE_BREAKDOWN sections', async () => {
+    const token = await adminToken();
+    await seedReports(15, {
+      areaName: 'Gulshan-e-Iqbal',
+      ambientTemp: 42,
+      causes: ['Heavy traffic', 'Lack of shade'],
+    });
+    await seedHotspot();
+    await publish();
+
+    const jsonRes = await authed(token, '/api/v1/insights', { city: 'Karachi', days: 30 });
+    expect(jsonRes.status).toBe(200);
+    expect(jsonRes.body.scope.briefRef).toMatch(/^HTX-KARACHI-\d{8}-30D$/);
+    expect(jsonRes.body.actionPlan).toBeDefined();
+    expect(jsonRes.body.causeBreakdown).toBeDefined();
+    expect(jsonRes.body.escalation).toBeDefined();
+
+    const csvRes = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
+    expect(csvRes.status).toBe(200);
+    expect(csvRes.text).toContain('SECTION,ACTION_PLAN');
+    expect(csvRes.text).toContain('Indicative band — not a costed estimate.');
+    expect(csvRes.text).toContain('SECTION,CAUSE_BREAKDOWN');
+    expect(csvRes.text).toContain('ministerBrief,');
+    expect(csvRes.text).toContain('scope.briefRef,');
+  });
+});
+
+describe('insights — empty report fixes (Fixes 1–7)', () => {
+  it('Fix 1: province query merges hotspots from >= 2 cities in the province', async () => {
+    const token = await adminToken();
+    // Seed reports in Punjab
+    await seedReports(15, { city: 'Lahore', latitude: 31.52, longitude: 74.35 });
+    // Seed publications for Lahore and Rawalpindi (both in Punjab)
+    await publish('run-lahore', 'Lahore');
+    await publish('run-rwp', 'Rawalpindi');
+    // Seed hotspots for both cities
+    await seedHotspot({ clusterId: 'CL-LHR', city: 'Lahore', runId: 'run-lahore', area: 'Gulberg' });
+    await seedHotspot({ clusterId: 'CL-RWP', city: 'Rawalpindi', runId: 'run-rwp', area: 'Saddar' });
+
+    const res = await authed(token, '/api/v1/insights', { city: 'Punjab', days: 30 });
+    expect(res.status).toBe(200);
+    expect(res.body.hotspots).toHaveLength(2);
+    const clusterIds = res.body.hotspots.map((h) => h.clusterId);
+    expect(clusterIds).toContain('CL-LHR');
+    expect(clusterIds).toContain('CL-RWP');
+    expect(res.body.dataQuality.hotspotRuns).toEqual(
+      expect.arrayContaining([
+        { city: 'Lahore', runId: 'run-lahore' },
+        { city: 'Rawalpindi', runId: 'run-rwp' },
+      ])
+    );
+    expect(res.body.dataQuality.hotspotRunId).toBeNull(); // null for province query
+    expect(res.body.dataQuality.hotspotEmptyReason).toBeNull();
+  });
+
+  it('Fix 2: sets hotspotEmptyReason to "no-published-run" when no publications exist', async () => {
+    const token = await adminToken();
+    await seedReports(12, { city: 'Lahore', latitude: 31.52, longitude: 74.35 });
+    // No publications seeded!
+    const res = await authed(token, '/api/v1/insights', { city: 'Punjab', days: 30 });
+    expect(res.status).toBe(200);
+    expect(res.body.hotspots).toHaveLength(0);
+    expect(res.body.dataQuality.hotspotEmptyReason).toBe('no-published-run');
+  });
+
+  it('Fix 2: sets hotspotEmptyReason to "below-threshold" when publication exists but 0 hotspots meet threshold', async () => {
+    const token = await adminToken();
+    await seedReports(12, { city: 'Lahore', latitude: 31.52, longitude: 74.35 });
+    await publish('run-empty', 'Lahore');
+    // Publication exists, but 0 active hotspots in DB!
+    const res = await authed(token, '/api/v1/insights', { city: 'Lahore', days: 30 });
+    expect(res.status).toBe(200);
+    expect(res.body.hotspots).toHaveLength(0);
+    expect(res.body.dataQuality.hotspotEmptyReason).toBe('below-threshold');
+  });
+
+  it('Fix 3: escalation returns NO_RECENT_DATA on 0 recent reports and never STABLE without data', async () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    const noReports = [];
+    const status = await buildEscalationWatch(noReports, now);
+    expect(status.status).toBe('NO_RECENT_DATA');
+    expect(status.reason).toContain('No verified reports in the last 48h');
+    expect(status.reason).not.toContain('within normal baseline range');
+  });
+
+  it('Fix 4: minister paragraph for province scope contains no doubled name and handles 0 hotspots', () => {
+    const provinceWithHotspots = buildMinisterParagraph({
+      provinceName: 'Punjab',
+      city: 'Punjab',
+      isProvinceQuery: true,
+      verifiedCount: 73,
+      days: 30,
+      hotspots: [{ id: 'h1' }],
+      peakTemp: 40.6,
+      areaAvgTempDelta: null,
+      criticalHotspots: 0,
+      actionPlan: [],
+    });
+    expect(provinceWithHotspots).toContain('Punjab recorded 73 verified heat reports in the last 30 days across 1 hotspots, peaking at 40.6°C.');
+    expect(provinceWithHotspots).not.toContain('Punjab (Punjab)');
+
+    const provinceZeroHotspots = buildMinisterParagraph({
+      provinceName: 'Punjab',
+      city: 'Punjab',
+      isProvinceQuery: true,
+      verifiedCount: 73,
+      days: 30,
+      hotspots: [],
+      peakTemp: 40.6,
+      areaAvgTempDelta: null,
+      criticalHotspots: 0,
+      actionPlan: [],
+    });
+    expect(provinceZeroHotspots).toContain('Punjab recorded 73 verified heat reports in the last 30 days across 0 hotspots, peaking at 40.6°C.');
+    expect(provinceZeroHotspots).toContain('No clustered hotspots were published in this window — findings are report-level only.');
+    expect(provinceZeroHotspots).not.toContain('Punjab (Punjab)');
+  });
+
+  it('Fix 5: withholds danger window when run is only 1 hour wide', () => {
+    // 12 reports all in the 14:00 PKT bucket (09:00 UTC) with 42C
+    const reports = Array.from({ length: 12 }, () => ({
+      ambientTemp: 42,
+      createdAt: new Date('2026-06-15T09:15:00Z'),
+    }));
+    const res = buildDangerWindows(reports, 'Asia/Karachi', 10);
+    expect(res).toEqual({ window: null, reason: 'no-sustained-window' });
   });
 });

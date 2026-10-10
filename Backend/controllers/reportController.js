@@ -96,7 +96,11 @@ export const getReports = async (req, res) => {
       filter.isSynthetic = { $ne: true };
     }
     if (severity && severity !== 'all') {
-      filter.severityLevel = parseInt(severity, 10);
+      const parsedSeverity = parseInt(severity, 10);
+      if (!Number.isInteger(parsedSeverity) || parsedSeverity < 1 || parsedSeverity > 5) {
+        return res.status(400).json({ error: 'severity must be an integer between 1 and 5' });
+      }
+      filter.severityLevel = parsedSeverity;
     }
     if (area && area !== 'all') {
       // Escape regex metacharacters: the area filter is a literal substring

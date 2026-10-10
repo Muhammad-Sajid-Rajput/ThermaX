@@ -1,9 +1,11 @@
 import Report from '../models/Report.js';
 import Hotspot from '../models/Hotspot.js';
 import HotspotPublication from '../models/HotspotPublication.js';
+import AdminNotification from '../models/AdminNotification.js';
 import { currentHotspotRunFilter } from '../utils/currentHotspotRunFilter.js';
 import { getCities } from './boundaryService.js';
 import { toDto } from '../routes/hotspots.js';
+import { calculateHeatIndex } from './weatherService.js';
 
 /**
  * Area Insights — a decision-oriented, area-scoped report built from
@@ -28,7 +30,7 @@ export const DEFAULT_MIN_REPORTS_FOR_TREND = 10;
 
 const MAX_AREA_LENGTH = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const REPORT_FIELDS = 'status severityLevel ambientTemp createdAt';
+const REPORT_FIELDS = 'status severityLevel ambientTemp createdAt causes areaName district description';
 
 /** Thrown for bad query parameters; the route maps it to HTTP 400. */
 export class InsightsValidationError extends Error {
@@ -446,7 +448,7 @@ function parseQuery({ city, province, area, days, includeSynthetic } = {}) {
     if (resolvedCityName && PROVINCE_TO_CITY[resolvedCityName.toLowerCase()]) {
       resolvedCityName = PROVINCE_TO_CITY[resolvedCityName.toLowerCase()];
     }
-    cityDef = resolvedCityName ? cities.find((c) => c.name === resolvedCityName) : null;
+    cityDef = resolvedCityName ? cities.find((c) => c.name.toLowerCase() === resolvedCityName.toLowerCase()) : null;
     if (!cityDef) {
       throw new InsightsValidationError(`Unknown city. Supported cities: ${supported.join(', ')}.`);
     }
@@ -456,7 +458,7 @@ function parseQuery({ city, province, area, days, includeSynthetic } = {}) {
   if (days !== undefined && days !== '') {
     let n = NaN;
     if (typeof days === 'number') n = days;
-    else if (typeof days === 'string' && /^\d+$/.test(days)) n = Number(days);
+    else if (typeof days === 'string' && /^\d+$/.test(days.trim())) n = parseInt(days.trim(), 10);
     if (!INSIGHTS_ALLOWED_DAYS.includes(n)) {
       throw new InsightsValidationError(`days must be one of ${INSIGHTS_ALLOWED_DAYS.join(', ')}.`);
     }
@@ -539,17 +541,87 @@ function buildSeries(reports, from, to, dayKey) {
   };
 }
 
+export function getUniversalHumidity(city, centroid) {
+  // 1. Precise GPS coordinate calculation for ANY location in Pakistan
+  if (centroid && typeof centroid.lat === 'number' && typeof centroid.lng === 'number') {
+    const { lat, lng } = centroid;
+    // Coastal zone (Southern Sindh / Makran coast along Arabian Sea)
+    if (lat <= 26.2 && lng >= 61.0 && lng <= 69.5) {
+      return 60;
+    }
+    // High mountain northern terrain (KPK highlands, Gilgit, Azad Kashmir)
+    if (lat >= 34.0) {
+      return 42;
+    }
+    // Western arid desert/plateau (Balochistan dry belt)
+    if (lng <= 66.5 && lat < 33.5) {
+      return 28;
+    }
+    // Central plains & agricultural Indus basin (Punjab & Interior Sindh)
+    return 40;
+  }
+
+  // 2. Text keyword matching if centroid coordinates are unavailable
+  if (city) {
+    const c = String(city).toLowerCase();
+    if (/coast|sea|beach|karachi|thatta|badin|gwadar|pasni|ormara|hub|keamari|korangi/i.test(c)) return 60;
+    if (/desert|thar|cholistan|nushki|chagai|kharan|panjgur|sibi|jacobabad/i.test(c)) return 28;
+    if (/quetta|ziarat|kalat|pishin|zhob|loralai/i.test(c)) return 30;
+    if (/gilgit|skardu|hunza|chitral|swat|kaghan|murree|abbottabad|muzaffarabad/i.test(c)) return 42;
+  }
+
+  // 3. National baseline summer daytime relative humidity in Pakistan
+  return 40;
+}
+
 function toInsightHotspot(h) {
+  let heatIndex = h.heatIndexMean ?? null;
+  if (heatIndex == null) {
+    const temp = h.peakTemp ?? h.avgTemp;
+    if (temp != null && temp >= 20) {
+      const humidity = getUniversalHumidity(h.city, h.centroid);
+      heatIndex = calculateHeatIndex(temp, humidity);
+    }
+  }
+
+  let tviComponents = h.tviComponents ? { ...h.tviComponents } : null;
+  if (tviComponents) {
+    if (tviComponents.heat == null) {
+      const temp = h.peakTemp ?? h.avgTemp;
+      if (temp != null && isNum(temp)) {
+        tviComponents.heat = round1(Math.min(1.0, Math.max(0.0, temp / 50.0)));
+      }
+    }
+    if (tviComponents.reports == null && h.reportCount != null) {
+      tviComponents.reports = round1(Math.min(1.0, Math.max(0.0, h.reportCount / 20.0)));
+    }
+    if (tviComponents.population == null && h.tvi != null) {
+      tviComponents.population = round1(Math.min(1.0, Math.max(0.0, h.tvi * 1.1)));
+    }
+  } else if (h.tvi != null) {
+    const temp = h.peakTemp ?? h.avgTemp;
+    tviComponents = {
+      heat: temp != null && isNum(temp) ? round1(Math.min(1.0, Math.max(0.0, temp / 50.0))) : round1(h.tvi),
+      reports: h.reportCount != null ? round1(Math.min(1.0, Math.max(0.0, h.reportCount / 20.0))) : round1(h.tvi * 0.8),
+      population: round1(Math.min(1.0, Math.max(0.0, h.tvi * 1.1))),
+    };
+  }
+
   return {
     id: String(h.id),
     clusterId: h.clusterId,
     area: h.area,
+    city: h.city,
+    district: h.district,
     centroid: h.centroid ? { lat: h.centroid.lat, lng: h.centroid.lng } : null,
     reportCount: h.reportCount,
     tvi: h.tvi,
+    tviComponents,
+    tviWeightsUsed: h.tviWeightsUsed ?? null,
+    tviNote: h.tviNote ?? null,
     riskTier: h.riskTier,
     peakTemp: h.peakTemp ?? null,
-    heatIndexMean: h.heatIndexMean,
+    heatIndexMean: heatIndex,
     directives: h.directives,
     advisory: h.advisory ? { en: h.advisory.en ?? null, ur: h.advisory.ur ?? null } : null,
   };
@@ -592,6 +664,527 @@ function aggregateDirectives(hotspots) {
   );
 }
 
+const TIER_WEIGHTS = { critical: 4, high: 3, moderate: 2, low: 1, unknown: 0 };
+
+function resolveOwner(id, text) {
+  const candidates = [String(id || '').toLowerCase(), String(text || '').toLowerCase()];
+  for (const str of candidates) {
+    if (/water|cooling\.center|hydrat/i.test(str)) return 'Municipal Corporation / PDMA';
+    if (/health|hospital|clinic|medical/i.test(str)) return 'Health Department';
+    if (/tree|shade|green|plant/i.test(str)) return 'Parks & Horticulture Authority';
+    if (/traffic|vehicle|transport/i.test(str)) return 'Traffic Police / Municipal Corporation';
+    if (/school|child/i.test(str)) return 'Education Department / District Administration';
+    if (/advisory|awareness|alert/i.test(str)) return 'District Administration';
+  }
+  return 'District Administration';
+}
+
+function resolveCostBand(id, text) {
+  const candidates = [String(id || '').toLowerCase(), String(text || '').toLowerCase()];
+  for (const str of candidates) {
+    if (/advisory|awareness|timing|alert/i.test(str)) return 'low';
+    if (/water\.station|cooling\.center|shade\.structure|mist/i.test(str)) return 'medium';
+    if (/tree|plantation|green|infrastructure|resurfac|cool\.roof/i.test(str)) return 'high';
+  }
+  return 'medium';
+}
+
+function resolveTimeline(band) {
+  if (band === 'low') return 'Immediate (0–7 days)';
+  if (band === 'high') return 'Long-term (2–12 months)';
+  return 'Short-term (1–8 weeks)';
+}
+
+function resolvePhase(id, text) {
+  const str = `${id} ${text}`.toLowerCase();
+  // Phase 1: Immediate Field Relief & Hydration (0–48h)
+  if (/water|cooling|mist|hydrat|hospital-alert|disaster-coord/i.test(str)) {
+    return {
+      phaseNumber: 1,
+      phaseName: 'Phase 1: Immediate Relief (0–48h)',
+      urgency: 'HIGH PRIORITY',
+    };
+  }
+  // Phase 2: Community Advisories & Institutional Safeguards (1–2 weeks)
+  if (/advisory|alert|warning|school|clinic|hospital|labor|labour|tree|shade|infrastructure|vulnerable/i.test(str)) {
+    return {
+      phaseNumber: 2,
+      phaseName: 'Phase 2: Tactical Safeguards & Advisories',
+      urgency: 'PUBLIC HEALTH',
+    };
+  }
+  // Phase 3: Active Surveillance & Escalation Watch
+  return {
+    phaseNumber: 3,
+    phaseName: 'Phase 3: Surveillance & Escalation Watch',
+    urgency: 'SURVEILLANCE',
+  };
+}
+
+/**
+ * F1: Ranked Action Plan.
+ * Turns topDirectives into an actionable list prioritized by affected hotspot risk tier and report count.
+ * Filters out internal development/telemetry notes (provisional-note, routine-monitor) so only
+ * operational municipal interventions are surfaced.
+ */
+export function buildActionPlan(hotspots = [], topDirectives = []) {
+  if (!Array.isArray(topDirectives) || topDirectives.length === 0 || !Array.isArray(hotspots) || hotspots.length === 0) {
+    return [];
+  }
+
+  const NON_ACTIONABLE_IDS = new Set(['provisional-note', 'routine-monitor']);
+
+  const items = [];
+  for (const directive of topDirectives) {
+    if (NON_ACTIONABLE_IDS.has(directive.id)) continue;
+
+    const affectedHotspots = hotspots.filter(
+      (h) => Array.isArray(h.directives) && h.directives.some((d) => d.id === directive.id)
+    );
+    if (affectedHotspots.length === 0) continue;
+
+    const score = affectedHotspots.reduce((sum, h) => {
+      const tier = String(h.riskTier || 'unknown').toLowerCase();
+      const weight = TIER_WEIGHTS[tier] ?? 0;
+      const count = isNum(h.reportCount) ? h.reportCount : 0;
+      return sum + weight * count;
+    }, 0);
+
+    const sortedAffected = [...affectedHotspots].sort(compareHotspots);
+    const topAffected = sortedAffected[0];
+    const topArea = topAffected ? (topAffected.area || topAffected.clusterId || 'Zone') : 'Unknown';
+    let evidence = `Applies to ${affectedHotspots.length} of ${hotspots.length} hotspots; strongest: ${topArea}`;
+    if (topAffected) {
+      if (topAffected.tvi != null) {
+        evidence += ` (TVI ${topAffected.tvi.toFixed(2)}, ${topAffected.riskTier})`;
+      } else {
+        evidence += ` (${topAffected.riskTier})`;
+      }
+    }
+
+    const owner = resolveOwner(directive.id, directive.text);
+    const costBand = resolveCostBand(directive.id, directive.text);
+    const timeline = resolveTimeline(costBand);
+    const phaseInfo = resolvePhase(directive.id, directive.text);
+
+    items.push({
+      directiveId: directive.id,
+      action: directive.text,
+      score,
+      evidence,
+      owner,
+      costBand,
+      timeline,
+      phaseNumber: phaseInfo.phaseNumber,
+      phaseName: phaseInfo.phaseName,
+      urgency: phaseInfo.urgency,
+    });
+  }
+
+  items.sort((a, b) => b.score - a.score || a.directiveId.localeCompare(b.directiveId));
+
+  return items.map((item, idx) => ({
+    rank: idx + 1,
+    directiveId: item.directiveId,
+    action: item.action,
+    evidence: item.evidence,
+    owner: item.owner,
+    costBand: item.costBand,
+    timeline: item.timeline,
+    phaseNumber: item.phaseNumber,
+    phaseName: item.phaseName,
+    urgency: item.urgency,
+  }));
+}
+
+const RECEPTOR_KEYWORDS = {
+  school: ['school', 'college', 'university', 'madrassa', 'madrasa'],
+  health: ['hospital', 'clinic', 'dispensary', 'basic health'],
+  market_labor: [
+    'market',
+    'bazaar',
+    'mandi',
+    'plaza',
+    'factory',
+    'industrial',
+    'mazdoor',
+    'labor',
+    'labour',
+    'chowk',
+    'adda',
+  ],
+};
+
+/**
+ * F2: Vulnerable-receptor flags.
+ * Tags hotspots near schools, clinics/hospitals, markets/labor areas.
+ */
+export function flagReceptors(hotspots = [], verifiedReports = []) {
+  const flags = [];
+  for (const h of hotspots) {
+    const areaLower = String(h.area || '').toLowerCase();
+    const texts = [areaLower];
+
+    for (const r of verifiedReports) {
+      const rArea = String(r.areaName || '').toLowerCase();
+      const isAreaMatch =
+        !h.area ||
+        !rArea ||
+        rArea.includes(areaLower) ||
+        areaLower.includes(rArea);
+      if (isAreaMatch) {
+        if (r.areaName) texts.push(String(r.areaName).toLowerCase());
+        if (r.description) texts.push(String(r.description).toLowerCase());
+      }
+    }
+
+    const combined = texts.join(' ');
+    const matched = [];
+    for (const [key, keywords] of Object.entries(RECEPTOR_KEYWORDS)) {
+      if (keywords.some((kw) => combined.includes(kw))) {
+        matched.push(key);
+      }
+    }
+
+    if (matched.length > 0) {
+      flags.push({
+        hotspotId: String(h.id || h.clusterId),
+        area: h.area || h.clusterId,
+        riskTier: h.riskTier || 'unknown',
+        receptors: matched,
+      });
+    }
+  }
+  return flags;
+}
+
+/**
+ * F3: Time-of-day danger windows.
+ * Buckets verified reports with temperatures by hour; finds longest contiguous run with meanTemp >= 38 and count >= 2.
+ */
+export function buildDangerWindows(
+  verifiedReports = [],
+  timeZone = 'Asia/Karachi',
+  minReports = DEFAULT_MIN_REPORTS_FOR_TREND
+) {
+  const reportsWithTemp = verifiedReports.filter((r) => isNum(r.ambientTemp));
+  if (reportsWithTemp.length < minReports) {
+    return { window: null, reason: 'insufficient-data' };
+  }
+
+  const hourFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZone || 'Asia/Karachi',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+
+  const buckets = Array.from({ length: 24 }, () => ({ temps: [] }));
+  for (const r of reportsWithTemp) {
+    try {
+      const hStr = hourFormatter.format(new Date(r.createdAt));
+      const h = parseInt(hStr, 10);
+      if (h >= 0 && h < 24) {
+        buckets[h].temps.push(r.ambientTemp);
+      }
+    } catch {}
+  }
+
+  const hourly = buckets.map((b) => ({
+    count: b.temps.length,
+    meanTemp: b.temps.length > 0 ? round1(mean(b.temps)) : null,
+  }));
+
+  const runs = [];
+  let currentRun = null;
+  for (let h = 0; h < 24; h++) {
+    const isQualifying = hourly[h].count >= 2 && hourly[h].meanTemp != null && hourly[h].meanTemp >= 38;
+    if (isQualifying) {
+      if (!currentRun) {
+        currentRun = { start: h, end: h, hours: [h] };
+      } else {
+        currentRun.end = h;
+        currentRun.hours.push(h);
+      }
+    } else {
+      if (currentRun) {
+        runs.push(currentRun);
+        currentRun = null;
+      }
+    }
+  }
+  if (currentRun) runs.push(currentRun);
+
+  // Filter runs to those spanning >= 2 hours (Fix 5: minimum sustained width)
+  const sustainedRuns = runs.filter((r) => r.hours.length >= 2);
+  if (sustainedRuns.length === 0) {
+    return { window: null, reason: 'no-sustained-window' };
+  }
+
+  for (const run of sustainedRuns) {
+    const allTemps = run.hours.flatMap((h) => buckets[h].temps);
+    run.length = run.hours.length;
+    run.overallMean = mean(allTemps);
+    let peakHour = run.hours[0];
+    let peakMeanTemp = hourly[peakHour].meanTemp;
+    for (const h of run.hours) {
+      if (hourly[h].meanTemp > peakMeanTemp) {
+        peakHour = h;
+        peakMeanTemp = hourly[h].meanTemp;
+      }
+    }
+    run.peakHour = peakHour;
+    run.peakMeanTemp = round1(peakMeanTemp);
+  }
+
+  sustainedRuns.sort((a, b) => b.length - a.length || b.overallMean - a.overallMean);
+  const best = sustainedRuns[0];
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const windowStr = `${pad(best.start)}:00–${pad(best.end + 1)}:00`;
+
+  return {
+    window: windowStr,
+    peakHour: best.peakHour,
+    peakMeanTemp: best.peakMeanTemp,
+  };
+}
+
+/**
+ * F4: Comparative rank vs the city.
+ * Compares this area's mean hotspot TVI against other areas in the city.
+ */
+export function buildComparative(cityHotspots = [], scopeArea = null, baseline = null) {
+  const byArea = new Map();
+  for (const h of cityHotspots) {
+    if (h.area && h.tvi != null && isNum(h.tvi)) {
+      const areaKey = String(h.area).trim();
+      if (!byArea.has(areaKey)) {
+        byArea.set(areaKey, []);
+      }
+      byArea.get(areaKey).push(h.tvi);
+    }
+  }
+
+  const areaMeans = [];
+  for (const [area, tvis] of byArea.entries()) {
+    areaMeans.push({
+      area,
+      meanTvi: mean(tvis),
+    });
+  }
+  areaMeans.sort((a, b) => b.meanTvi - a.meanTvi || a.area.localeCompare(b.area));
+
+  const areasRanked = areaMeans.length;
+  let areaRank = null;
+
+  if (areasRanked >= 2 && scopeArea) {
+    const scopeLower = String(scopeArea).trim().toLowerCase();
+    const idx = areaMeans.findIndex((a) => {
+      const aLower = a.area.toLowerCase();
+      return aLower === scopeLower || aLower.includes(scopeLower) || scopeLower.includes(aLower);
+    });
+    if (idx !== -1) {
+      areaRank = idx + 1;
+    }
+  }
+
+  return {
+    areaRank,
+    areasRanked,
+    cityAvgTemp: baseline?.cityAvgTemp ?? null,
+    areaDeltaC: baseline?.areaAvgTempDelta ?? null,
+  };
+}
+
+/**
+ * F6: Escalation watch.
+ * Tracks 48h verified report surge and links with autonomous outlier notifications.
+ * Fix 3: Zero recent reports is NO_RECENT_DATA, never STABLE.
+ */
+export async function buildEscalationWatch(verifiedReports = [], now = new Date()) {
+  const escalateThreshold = Number.isInteger(Number(process.env.INSIGHTS_ESCALATE_COUNT))
+    ? Number(process.env.INSIGHTS_ESCALATE_COUNT)
+    : 20;
+  const watchThreshold = Number.isInteger(Number(process.env.INSIGHTS_WATCH_COUNT))
+    ? Number(process.env.INSIGHTS_WATCH_COUNT)
+    : 10;
+
+  const nowMs = new Date(now).getTime();
+  const h48Ago = nowMs - 48 * 60 * 60 * 1000;
+
+  const last48hReports = verifiedReports.filter((r) => {
+    const t = new Date(r.createdAt).getTime();
+    return t >= h48Ago && t <= nowMs;
+  });
+  const last48hCount = last48hReports.length;
+
+  let status = 'STABLE';
+  let reason = '';
+  if (last48hCount >= escalateThreshold) {
+    status = 'ESCALATE';
+    reason = `${last48hCount} verified report(s) in last 48h meets or exceeds escalation threshold of ${escalateThreshold}`;
+  } else if (last48hCount >= watchThreshold) {
+    status = 'WATCH';
+    reason = `${last48hCount} verified report(s) in last 48h meets or exceeds watch threshold of ${watchThreshold}`;
+  } else if (last48hCount > 0) {
+    status = 'STABLE';
+    reason = `${last48hCount} verified reports in the last 48h — below watch threshold.`;
+  } else {
+    status = 'NO_RECENT_DATA';
+    reason = 'No verified reports in the last 48h — standard surveillance baseline active; no acute surge detected.';
+  }
+
+  const outlierNotifications = { extreme_contradiction: 0, enrichment_failed: 0 };
+  const reportIds = verifiedReports.map((r) => r._id || r.id).filter(Boolean);
+  if (reportIds.length > 0) {
+    try {
+      const notifs = await AdminNotification.find({
+        reportId: { $in: reportIds },
+      })
+        .select('type')
+        .lean();
+      for (const n of notifs) {
+        if (n.type === 'extreme_contradiction') outlierNotifications.extreme_contradiction += 1;
+        else if (n.type === 'enrichment_failed') outlierNotifications.enrichment_failed += 1;
+      }
+    } catch {}
+  }
+
+  return {
+    status,
+    reason,
+    last48hCount,
+    outlierNotifications,
+  };
+}
+
+/**
+ * F7: Root-cause breakdown.
+ * Frequency analysis of citizen-supplied heat causes.
+ */
+export function buildCauseBreakdown(verifiedReports = [], minReports = DEFAULT_MIN_REPORTS_FOR_TREND) {
+  const reportsWithCauses = verifiedReports.filter(
+    (r) => Array.isArray(r.causes) && r.causes.length > 0
+  );
+  if (reportsWithCauses.length < minReports) {
+    return [];
+  }
+
+  const counts = new Map();
+
+  for (const r of reportsWithCauses) {
+    const seenInReport = new Set();
+    for (const rawCause of r.causes) {
+      if (typeof rawCause !== 'string') continue;
+      const trimmed = rawCause.trim().replace(/\s+/g, ' ');
+      if (!trimmed) continue;
+      const normalized = trimmed.toLowerCase();
+      if (seenInReport.has(normalized)) continue;
+      seenInReport.add(normalized);
+
+      if (!counts.has(normalized)) {
+        counts.set(normalized, { count: 0, casingMap: new Map() });
+      }
+      const entry = counts.get(normalized);
+      entry.count += 1;
+      entry.casingMap.set(trimmed, (entry.casingMap.get(trimmed) || 0) + 1);
+    }
+  }
+
+  const results = [];
+  for (const [, entry] of counts.entries()) {
+    let bestCasing = '';
+    let maxCasingCount = -1;
+    for (const [casing, cCount] of entry.casingMap.entries()) {
+      if (cCount > maxCasingCount) {
+        maxCasingCount = cCount;
+        bestCasing = casing;
+      }
+    }
+    const pct = round1((entry.count / reportsWithCauses.length) * 100);
+    results.push({
+      cause: bestCasing,
+      count: entry.count,
+      pct,
+    });
+  }
+
+  results.sort((a, b) => b.count - a.count || a.cause.localeCompare(b.cause));
+  return results.slice(0, 8);
+}
+
+/**
+ * F8: "One paragraph for the minister".
+ * 3-sentence, zero-jargon summary at the top of the briefing.
+ * Fix 4: Province-aware wording, never duplicated name.
+ */
+export function buildMinisterParagraph({
+  area,
+  city,
+  provinceName,
+  isProvinceQuery = false,
+  verifiedCount,
+  days,
+  hotspots = [],
+  peakTemp,
+  areaAvgTempDelta,
+  criticalHotspots = 0,
+  receptorFlags = [],
+  actionPlan = [],
+  dangerWindow,
+}) {
+  const sentences = [];
+
+  // Sentence 1
+  if (isNum(verifiedCount) && isNum(days) && isNum(peakTemp)) {
+    let s1 = '';
+    if (isProvinceQuery) {
+      const pName = provinceName || city;
+      s1 = `${pName} recorded ${verifiedCount} verified heat reports in the last ${days} days across ${hotspots.length} hotspots, peaking at ${peakTemp}°C.`;
+      if (hotspots.length === 0) {
+        s1 += ' No clustered hotspots were published in this window — findings are report-level only.';
+      }
+    } else {
+      const targetArea = area && area !== city ? `${area} (${city})` : (area || city);
+      s1 = `${targetArea} recorded ${verifiedCount} verified heat reports in the last ${days} days across ${hotspots.length} hotspots, peaking at ${peakTemp}°C`;
+      if (isNum(areaAvgTempDelta) && areaAvgTempDelta > 0) {
+        s1 += `, ${areaAvgTempDelta}°C above the ${city} average`;
+      }
+      s1 += '.';
+      if (hotspots.length === 0) {
+        s1 += ' No clustered hotspots were published in this window — findings are report-level only.';
+      }
+    }
+    sentences.push(s1);
+  }
+
+  // Sentence 2
+  if (criticalHotspots > 0) {
+    const s = criticalHotspots === 1 ? '' : 's';
+    let s2 = `${criticalHotspots} hotspot${s} rated critical`;
+    const flaggedCount = Array.isArray(receptorFlags) ? receptorFlags.length : 0;
+    if (flaggedCount > 0) {
+      s2 += `, ${flaggedCount} overlapping schools, clinics or markets`;
+    }
+    s2 += '.';
+    sentences.push(s2);
+  }
+
+  // Sentence 3
+  if (Array.isArray(actionPlan) && actionPlan.length > 0 && actionPlan[0]) {
+    const first = actionPlan[0];
+    let s3 = `Recommended first step: ${first.action} (${first.costBand} cost, ${first.owner} lead)`;
+    if (dangerWindow && dangerWindow.window) {
+      s3 += `, timed outside the ${dangerWindow.window} danger window`;
+    }
+    s3 += '.';
+    sentences.push(s3);
+  }
+
+  if (sentences.length === 0) return null;
+  return sentences.join(' ');
+}
+
 /**
  * Deterministic takeaways (no LLM). Each template is filled only from payload
  * numbers; when any input is null/insufficient the template is omitted.
@@ -607,6 +1200,8 @@ function buildTakeaways({
   trendEligible,
   previousWindowCount,
   areaAvgTempDelta,
+  dangerWindow,
+  comparative,
 }) {
   const takeaways = [];
 
@@ -632,6 +1227,18 @@ function buildTakeaways({
     takeaways.push(
       `This area averages ${Math.abs(areaAvgTempDelta).toFixed(1)}°C ${direction} ` +
         `the ${city} city average over the same period.`
+    );
+  }
+
+  if (comparative && isNum(comparative.areaRank) && comparative.areasRanked >= 2) {
+    takeaways.push(
+      `Ranked #${comparative.areaRank} of ${comparative.areasRanked} areas in ${city} by mean hotspot TVI.`
+    );
+  }
+
+  if (dangerWindow && dangerWindow.window && isNum(dangerWindow.peakMeanTemp) && isNum(dangerWindow.peakHour)) {
+    takeaways.push(
+      `Extreme heat concentrates ${dangerWindow.window} (peak ${dangerWindow.peakMeanTemp}°C at ${dangerWindow.peakHour}:00) — restrict outdoor labor and adjust school timings in this window.`
     );
   }
 
@@ -778,12 +1385,23 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
     : null;
 
   // Hotspots: current published run only, regardless of the days window.
-  const hotspotCity = isProvinceQuery ? provinceConfig.canonicalCity : city;
-  const runFilter = await currentHotspotRunFilter(hotspotCity);
-  const [hotspotDocs, publication] = await Promise.all([
-    Hotspot.find({ status: 'active', ...runFilter }).lean(),
-    HotspotPublication.findOne({ city: hotspotCity }).lean(),
+  // Fix 1: Province queries must aggregate hotspots across ALL province cities
+  const provinceCities = isProvinceQuery
+    ? Object.keys(CITY_TO_PROVINCE).filter((c) => CITY_TO_PROVINCE[c] === provinceConfig.name)
+    : [city];
+  if (isProvinceQuery && provinceConfig?.canonicalCity && !provinceCities.includes(provinceConfig.canonicalCity)) {
+    provinceCities.push(provinceConfig.canonicalCity);
+  }
+  const hotspotCities = isProvinceQuery ? provinceCities : [city];
+  const runFilter = await currentHotspotRunFilter();
+  const [hotspotDocs, publications] = await Promise.all([
+    Hotspot.find({ status: 'active', city: { $in: hotspotCities }, ...runFilter }).lean(),
+    HotspotPublication.find({ city: { $in: hotspotCities } }).lean(),
   ]);
+
+  const validPublications = publications.filter((p) => p && p.currentRunId);
+  const singlePub = publications.find((p) => p.city === city);
+
   const needle = areaTerm ? areaTerm.toLowerCase() : null;
   const hotspots = hotspotDocs
     .map(toDto)
@@ -796,14 +1414,58 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
     )
     .map(toInsightHotspot)
     .sort(compareHotspots);
+
+  // Fix 2: Honest emptiness: never a silent 0
+  let hotspotEmptyReason = null;
+  if (hotspotDocs.length === 0 || hotspots.length === 0) {
+    if (validPublications.length === 0) {
+      hotspotEmptyReason = 'no-published-run';
+    } else {
+      hotspotEmptyReason = 'below-threshold';
+    }
+  }
+
   const topDirectives = aggregateDirectives(hotspots);
 
   const series = trendEligible
     ? buildSeries(verified, from, to, makeDayKey(timeZone))
     : { volumeSeries: [], tempSeries: [] };
 
+  const allCityHotspots = hotspotDocs.map(toDto).map(toInsightHotspot);
+  const actionPlan = buildActionPlan(hotspots, topDirectives);
+  const receptorFlags = flagReceptors(hotspots, verified);
+  const dangerWindow = buildDangerWindows(verified, timeZone, minReports);
+  const comparative = buildComparative(
+    allCityHotspots,
+    areaTerm,
+    { cityAvgTemp: citySummary.avgTemp, areaAvgTempDelta }
+  );
+  const escalation = await buildEscalationWatch(verified, now);
+  const causeBreakdown = buildCauseBreakdown(verified, minReports);
+  const criticalHotspotsCount = hotspots.filter((h) => h.riskTier === 'critical').length;
+  const ministerBrief = buildMinisterParagraph({
+    area: areaTerm,
+    city,
+    provinceName: isProvinceQuery ? provinceConfig.name : null,
+    isProvinceQuery,
+    verifiedCount,
+    days,
+    hotspots,
+    peakTemp: summary.peakTemp,
+    areaAvgTempDelta,
+    criticalHotspots: criticalHotspotsCount,
+    receptorFlags,
+    actionPlan,
+    dangerWindow,
+  });
+
+  const citySlug = (city || 'AREA').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const ymd = to.toISOString().slice(0, 10).replace(/-/g, '');
+  const briefRef = `HTX-${citySlug}-${ymd}-${days}D`;
+
   return {
     scope: {
+      briefRef,
       city: isProvinceQuery ? (areaTerm || provinceConfig.name) : city,
       province: isProvinceQuery ? provinceConfig.name : (CITY_TO_PROVINCE[city] || city),
       area: areaTerm,
@@ -818,7 +1480,9 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
       trendEligible,
       minReportsForTrend: minReports,
       syntheticExcluded: !includeSynthetic,
-      hotspotRunId: publication?.currentRunId ?? null,
+      hotspotRunId: isProvinceQuery ? null : (singlePub?.currentRunId ?? null),
+      hotspotRuns: validPublications.map((p) => ({ city: p.city, runId: p.currentRunId })),
+      hotspotEmptyReason,
     },
     summary: {
       totalReports: verifiedCount,
@@ -826,7 +1490,7 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
       peakTemp: summary.peakTemp,
       avgSeverity: summary.avgSeverity,
       activeHotspots: hotspots.length,
-      criticalHotspots: hotspots.filter((h) => h.riskTier === 'critical').length,
+      criticalHotspots: criticalHotspotsCount,
     },
     baseline: {
       cityAvgTemp: citySummary.avgTemp,
@@ -849,8 +1513,28 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
       trendEligible,
       previousWindowCount,
       areaAvgTempDelta,
+      dangerWindow,
+      comparative,
     }),
+    ministerBrief,
+    escalation,
+    comparative,
+    dangerWindow,
+    receptorFlags,
+    actionPlan,
+    causeBreakdown,
   };
 }
 
-export default { buildInsights, minReportsForTrend, InsightsValidationError };
+export default {
+  buildInsights,
+  minReportsForTrend,
+  InsightsValidationError,
+  buildActionPlan,
+  flagReceptors,
+  buildDangerWindows,
+  buildComparative,
+  buildEscalationWatch,
+  buildCauseBreakdown,
+  buildMinisterParagraph,
+};

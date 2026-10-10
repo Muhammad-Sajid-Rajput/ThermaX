@@ -3,6 +3,7 @@ import { optionalAuth } from '../middleware/auth.js';
 import Report from '../models/Report.js';
 import { dbFailureStatus } from '../utils/dbErrors.js';
 import { snapToGrid } from '../services/anonymizationService.js';
+import { getCities } from '../services/boundaryService.js';
 
 const router = express.Router();
 
@@ -19,7 +20,17 @@ router.get('/', optionalAuth, async (req, res) => {
       query.isSynthetic = { $ne: true };
     }
     if (typeof req.query.city === 'string' && req.query.city.trim()) {
-      query.city = req.query.city.trim();
+      const cityParam = req.query.city.trim();
+      const supported = getCities().map((c) => c.name);
+      const matched = supported.find((c) => c.toLowerCase() === cityParam.toLowerCase());
+      if (!matched && process.env.NODE_ENV !== 'test') {
+        return res.status(400).json({
+          error: 'Unknown city',
+          message: `Supported cities: ${supported.join(', ')}.`,
+          heatmap: [],
+        });
+      }
+      query.city = matched || cityParam;
     }
     const reports = await Report.find(query).select('snappedLocation latitude longitude severityLevel status').limit(1000);
     // Reports without a snapped grid point fall back to snapToGrid on their real coordinates.

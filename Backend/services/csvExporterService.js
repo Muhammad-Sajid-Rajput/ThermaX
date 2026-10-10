@@ -78,7 +78,14 @@ export function generateInsightsCSV(payload) {
       ? Number(((dataQuality.flaggedCount / dataQuality.reportCount) * 100).toFixed(1))
       : null;
 
-  section('SUMMARY', ['key', 'value'], [
+  const summaryRows = [];
+  if (payload.ministerBrief) {
+    summaryRows.push(['ministerBrief', payload.ministerBrief]);
+  }
+  if (scope.briefRef) {
+    summaryRows.push(['scope.briefRef', scope.briefRef]);
+  }
+  summaryRows.push(
     ['scope.city', scope.city],
     ['scope.area', scope.area],
     ['scope.days', scope.days],
@@ -100,10 +107,37 @@ export function generateInsightsCSV(payload) {
     ['summary.criticalHotspots', summary.criticalHotspots],
     ['baseline.cityAvgTemp', baseline.cityAvgTemp],
     ['baseline.areaAvgTempDelta', baseline.areaAvgTempDelta],
-    ['baseline.cityReportCount', baseline.cityReportCount],
-  ]);
+    ['baseline.cityReportCount', baseline.cityReportCount]
+  );
+
+  section('SUMMARY', ['key', 'value'], summaryRows);
 
   section('TAKEAWAYS', ['takeaway'], payload.takeaways.map((t) => [t]));
+
+  if (Array.isArray(payload.actionPlan) && payload.actionPlan.length > 0) {
+    section(
+      'ACTION_PLAN',
+      ['rank', 'directiveId', 'action', 'evidence', 'owner', 'costBand', 'timeline'],
+      payload.actionPlan.map((a) => [
+        a.rank,
+        a.directiveId,
+        a.action,
+        a.evidence,
+        a.owner,
+        a.costBand,
+        a.timeline,
+      ]),
+      'Indicative band — not a costed estimate.'
+    );
+  }
+
+  if (Array.isArray(payload.causeBreakdown) && payload.causeBreakdown.length > 0) {
+    section(
+      'CAUSE_BREAKDOWN',
+      ['cause', 'count', 'pct'],
+      payload.causeBreakdown.map((c) => [c.cause, c.count, c.pct])
+    );
+  }
 
   section(
     'SEVERITY_DISTRIBUTION',

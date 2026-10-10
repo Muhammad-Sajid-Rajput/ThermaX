@@ -25,6 +25,8 @@ export function toDto(h) {
     clusterId: h.clusterId,
     area: h.district || h.zone || h.city,
     city: h.city,
+    district: h.district || h.zone || null,
+    zone: h.zone || null,
     avgTemperature: h.avgTemp,
     peakTemp: h.peakTemp,
     avgSeverity: severityToLevel(h.severity),
