@@ -23,9 +23,18 @@ spec:
           image: thermaxacr.azurecr.io/thermax-ml:latest
           ports:
             - containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/etc/secrets/gee/service-account.json"
           envFrom:
             - secretRef:
                 name: thermax-secrets
+          volumeMounts:
+            - name: gee-credentials
+              mountPath: /etc/secrets/gee
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /health
@@ -38,6 +47,11 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: gee-credentials
+          secret:
+            secretName: gee-credentials
+            optional: true
 ---
 apiVersion: v1
 kind: Service

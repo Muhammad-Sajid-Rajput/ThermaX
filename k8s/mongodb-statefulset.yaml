@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: thermax-mongodb
+  labels:
+    app: thermax-mongodb
+spec:
+  type: ClusterIP
+  ports:
+    - port: 27017
+      targetPort: 27017
+      name: mongodb
+  selector:
+    app: thermax-mongodb
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thermax-mongodb
+  labels:
+    app: thermax-mongodb
+spec:
+  serviceName: thermax-mongodb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thermax-mongodb
+  template:
+    metadata:
+      labels:
+        app: thermax-mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:6.0
+          ports:
+            - containerPort: 27017
+              name: mongodb
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          livenessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

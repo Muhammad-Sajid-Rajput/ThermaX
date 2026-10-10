@@ -24,6 +24,9 @@ spec:
           image: thermaxacr.azurecr.io/thermax-backend:latest
           ports:
             - containerPort: 5000
+          env:
+            - name: PORT
+              value: "5000"
           envFrom:
             - secretRef:
                 name: thermax-secrets

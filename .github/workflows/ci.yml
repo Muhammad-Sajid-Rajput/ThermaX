@@ -40,8 +40,7 @@ jobs:
         working-directory: Frontend
       - run: npm test
         working-directory: Frontend
-      # Lint is warn-only for now (legacy setting); the suite is at 0 errors, 0 warnings.
-      - run: npm run lint -- --max-warnings=10000 || true
+      - run: npm run lint
         working-directory: Frontend
       - run: npm run build
         working-directory: Frontend
