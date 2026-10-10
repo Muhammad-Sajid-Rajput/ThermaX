@@ -4,7 +4,8 @@
 
 Citizen heat reports + real weather + real satellite land-surface temperature,
 fused into per-city hotspot maps with vulnerability scoring (TVI-lite) and
-deterministic bilingual heat advisories — for Karachi, Lahore, and Islamabad.
+deterministic bilingual heat advisories — covering 14 metropolitan centers across
+Pakistan (with high-resolution WorldPop 2020 1 km population grids for Karachi, Lahore, and Islamabad).
 
 Final-year project. Built locally; this repository is the complete system.
 
@@ -36,20 +37,19 @@ Final-year project. Built locally; this repository is the complete system.
                                      └──────────────────────────┘
 ```
 
-- **Frontend** (`Frontend/`): citizen reporting with photo upload, heatmap
+- **Frontend** (`Frontend/`): citizen reporting with verified environmental observations (ambient temp, severity, thermal causes), heatmap
   and hotspot views, admin moderation/TVI/directive panels, bilingual
   citizen advisory banner.
 - **Backend** (`Backend/`): the system of record. Email-OTP auth, report
   lifecycle (`pending → verified | flagged | rejected`), city-resolution
-  against OSM boundaries, reader-atomic hotspot reads via per-city
+  via canonical metropolitan bounding boxes and centroid routing, reader-atomic hotspot reads via per-city
   publication pointers.
 - **ML service** (`ML/`): enrichment and scoring. Per-report: weather
   snapshot → GEE/MODIS LST → 4-check QC → fusion heatScore. Per tick:
   enrich pending → DBSCAN per city (verified-only) → TVI-lite → deterministic
   directives + EN/UR advisories → atomic publication.
 
-City authority is shared: `Backend/data/cities.json` (Karachi, Lahore,
-Islamabad — OSM boundary polygons, WorldPop 2020 1 km population grids).
+City authority is shared: `Backend/data/cities.json` (14 canonical metropolitan divisions across Pakistan, with WorldPop 2020 1 km population grids in `Backend/data/pop_grids/` for Karachi, Lahore, and Islamabad).
 
 ---
 
@@ -57,7 +57,7 @@ Islamabad — OSM boundary polygons, WorldPop 2020 1 km population grids).
 
 - **Report lifecycle with teeth & autonomous moderation.** Reports start `pending`. QC (citizen temp
   vs provider air temp ±3 °C · severity vs satellite surface-air excess ·
-  GPS plausibility · photo presence) moves them to `verified` or `flagged`.
+  GPS plausibility · independent environmental cross-validation) moves them to `verified` or `flagged`.
   GPS alone can never verify — with no environmental signal the report goes
   to human moderation. Routine moderation is fully autonomous: the admin acts
   only when notified of deliberate outliers (`enrichment_failed` or `extreme_contradiction`
@@ -88,6 +88,10 @@ Islamabad — OSM boundary polygons, WorldPop 2020 1 km population grids).
   extrapolating), ranks published hotspots by TVI descending, aggregates top
   directives, and provides three exits: interactive UI, formula-injection-guarded
   multi-section CSV (`format=csv`), raw JSON, and styled print-to-PDF (`window.print()`).
+- **Pakistan-wide administrative coverage & spatial search.** 14 canonical metropolitan
+  centers spanning Punjab, Sindh, Khyber Pakhtunkhwa, Balochistan, Islamabad Capital Territory,
+  Azad Kashmir, and Gilgit-Baltistan, alongside OpenStreetMap Nominatim live search for granular
+  geocoding across all local administrative boundaries.
 
 ## What it does NOT do
 
@@ -195,7 +199,8 @@ ThermaX/
 - **Cool-shelter navigation** — routing citizens to cooling centers.
 - **LLM narrator** — natural-language hotspot briefings (parked: determinism
   preferred for safety-critical advisories).
-- **Nationwide operations** — beyond the 3 supported cities.
+- **Hyper-local sub-kilometer population grids** — expanding the WorldPop 1 km rasters beyond
+  the current primary metropolitan centers (Karachi, Lahore, Islamabad) to all secondary districts.
 - **Real PDF engine** for exports (currently honestly HTML/CSV only).
 - **Field validation** — QC against real fraud, DBSCAN against real report
   density; calibration of fusion/TVI weights against health-outcome records.
