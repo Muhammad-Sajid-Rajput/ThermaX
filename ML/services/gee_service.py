@@ -9,6 +9,7 @@ import os
 import json
 import datetime
 import importlib
+import concurrent.futures
 from config import GEE_PROJECT_ID
 
 # Credentials: set GOOGLE_APPLICATION_CREDENTIALS to the GEE service-account
@@ -68,7 +69,21 @@ class GEEService:
                     .sort('system:time_start', False)
                 )
                 image = dataset.first()
-                val = image.reduceRegion(self.ee.Reducer.mean(), point, 1000).getInfo()
+
+                def _fetch_from_gee():
+                    v = image.reduceRegion(self.ee.Reducer.mean(), point, 1000).getInfo()
+                    dt = image.date().format('YYYY-MM-dd').getInfo() if v else None
+                    return v, dt
+
+                # 8s abort timeout prevents hung satellite calls from blocking workers
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_fetch_from_gee)
+                    try:
+                        val, observed_date = future.result(timeout=8.0)
+                    except concurrent.futures.TimeoutError:
+                        print(f"[GEE Service] Satellite query timed out (>8s) for ({lat}, {lng})")
+                        return dict(UNAVAILABLE)
+
                 if val and val.get('LST_Day_1km') is not None:
                     lst_c = round(val['LST_Day_1km'] * 0.02 - 273.15, 1)
                     return {
@@ -79,7 +94,7 @@ class GEEService:
                         "landCover": None,
                         "uhiClassification": self._classify(lst_c),
                         "geeTileId": f"MOD11A1_{lat:.4f}_{lng:.4f}",
-                        "observedAt": image.date().format('YYYY-MM-dd').getInfo(),
+                        "observedAt": observed_date,
                         "source": "MODIS Terra LST (Google Earth Engine)",
                     }
             except Exception as e:

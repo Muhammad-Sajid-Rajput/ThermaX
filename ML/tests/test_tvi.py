@@ -64,11 +64,21 @@ def test_tvi_weights_sum_to_one_on_partial_data():
 
 # ─── Population grid lookups (graceful degradation when files absent) ─────
 
-def test_pop_grid_missing_files_returns_none_gracefully():
+def test_pop_grid_missing_files_returns_none_gracefully(monkeypatch):
     # Without local pop_grid files, pop_density_at returns None safely so TVI renormalizes
+    monkeypatch.setattr(pop_grid, "POP_GRID_DIR", "/nonexistent_dir")
+    pop_grid._cache.clear()
     assert pop_grid.pop_density_at("Karachi", 24.8607, 67.0011) is None
     assert pop_grid.pop_density_at("Lahore", 31.5204, 74.3587) is None
     assert pop_grid.pop_density_at("Islamabad", 33.6844, 73.0479) is None
+    pop_grid._cache.clear()
+
+
+def test_pop_grid_lookup_with_real_files():
+    # With WorldPop grids present, Karachi returns valid positive density
+    density = pop_grid.pop_density_at("Karachi", 24.8607, 67.0011)
+    assert density is not None
+    assert density > 0
 
 
 def test_pop_grid_sea_point_returns_none():

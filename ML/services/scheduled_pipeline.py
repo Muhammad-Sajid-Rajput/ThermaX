@@ -144,6 +144,30 @@ def _mean_heat_score(db, member_ids):
     return round(sum(scores) / len(scores), 2)
 
 
+def _dominant_area_name(db, member_ids):
+    """Find the dominant neighborhood / areaName from the cluster's member reports."""
+    if not member_ids:
+        return None
+    candidates = set(member_ids)
+    for mid in list(member_ids):
+        try:
+            bson = importlib.import_module("bson")
+            candidates.add(bson.ObjectId(mid))
+        except Exception:
+            pass
+    area_counts = {}
+    for r in db.reports.find(
+        {"_id": {"$in": list(candidates)}},
+        {"areaName": 1, "district": 1, "zone": 1}
+    ):
+        name = (r.get("areaName") or r.get("district") or r.get("zone") or "").strip()
+        if name:
+            area_counts[name] = area_counts.get(name, 0) + 1
+    if not area_counts:
+        return None
+    return max(area_counts.items(), key=lambda x: x[1])[0]
+
+
 def score_clusters(db, city, clusters):
     """Attach TVI-lite scores to raw clusters. Pure derivation, no I/O
     beyond the member heatScore lookup and the static pop grid."""
@@ -185,9 +209,12 @@ def publish_hotspot_run(db, city, scored_clusters):
     run_id = f"{city}-{now.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     docs = []
     for c in scored_clusters:
+        dominant_area = c.get("district") or _dominant_area_name(db, c.get("memberReportIds", []))
         docs.append({
             "clusterId": c["clusterId"],
             "city": city,
+            "district": dominant_area,
+            "zone": dominant_area,
             "centroid": c["centroid"],
             "boundary": c["boundary"],
             "avgTemp": c["avgTemp"],
