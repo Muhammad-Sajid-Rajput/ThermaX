@@ -122,6 +122,8 @@ describe('weather service (Phase 2: never fabricate)', () => {
         new Date(providerLocaltime).toISOString()
       );
       expect(snapshot.fetchedAt).not.toBeNull();
+      expect(snapshot.humidity).toBe(35);
+      expect(snapshot.heatIndexSource).toBe('provider');
       await WeatherSnapshot.deleteOne({ _id: snapshot._id });
     } finally {
       globalThis.fetch = realFetch;

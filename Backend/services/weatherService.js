@@ -254,6 +254,8 @@ export async function enrichAndSaveSnapshot(reportId, lat, lng) {
           $set: {
             windSpeed: weatherDto.windKph != null ? Number((weatherDto.windKph / 3.6).toFixed(1)) : null,
             heatIndex,
+            humidity: weatherDto.humidity ?? null,
+            heatIndexSource: 'provider',
             // Air temperature is stored (not just heat index) so QC can compare
             // the citizen-measured temperature against the provider reading.
             temperature: weatherDto.temperature ?? null,

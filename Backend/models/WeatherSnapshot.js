@@ -15,6 +15,13 @@ const weatherSnapshotSchema = new Schema(
     },
     windSpeed: Number,
     heatIndex: Number,
+    // Provider-measured relative humidity (%)
+    humidity: Number,
+    // Provenance marker: 'provider' for live enrichment, 'weather-cache-backfill' for backfilled
+    heatIndexSource: {
+      type: String,
+      default: 'provider',
+    },
     // Air temperature (°C) from the provider. Needed for QC comparison of
     // citizen-measured temperature. Null when unavailable — never faked.
     temperature: {
