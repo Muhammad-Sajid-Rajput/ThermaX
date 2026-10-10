@@ -9,7 +9,7 @@ import os
 import json
 import datetime
 import importlib
-import concurrent.futures
+import threading
 from config import GEE_PROJECT_ID
 
 # Credentials: set GOOGLE_APPLICATION_CREDENTIALS to the GEE service-account
@@ -25,6 +25,27 @@ UNAVAILABLE = {
     "geeTileId": None,
     "source": "MODIS Terra LST (Google Earth Engine)",
 }
+
+_TIMEOUT = object()
+
+
+def _call_with_timeout(fn, timeout_s=8.0):
+    box = {}
+
+    def _target():
+        try:
+            box["value"] = fn()
+        except Exception as exc:  # noqa: BLE001 - converted to UNAVAILABLE below
+            box["error"] = exc
+
+    t = threading.Thread(target=_target, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        return _TIMEOUT  # sentinel -> caller maps to honest UNAVAILABLE
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 class GEEService:
@@ -52,7 +73,7 @@ class GEEService:
         except Exception as err:
             print(f"[GEE Service] Earth Engine unavailable ({err}); satellite metrics will report 'unavailable'.")
 
-    def extract_satellite_metrics(self, lat: float, lng: float) -> dict:
+    def extract_satellite_metrics(self, lat: float, lng: float, timeout_s: float = 8.0) -> dict:
         if self.gee_available and self.ee:
             try:
                 point = self.ee.Geometry.Point([lng, lat])
@@ -75,14 +96,13 @@ class GEEService:
                     dt = image.date().format('YYYY-MM-dd').getInfo() if v else None
                     return v, dt
 
-                # 8s abort timeout prevents hung satellite calls from blocking workers
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_fetch_from_gee)
-                    try:
-                        val, observed_date = future.result(timeout=8.0)
-                    except concurrent.futures.TimeoutError:
-                        print(f"[GEE Service] Satellite query timed out (>8s) for ({lat}, {lng})")
-                        return dict(UNAVAILABLE)
+                # Enforce real timeout using daemon thread (avoids hung ThreadPoolExecutor shutdown)
+                res = _call_with_timeout(_fetch_from_gee, timeout_s=timeout_s)
+                if res is _TIMEOUT:
+                    print(f"[GEE Service] Satellite query timed out (>{timeout_s}s) for ({lat}, {lng})")
+                    return dict(UNAVAILABLE)
+
+                val, observed_date = res if res else (None, None)
 
                 if val and val.get('LST_Day_1km') is not None:
                     lst_c = round(val['LST_Day_1km'] * 0.02 - 273.15, 1)
@@ -108,7 +128,7 @@ class GEEService:
             return "Extreme UHI"
         if lst_c >= 41.0:
             return "Strong UHI"
-        return "Moderate UHI"
+        return "No significant UHI"
 
 
 gee_service = GEEService()

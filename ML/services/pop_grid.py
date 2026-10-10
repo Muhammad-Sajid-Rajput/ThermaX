@@ -3,9 +3,9 @@
 Each supported city has a precomputed grid at
 ``Backend/data/pop_grids/<city-slug>.json``: row-major persons/km² derived
 from the WorldPop 2020 1km UN-adjusted population raster
-(``pak_ppp_2020_1km_Aggregated.tif``, https://www.worldpop.org/), masked to
-the city's OSM boundary polygon, with per-row latitude area correction.
-``null`` cells are outside the city polygon.
+(``pak_ppp_2020_1km_Aggregated.tif``, https://www.worldpop.org/), covering
+the metropolitan bounding box raster, with per-row latitude area correction.
+``null`` cells are outside the raster coverage.
 
 The grids are STATIC assets (sampled 2026-09-27) — the pipeline does a pure
 local lookup, no network, no GEE call at tick time. Source and sampling

@@ -87,6 +87,8 @@ def _check(name, result, detail, data=None):
 
 
 def _inside_bounds(lat, lng, bounds):
+    if not bounds or "lat" not in bounds or "lng" not in bounds:
+        return False
     (lat_min, lat_max), (lng_min, lng_max) = bounds["lat"], bounds["lng"]
     return lat_min <= lat <= lat_max and lng_min <= lng <= lng_max
 

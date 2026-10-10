@@ -1,6 +1,9 @@
 import json
 import os
 
+# Note on precedence: ML/.env is checked first and uses setdefault, which means
+# keys in ML/.env shadow any matching keys in ../Backend/.env. If secrets differ
+# between the two files, ML/.env takes precedence.
 def _load_env():
     for path in ['.env', '../Backend/.env']:
         if os.path.exists(path):

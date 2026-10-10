@@ -243,6 +243,7 @@ def _scheduled_tick():
 if __name__ == "__main__":
     try:
         uvicorn = importlib.import_module("uvicorn")
-        uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
+        is_prod = os.getenv("ENV_NAME", "").lower() == "production" or os.getenv("NODE_ENV", "").lower() == "production"
+        uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=not is_prod)
     except Exception:
         print("[ML Microservice] Run 'pip install -r requirements.txt' to start uvicorn server.")
