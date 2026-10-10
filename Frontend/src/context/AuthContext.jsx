@@ -135,6 +135,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep the cached token in sync with silent refreshes: the axios

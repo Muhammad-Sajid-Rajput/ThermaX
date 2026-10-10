@@ -442,14 +442,6 @@ export async function fetchInsights(options, { signal } = {}) {
   return response.data;
 }
 
-export async function downloadInsightsCsv(options) {
-  const response = await api.get('/api/insights/export', {
-    params: { ...insightsParams(options), format: 'csv' },
-    responseType: 'blob',
-  });
-  return response.data;
-}
-
 // ─── EXPORTS API ──────────────────────────────────────────────────────────────
 export async function fetchExportHistory() {
   const response = await api.get('/api/exports/history');

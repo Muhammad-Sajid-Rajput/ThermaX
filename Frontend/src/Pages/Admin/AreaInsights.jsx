@@ -333,51 +333,7 @@ function formatClusterLocation(h, fallback = 'Zone', scopeMode = 'city') {
   return h.area || h.district || h.city || fallback;
 }
 
-// Universal Heat Index calculation for ANY location, city, or village across Pakistan
-function getUniversalHumidity(city, centroid) {
-  if (centroid && typeof centroid.lat === 'number' && typeof centroid.lng === 'number') {
-    const { lat, lng } = centroid;
-    if (lat <= 26.2 && lng >= 61.0 && lng <= 69.5) return 60; // coastal zone along Arabian Sea
-    if (lat >= 34.0) return 42; // northern highlands and mountain valleys
-    if (lng <= 66.5 && lat < 33.5) return 28; // western arid plateau
-    return 40; // central plains & Indus river basin
-  }
-  if (city) {
-    const c = String(city).toLowerCase();
-    if (/coast|sea|beach|karachi|thatta|badin|gwadar|pasni|ormara|hub|keamari|korangi/i.test(c)) return 60;
-    if (/desert|thar|cholistan|nushki|chagai|kharan|panjgur|sibi|jacobabad/i.test(c)) return 28;
-    if (/quetta|ziarat|kalat|pishin|zhob|loralai/i.test(c)) return 30;
-    if (/gilgit|skardu|hunza|chitral|swat|kaghan|murree|abbottabad|muzaffarabad/i.test(c)) return 42;
-  }
-  return 40;
-}
 
-function calculateHeatIndex(tempC, humidity = 40) {
-  if (tempC == null || tempC < 20) return tempC;
-  const rh = typeof humidity === 'number' && humidity > 0 && humidity <= 100 ? humidity : 40;
-  const tempF = (tempC * 9) / 5 + 32;
-  const hiF =
-    -42.379 +
-    2.04901523 * tempF +
-    10.14333127 * rh -
-    0.22475541 * tempF * rh -
-    0.00683783 * tempF * tempF -
-    0.05481717 * rh * rh +
-    0.00122874 * tempF * tempF * rh +
-    0.00085282 * tempF * rh * rh -
-    0.00000199 * tempF * tempF * rh * rh;
-  return Number((((hiF - 32) * 5) / 9).toFixed(1));
-}
-
-function resolveHeatIndex(h) {
-  if (h?.heatIndexMean != null) return h.heatIndexMean;
-  const temp = h?.peakTemp ?? h?.avgTemp;
-  if (temp != null && temp >= 20) {
-    const humidity = getUniversalHumidity(h.city, h.centroid);
-    return calculateHeatIndex(temp, humidity);
-  }
-  return null;
-}
 
 function CustomTooltip({ active, payload, label, unit = '' }) {
   if (active && payload && payload.length) {
@@ -415,7 +371,6 @@ export default function AreaInsights() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedHotspotId, setExpandedHotspotId] = useState(null);
 
   // Live Nominatim OpenStreetMap Search State
   const [nominatimResults, setNominatimResults] = useState([]);
@@ -598,10 +553,6 @@ export default function AreaInsights() {
     }
   };
 
-  const toggleHotspot = (clusterId) => {
-    setExpandedHotspotId((prev) => (prev === clusterId ? null : clusterId));
-  };
-
   // Smart classification and deduplication of takeaways for authority leadership
   const operationalTakeaways = useMemo(() => {
     if (!data?.takeaways || !Array.isArray(data.takeaways)) {
@@ -704,9 +655,11 @@ export default function AreaInsights() {
 
       return {
         id: rec.id,
+        rank: planItem?.rank ?? null,
         title: meta.title,
         text: rec.text || rec.action,
         leadAgency: planItem?.owner || meta.leadAgency,
+        costBand: planItem?.costBand || meta.costBand || 'Medium',
         urgency: meta.urgency,
         urgencyStyle: meta.urgencyStyle,
         timeline:
@@ -717,24 +670,27 @@ export default function AreaInsights() {
               ? 'Short-term (1–8 weeks)'
               : 'Active Surveillance'),
         phaseNumber,
+        phaseName:
+          planItem?.phaseName ||
+          meta.phaseName ||
+          (phaseNumber === 1
+            ? 'Phase 1: Emergency Relief'
+            : phaseNumber === 2
+              ? 'Phase 2: Civic Intervention'
+              : 'Phase 3: Resilience & Infrastructure'),
         targetLocations,
         hotspotCount: targetLocations.length || rec.hotspotCount || 1,
-        evidence: planItem?.evidence || `Applies to ${targetLocations.length} active hotspot zones`,
+        evidence: planItem?.evidence || (targetLocations.length > 0 ? `Applies to ${targetLocations.length} active hotspot zones` : ''),
       };
     });
 
-    // Ensure strictly sequential phase numbering (e.g. Phase 1, Phase 2, Phase 3 without skips)
-    const uniquePhases = [...new Set(items.map((i) => i.phaseNumber))].sort((a, b) => a - b);
-    const phaseMap = new Map();
-    uniquePhases.forEach((p, idx) => phaseMap.set(p, idx + 1));
-
-    const sequenced = items.map((item) => ({
-      ...item,
-      phaseNumber: phaseMap.get(item.phaseNumber) || item.phaseNumber,
-    }));
-
-    return sequenced.sort((a, b) => a.phaseNumber - b.phaseNumber || b.hotspotCount - a.hotspotCount);
-  }, [data, priorityActions]);
+    return items.sort(
+      (a, b) =>
+        a.phaseNumber - b.phaseNumber ||
+        (a.rank ?? 999) - (b.rank ?? 999) ||
+        b.hotspotCount - a.hotspotCount
+    );
+  }, [data, priorityActions, scopeMode]);
 
   // Mapped data for the 3 visual analytics cards: Report Trend, Severity Mix, Area Heat Index
   const analyticsCharts = useMemo(() => {
@@ -779,7 +735,7 @@ export default function AreaInsights() {
     });
 
     return { trend, severity, hotspotGrowth };
-  }, [data]);
+  }, [data, scopeMode]);
 
   const receptorMap = useMemo(() => {
     const map = new Map();
@@ -841,9 +797,12 @@ export default function AreaInsights() {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             title="Export Thermal Report as PDF"
           >
-            <FileDown className="w-3.5 h-3.5 text-white" />
-            <span>Export Report</span>
+            <Printer className="w-3.5 h-3.5 text-white" />
+            <span>Export Report (PDF)</span>
           </button>
+          <span className="text-[10px] text-slate-400 no-print print:hidden">
+            In the print dialog, uncheck &apos;Headers and footers&apos; for a clean official copy.
+          </span>
         </div>
       </div>
 
@@ -1207,8 +1166,8 @@ export default function AreaInsights() {
                       "{data.actionPlan[0].action}"
                     </h3>
                   ) : (
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug print:text-sm">
-                      Deploy Targeted Cooling &amp; Hydration Measures
+                    <h3 className="text-base sm:text-lg font-medium text-slate-600 leading-snug print:text-sm">
+                      No immediate municipal interventions triggered by current data
                     </h3>
                   )}
                 </div>
@@ -1219,20 +1178,24 @@ export default function AreaInsights() {
 
                 {/* Metadata Pills */}
                 <div className="pt-1 flex flex-wrap items-center gap-2 print:gap-1.5 text-slate-800">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
-                    <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Lead Team: <strong className="text-slate-900 font-semibold">{data.actionPlan?.[0]?.owner || 'Municipal Corporation / PDMA'}</strong></span>
-                  </div>
+                  {data.actionPlan?.[0]?.owner && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Suggested lead: <strong className="text-slate-900 font-semibold">{data.actionPlan[0].owner}</strong></span>
+                    </div>
+                  )}
 
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
-                    <Activity className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Budget: <strong className="text-slate-900 font-semibold uppercase">{data.actionPlan?.[0]?.costBand || 'Medium'} Cost</strong></span>
-                  </div>
+                  {data.actionPlan?.[0]?.costBand && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
+                      <Activity className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Budget: <strong className="text-slate-900 font-semibold uppercase">{data.actionPlan[0].costBand} Cost</strong></span>
+                    </div>
+                  )}
 
                   {data.dangerWindow?.window && (
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-medium text-slate-700 print:py-0.5 print:px-2 print:text-[10px]">
                       <Clock className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Safe Hours: <strong className="text-slate-900 font-semibold">Avoid {data.dangerWindow.window} peak heat</strong></span>
+                      <span>Peak Danger Hours: <strong className="text-slate-900 font-semibold">{data.dangerWindow.window}</strong></span>
                     </div>
                   )}
                 </div>
@@ -1258,7 +1221,9 @@ export default function AreaInsights() {
                       ? 'bg-red-50/90 border-red-200 text-red-900'
                       : data.escalation.status === 'WATCH'
                         ? 'bg-amber-50/90 border-amber-200 text-amber-900'
-                        : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
+                        : data.escalation.status === 'NO_RECENT_DATA'
+                          ? 'bg-slate-50 border-slate-200 text-slate-700'
+                          : 'bg-white border-slate-200 text-slate-700 shadow-2xs'
                       }`}
                   >
                     {data.escalation.status === 'ESCALATE' ? (
@@ -1270,6 +1235,11 @@ export default function AreaInsights() {
                       <p className="font-medium">
                         <strong className="text-amber-800 font-bold block mb-0.5">Watch Status Active:</strong>
                         Heat reports are rising in the last 48 hours ({data.escalation.last48hCount} reports). Prepare water tankers and alert local health clinics.
+                      </p>
+                    ) : data.escalation.status === 'NO_RECENT_DATA' ? (
+                      <p className="font-medium">
+                        <strong className="text-slate-800 font-bold block mb-0.5">No Recent 48-Hour Data:</strong>
+                        No verified reports received in the last 48 hours — escalation cannot be assessed. Standard baseline monitoring active.
                       </p>
                     ) : (
                       <p className="font-medium">
@@ -1285,10 +1255,12 @@ export default function AreaInsights() {
                       (data.escalation.outlierNotifications.extreme_contradiction > 0 ||
                         data.escalation.outlierNotifications.enrichment_failed > 0) ? (
                       <span className="text-amber-700 font-mono">
-                        {data.escalation.outlierNotifications.extreme_contradiction} Flagged
+                        {(data.escalation.outlierNotifications.extreme_contradiction || 0) + (data.escalation.outlierNotifications.enrichment_failed || 0)} Flagged
                       </span>
                     ) : (
-                      <span className="text-emerald-700 font-mono font-medium">Data Verified</span>
+                      <span className="text-slate-600 font-mono font-medium">
+                        {data.escalation.outlierNotifications ? '0 Outlier Flags Detected' : 'No Flags Detected'}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1356,20 +1328,28 @@ export default function AreaInsights() {
                     <Clock className="w-4 h-4 print:w-3 print:h-3 text-amber-600" />
                   </div>
                   <h3 className="text-sm print:text-xs font-bold text-slate-900">
-                    {data.dangerWindow?.window ? data.dangerWindow.window : 'Afternoon Heat Peak (12 PM – 4 PM)'}
+                    {data.dangerWindow?.window
+                      ? data.dangerWindow.window
+                      : data.dangerWindow?.reason === 'insufficient-data'
+                        ? 'Insufficient Data'
+                        : 'No Sustained Peak Window'}
                   </h3>
                   <p className="text-xs print:text-[10.5px] text-slate-600 mt-1 leading-relaxed">
                     {data.dangerWindow?.window ? (
                       <>
                         Temperatures are highest between <strong className="font-mono text-slate-800">{data.dangerWindow.window}</strong> (peaking at <strong className="font-mono text-slate-800">{data.dangerWindow.peakMeanTemp}°C</strong> around {data.dangerWindow.peakHour}:00).
                       </>
+                    ) : data.dangerWindow?.reason === 'insufficient-data' ? (
+                      'Fewer than 10 verified reports in this time window — danger hours cannot be reliably computed.'
                     ) : (
-                      'No extreme all-day heat wave detected. Temperatures are highest during early afternoon hours.'
+                      'No sustained 2-hour window above 38°C detected in the current observation period.'
                     )}
                   </p>
                 </div>
                 <div className="pt-2 print:pt-1 border-t border-slate-100 text-[11px] print:text-[10px] font-medium text-amber-800 bg-amber-50/60 p-2 print:p-1.5 rounded-lg">
-                  ⏱️ <strong>Safety Rule:</strong> Provide shade and water breaks for outdoor workers; avoid outdoor school activities during peak heat.
+                  ⏱️ <strong>Safety Rule:</strong> {data.dangerWindow?.window
+                    ? 'Provide shade and water breaks for outdoor workers; avoid outdoor school activities during peak heat.'
+                    : 'Continue routine heat monitoring across standard operational shifts.'}
                 </div>
               </div>
 
@@ -1694,7 +1674,7 @@ export default function AreaInsights() {
                           </h3>
                         </div>
                         <span className="text-[10px] text-slate-400 font-medium">
-                          Top {data.causeBreakdown.length} causes mentioned in verified citizen reports
+                          Top {data.causeBreakdown.length} causes cited (% of reports providing causes)
                         </span>
                       </div>
 
@@ -1771,16 +1751,20 @@ export default function AreaInsights() {
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
                           {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
                             ? 'No Active Hotspot Run'
-                            : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
-                              ? 'Below Hotspot Threshold'
-                              : 'No Concentrated Heat Zones'}
+                            : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
+                              ? 'No Hotspots in Selected Area'
+                              : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
+                                ? 'Below Hotspot Threshold'
+                                : 'No Concentrated Heat Zones'}
                         </h4>
                         <p className="text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
                           {data.dataQuality?.hotspotEmptyReason === 'no-published-run'
                             ? 'No hotspot models have been published for these cities in this window yet. Reports below are shown individually.'
-                            : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
-                              ? 'No areas exceeded the heat clustering threshold — reports did not reach extreme cluster levels.'
-                              : 'No concentrated heat zones recorded for this scope in the selected observation window.'}
+                            : data.dataQuality?.hotspotEmptyReason === 'no-area-match'
+                              ? 'Hotspots exist in this city/province, but none fall within the specified area filter.'
+                              : data.dataQuality?.hotspotEmptyReason === 'below-threshold'
+                                ? 'No areas exceeded the heat clustering threshold — reports did not reach extreme cluster levels.'
+                                : 'No concentrated heat zones recorded for this scope in the selected observation window.'}
                         </p>
                       </div>
                     ) : (
@@ -1818,7 +1802,16 @@ export default function AreaInsights() {
                                     {formatClusterLocation(h, h.area || h.city, scopeMode)}
                                   </td>
                                   <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
-                                    {h.tvi != null ? h.tvi.toFixed(2) : (
+                                    {h.tvi != null ? (
+                                      <>
+                                        <span>{h.tvi.toFixed(2)}</span>
+                                        {h.tviComponents && !h.tviComponents.includes('population') && (
+                                          <span className="block font-sans text-[9px] font-normal text-slate-400">
+                                            2-component TVI (population unavailable for this city)
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
                                       <span className="text-slate-400 font-normal italic">Unscored</span>
                                     )}
                                   </td>
@@ -1854,7 +1847,7 @@ export default function AreaInsights() {
                                   <td className="py-2.5 px-3 font-mono">{h.reportCount}</td>
                                   <td className="py-2.5 px-3 font-mono">{h.peakTemp != null ? `${h.peakTemp}°C` : '—'}</td>
                                   <td className="py-2.5 px-3 font-mono font-medium text-slate-900">
-                                    {resolveHeatIndex(h) != null ? `${resolveHeatIndex(h)}°C` : '—'}
+                                    {h.heatIndexMean != null ? `${h.heatIndexMean}°C` : '—'}
                                   </td>
                                 </tr>
                               );
@@ -1909,7 +1902,7 @@ export default function AreaInsights() {
                               </div>
                             </div>
                             <div className="p-3 print:p-2">
-                              <HotspotDetailPanel hotspot={{ ...h, heatIndexMean: resolveHeatIndex(h) }} />
+                              <HotspotDetailPanel hotspot={h} />
                             </div>
                           </div>
                         ))}
@@ -1946,21 +1939,31 @@ export default function AreaInsights() {
                                 className={`rounded-xl border border-slate-200 bg-white p-3.5 print:p-2.5 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between space-y-2.5 print:space-y-1.5 border-l-4 ${cfg.border} print:border-slate-300`}
                               >
                                 <div className="space-y-2 print:space-y-1">
-                                  {/* Phase Pill + Urgency */}
+                                  {/* Phase Pill + Urgency + Cost + Rank */}
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <div className="flex items-center gap-1.5 flex-wrap">
+                                      {action.rank != null && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                          Rank #{action.rank}
+                                        </span>
+                                      )}
                                       <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                                        {cfg.short}
+                                        {action.phaseName || cfg.short}
                                       </span>
                                       <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${action.urgencyStyle}`}>
                                         {action.urgency}
                                       </span>
+                                      {action.costBand && (
+                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                          Budget: {action.costBand} Cost
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
 
                                   {/* Lead Agency */}
                                   <div className="flex items-center gap-1.5 text-[11px] print:text-[10px] font-medium text-slate-700">
-                                    <span className="text-slate-400 font-normal">Assigned Team:</span>
+                                    <span className="text-slate-400 font-normal">Suggested lead:</span>
                                     <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 rounded truncate max-w-52.5" title={action.leadAgency}>
                                       {action.leadAgency}
                                     </span>
@@ -1974,6 +1977,11 @@ export default function AreaInsights() {
                                     <p className="text-[11.5px] print:text-[10.5px] text-slate-600 mt-1 print:mt-0.5 leading-relaxed">
                                       {action.text}
                                     </p>
+                                    {action.evidence && (
+                                      <p className="text-[10px] print:text-[9.5px] text-slate-500 italic mt-1 leading-snug">
+                                        Evidence: {action.evidence}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
 
@@ -2043,7 +2051,7 @@ export default function AreaInsights() {
                       <div>
                         <span className="text-slate-400">Total Reports:</span>{' '}
                         <strong className="text-slate-700">{data.dataQuality?.verifiedCount ?? 0} verified</strong> of{' '}
-                        {data.dataQuality?.reportCount ?? 0} total ({data.dataQuality?.flaggedCount ?? 0} spam or duplicate removed)
+                        {data.dataQuality?.reportCount ?? 0} total ({data.dataQuality?.flaggedCount ?? 0} flagged by quality control checks excluded)
                       </div>
                       <div>
                         <span className="text-slate-400">Time Period:</span>{' '}

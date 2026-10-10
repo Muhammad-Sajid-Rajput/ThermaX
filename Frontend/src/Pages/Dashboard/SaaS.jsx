@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   AlertCircle,
-  CheckCircle,
-  Clock,
-  XCircle,
   Flame,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -12,46 +9,14 @@ import { useAuth } from '../../context/AuthContext';
 import KpiCards from '../../components/dashboard/KpiCards';
 import MapSection from '../../components/dashboard/MapSection';
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from '../../components/ui/Card';
-import {
   fetchDashboardSnapshot,
   fetchHotspots,
   fetchHeatmap,
   fetchReports,
 } from '../../services/api.js';
-import toast from 'react-hot-toast';
 import LiveWeatherCard from '../../components/weather/LiveWeatherCard';
 import AdvisoryBanner from '../../components/advisory/AdvisoryBanner';
-// ─── Status badge helpers (keyed by the Phase 3 lifecycle vocabulary;
-// rpt.status is the lowercase backend status) ────────────────────────────
-const LEGACY_STATUS_ALIASES = { validated: 'verified', anomaly: 'flagged' };
-const canonicalStatus = (s) => {
-  const key = String(s || '').toLowerCase();
-  return LEGACY_STATUS_ALIASES[key] || key;
-};
-const STATUS_ICONS = {
-  verified: CheckCircle,
-  pending: Clock,
-  flagged: AlertCircle,
-  rejected: XCircle,
-};
-const STATUS_COLORS = {
-  verified: 'text-green-600 bg-green-50 border-green-200',
-  pending: 'text-amber-600 bg-amber-50 border-amber-200',
-  flagged: 'text-orange-600 bg-orange-50 border-orange-200',
-  rejected: 'text-red-600 bg-red-50 border-red-200',
-};
-const SEVERITY_BG = {
-  5: 'bg-red-500',
-  4: 'bg-orange-400',
-  3: 'bg-yellow-400',
-  2: 'bg-green-500',
-  1: 'bg-slate-400',
-};
+
 const PRIORITY_BORDER = {
   Critical: 'border-l-red-500 bg-red-50',
   High: 'border-l-orange-500 bg-orange-50',
@@ -97,7 +62,7 @@ const SaaSDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({
+  const [filters] = useState({
     range: '7d',
     severity: 'all',
     area: 'all',

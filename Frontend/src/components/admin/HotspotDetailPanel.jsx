@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { Flame, ShieldAlert } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 
 const TIER_BADGE = {
   critical: 'bg-red-100 text-red-800 border-red-300',
@@ -14,12 +12,6 @@ const COMPONENT_LABELS = {
   heat: 'Heat score',
   reports: 'Report density',
   population: 'Population density',
-};
-
-const COMPONENT_WEIGHT_HINT = {
-  heat: '0.5',
-  reports: '0.3',
-  population: '0.2',
 };
 
 function ComponentBar({ name, value, weightUsed }) {
@@ -57,7 +49,6 @@ function simplifyDirective(text) {
 }
 
 export default function HotspotDetailPanel({ hotspot }) {
-  const [copied, setCopied] = useState(false);
   if (!hotspot) return null;
 
   const tier = hotspot.riskTier || 'unknown';
@@ -66,21 +57,15 @@ export default function HotspotDetailPanel({ hotspot }) {
   const directives = actionable.length > 0 ? actionable : rawDirectives;
   const advisory = hotspot.advisory;
   
-  // Resolve TVI components with robust fallback if raw ML components had nulls
-  const rawComponents = hotspot.tviComponents || {};
+  // Resolve TVI components without fabricating unmeasured data
+  const rawComponents = Array.isArray(hotspot.tviComponents)
+    ? {}
+    : (hotspot.tviComponents || {});
   const components = { ...rawComponents };
-  if (hotspot.tvi != null) {
-    if (components.heat == null && (hotspot.peakTemp != null || hotspot.avgTemperature != null || hotspot.avgTemp != null)) {
-      const temp = hotspot.peakTemp ?? hotspot.avgTemperature ?? hotspot.avgTemp;
-      components.heat = Number((Math.min(1.0, Math.max(0.0, temp / 50.0))).toFixed(2));
-    }
-    if (components.reports == null && hotspot.reportCount != null) {
-      components.reports = Number((Math.min(1.0, Math.max(0.0, hotspot.reportCount / 20.0))).toFixed(2));
-    }
-    if (components.population == null && hotspot.tvi != null) {
-      components.population = Number((Math.min(1.0, Math.max(0.0, hotspot.tvi * 1.1))).toFixed(2));
-    }
-  }
+
+  const componentList = Array.isArray(hotspot.tviComponents)
+    ? hotspot.tviComponents
+    : Object.keys(hotspot.tviWeightsUsed || hotspot.tviComponents || {});
 
   const weightsUsed = hotspot.tviWeightsUsed || {};
 
@@ -123,6 +108,11 @@ export default function HotspotDetailPanel({ hotspot }) {
               {Object.keys(weightsUsed).length > 0 && Object.keys(weightsUsed).length < 3
                 && ' — adjusted for available data'}
             </p>
+            {!componentList.includes('population') && (
+              <p className="text-[10px] text-slate-400 italic mt-0.5">
+                2-component TVI (population unavailable for this city)
+              </p>
+            )}
           </>
         )}
       </div>
@@ -171,14 +161,11 @@ export default function HotspotDetailPanel({ hotspot }) {
           <div className="text-[12px] print:text-[10.5px] text-slate-800 leading-relaxed rounded-lg bg-amber-50/60 border border-amber-200/80 p-2.5 print:p-1.5">
             <p>{advisoryText}</p>
           </div>
-          {hotspot.heatIndexMean != null && (
-            <p className="text-[10px] text-slate-500 mt-1 font-mono">
-              Feels-Like Temp: <strong className="text-slate-800">{hotspot.heatIndexMean}°C</strong> (Heat Index)
-            </p>
-          )}
+          <p className="text-[10px] text-slate-500 mt-1 font-mono">
+            Feels-Like Temp: <strong className="text-slate-800">{hotspot.heatIndexMean != null ? `${hotspot.heatIndexMean}°C` : '—'}</strong> (Heat Index)
+          </p>
         </div>
       )}
     </div>
   );
 }
-

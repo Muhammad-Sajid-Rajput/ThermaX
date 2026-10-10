@@ -11,56 +11,7 @@ import {
   HEATMAP_CONFIG,
 } from '../../utils/geo/heatmapLayer';
 import { createUserLocationMarker } from '../../utils/geo/userLocationMarker';
-import { getHotspotRadius } from '../../utils/geo/hotspotUtils';
-
-// Fix default marker icon paths (Vite asset pipeline issue)
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
-
-// TVI tier thresholds matching ML Phase 5/6:
-// Critical (>=0.65), High (>=0.45), Moderate (>=0.25), Low (<0.25)
-// TVI tier thresholds matching ML Phase 5/6:
-// Critical (>=0.65), High (>=0.45), Moderate (>=0.25), Low (<0.25)
-// Thermal hotspots use warm hazard tones: red, flame orange, deep amber, golden yellow. No greens.
-const TVI_TIER_COLORS = {
-  critical: '#dc2626',
-  high: '#f97316',
-  moderate: '#f59e0b',
-  low: '#eab308',
-  unknown: '#c2410c',
-};
-
-export function getHotspotColor(hs) {
-  const riskTier = String(hs?.riskTier || '').toLowerCase();
-  if (riskTier && TVI_TIER_COLORS[riskTier]) {
-    return TVI_TIER_COLORS[riskTier];
-  }
-  if (hs?.tvi != null && Number.isFinite(Number(hs.tvi))) {
-    const val = Number(hs.tvi);
-    if (val >= 0.65) return TVI_TIER_COLORS.critical;
-    if (val >= 0.45) return TVI_TIER_COLORS.high;
-    if (val >= 0.25) return TVI_TIER_COLORS.moderate;
-    return TVI_TIER_COLORS.low;
-  }
-  const priority = hs?.severityLabel || hs?.priority;
-  return PRIORITY_COLORS[priority] ?? '#c2410c';
-}
-
-const PRIORITY_COLORS = {
-  Extreme: '#dc2626',
-  Critical: '#dc2626',
-  High: '#f97316',
-  Moderate: '#f59e0b',
-  Medium: '#f59e0b',
-  Low: '#eab308',
-};
+import { getHotspotRadius, getHotspotColor } from '../../utils/geo/hotspotUtils';
 
 const SEVERITY_COLORS = {
   5: '#dc2626',

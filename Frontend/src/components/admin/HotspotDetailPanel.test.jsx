@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { render, within, fireEvent } from '@testing-library/react';
+import { render, within } from '@testing-library/react';
 import HotspotDetailPanel from './HotspotDetailPanel.jsx';
 
 const hotspot = {
@@ -58,6 +58,27 @@ describe('HotspotDetailPanel', () => {
     const c = within(view.container);
     expect(c.getByText(/No TVI score/)).toBeTruthy();
     expect(c.getByText(/No directives/)).toBeTruthy();
+  });
+
+  it('renders measured heat index byte-identically and handles null honestly with "—"', () => {
+    const measuredView = render(<HotspotDetailPanel hotspot={{ ...hotspot, heatIndexMean: 46.35 }} />);
+    expect(within(measuredView.container).getByText('46.35°C')).toBeTruthy();
+
+    const nullView = render(<HotspotDetailPanel hotspot={{ ...hotspot, heatIndexMean: null }} />);
+    expect(within(nullView.container).getByText('—')).toBeTruthy();
+  });
+
+  it('discloses 2-component TVI when population is unavailable', () => {
+    const view = render(
+      <HotspotDetailPanel
+        hotspot={{
+          ...hotspot,
+          tviComponents: ['heat', 'reports'],
+          tviWeightsUsed: { heat: 0.625, reports: 0.375 },
+        }}
+      />
+    );
+    expect(within(view.container).getByText('2-component TVI (population unavailable for this city)')).toBeTruthy();
   });
 
   it('renders nothing without a hotspot', () => {
