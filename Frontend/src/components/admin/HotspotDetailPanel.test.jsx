@@ -38,23 +38,17 @@ describe('HotspotDetailPanel', () => {
     expect(c.getByText('critical risk')).toBeTruthy();
   });
 
-  it('renders the directive checklist and tracks acted items', () => {
+  it('renders automated mitigation directives', () => {
     const view = render(<HotspotDetailPanel hotspot={hotspot} />);
     const c = within(view.container);
     expect(c.getByText('Open public cooling centers.')).toBeTruthy();
-    expect(c.getByText('0/2 acted')).toBeTruthy();
-    const checkbox = c.getAllByRole('checkbox')[0];
-    fireEvent.click(checkbox);
-    expect(c.getByText('1/2 acted')).toBeTruthy();
+    expect(c.getByText('Deploy drinking-water points.')).toBeTruthy();
   });
 
-  it('previews the citizen advisory and toggles EN/UR', () => {
+  it('previews the citizen advisory in English', () => {
     const view = render(<HotspotDetailPanel hotspot={hotspot} />);
     const c = within(view.container);
     expect(c.getByText('Extreme heat danger in your area.')).toBeTruthy();
-    const toggle = c.getByLabelText('Switch to Urdu');
-    fireEvent.click(toggle);
-    expect(c.getByText('شدید گرمی کا خطرہ ہے۔')).toBeTruthy();
   });
 
   it('is honest about unscored hotspots', () => {

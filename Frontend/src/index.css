@@ -247,24 +247,49 @@ Unified light theme for both User and Admin
 /* ============================================
    Area Insights & Print-to-PDF Rules
    ============================================ */
+@page {
+  size: A4 portrait;
+  margin: 10mm 10mm 12mm 10mm;
+}
+
 @media print {
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Unblock multi-page flow across root document containers only */
+  html,
+  body {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  #root {
+    display: block !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  /* Completely suppress non-print chrome, sidebars, headers, floating modals, and toasts */
   aside,
   header,
   nav,
-  .no-print {
+  .no-print,
+  [data-hot-toast],
+  [data-toaster-container],
+  div:has(> [data-hot-toast]),
+  div[style*="z-index: 9999"],
+  div[style*="z-index:9999"] {
     display: none !important;
-  }
-
-  body,
-  #root,
-  main {
-    background: #ffffff !important;
-    color: #0f172a !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
-    min-height: auto !important;
-    height: auto !important;
+    visibility: hidden !important;
   }
 
   .print-full-width {
@@ -277,6 +302,99 @@ Unified light theme for both User and Admin
   .page-break-avoid {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  /* Executive Memo Card: strip dark gradients and force clean light executive theme in print */
+  .executive-memo-card {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+  }
+
+  .executive-memo-card h3 {
+    color: #0f172a !important;
+  }
+
+  .executive-memo-card p {
+    color: #334155 !important;
+  }
+
+  .executive-memo-card strong {
+    color: #0f172a !important;
+  }
+
+  /* Force multi-column grids in print regardless of viewport breakpoint */
+  .print-grid-2,
+  .dossier-grid,
+  div.dossier-grid,
+  div.print-grid-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .dossier-grid > div,
+  .print-grid-2 > div {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+  }
+
+  .print-grid-5 {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  /* Controlled page break utilities */
+  .print-break-before {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  .print-break-after {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Compact table styling for print */
+  .print-compact-table th,
+  .print-compact-table td {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Preserve Recharts graphs in print media without collapse or distortion */
+  .recharts-responsive-container,
+  .recharts-wrapper,
+  svg.recharts-surface {
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+
+  svg.recharts-surface text {
+    fill: #475569 !important;
   }
 }
 
