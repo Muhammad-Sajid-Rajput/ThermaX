@@ -182,12 +182,12 @@ function ReportManagement() {
   };
 
   const handleBulkAction = async (action) => {
-    // Bulk operations apply to pending and flagged reports.
+    // Bulk operations apply to flagged outlier reports only.
     const targets = selectedReports.filter((id) =>
-      reports.some((r) => r.id === id && ['flagged', 'pending'].includes(r.status))
+      reports.some((r) => r.id === id && r.status === 'flagged')
     );
     if (targets.length === 0) {
-      toast.error('Select at least one pending or flagged report.');
+      toast.error('Select at least one flagged outlier report.');
       return;
     }
     try {
@@ -197,7 +197,7 @@ function ReportManagement() {
       await Promise.all(targets.map((id) => updateModerationStatus(id, decision)));
       const label =
         action === 'approve' ? 'verified' : action === 'flag' ? 'flagged' : 'rejected';
-      toast.success(`${targets.length} report(s) ${label}`);
+      toast.success(`${targets.length} outlier report(s) ${label}`);
       setSelectedReports([]);
       await loadReports();
     } catch {
@@ -214,10 +214,16 @@ function ReportManagement() {
   };
 
   const toggleAllSelection = () => {
-    if (selectedReports.length === currentPageItems.length) {
-      setSelectedReports([]);
+    const flaggedItems = currentPageItems.filter((r) => r.status === 'flagged');
+    const allFlaggedSelected =
+      flaggedItems.length > 0 && flaggedItems.every((r) => selectedReports.includes(r.id));
+    if (allFlaggedSelected) {
+      setSelectedReports((prev) => prev.filter((id) => !flaggedItems.some((r) => r.id === id)));
     } else {
-      setSelectedReports(currentPageItems.map((r) => r.id));
+      setSelectedReports((prev) => [
+        ...prev,
+        ...flaggedItems.map((r) => r.id).filter((id) => !prev.includes(id)),
+      ]);
     }
   };
 
@@ -400,11 +406,15 @@ function ReportManagement() {
                   <input
                     type="checkbox"
                     checked={
-                      selectedReports.length === currentPageItems.length &&
-                      currentPageItems.length > 0
+                      currentPageItems.some((r) => r.status === 'flagged') &&
+                      currentPageItems
+                        .filter((r) => r.status === 'flagged')
+                        .every((r) => selectedReports.includes(r.id))
                     }
                     onChange={toggleAllSelection}
-                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                    disabled={!currentPageItems.some((r) => r.status === 'flagged')}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 disabled:opacity-30 cursor-pointer"
+                    title="Select all flagged outliers on this page"
                   />
                 </th>
                 <th className="py-3 px-4">Location / Area</th>
@@ -444,7 +454,13 @@ function ReportManagement() {
                           type="checkbox"
                           checked={selectedReports.includes(r.id)}
                           onChange={() => toggleReportSelection(r.id)}
-                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                          disabled={r.status !== 'flagged'}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 disabled:opacity-20 cursor-pointer"
+                          title={
+                            r.status === 'flagged'
+                              ? 'Select flagged outlier for review'
+                              : 'Automatic QC applies; manual actions appear only on flagged outliers'
+                          }
                         />
                       </td>
 
@@ -495,24 +511,24 @@ function ReportManagement() {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Manual actions: available for pending and flagged reports */}
-                          {['flagged', 'pending'].includes(r.status) && (
+                          {/* Manual actions: strict outlier-only (flagged reports) */}
+                          {r.status === 'flagged' && (
                             <button
                               onClick={() => handleReportAction(r.id, 'approve')}
                               disabled={actionLoadingId === r.id}
                               className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors disabled:opacity-50"
-                              title="Verify Report"
+                              title="Verify Flagged Outlier"
                             >
                               <CheckCircle className="w-3.5 h-3.5" />
                             </button>
                           )}
 
-                          {['flagged', 'pending'].includes(r.status) && (
+                          {r.status === 'flagged' && (
                             <button
                               onClick={() => handleReportAction(r.id, 'reject')}
                               disabled={actionLoadingId === r.id}
                               className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-colors disabled:opacity-50"
-                              title="Reject Report"
+                              title="Reject Flagged Outlier"
                             >
                               <XCircle className="w-3.5 h-3.5" />
                             </button>
@@ -666,28 +682,28 @@ function ReportManagement() {
                 </div>
               )}
 
-              {/* Moderation Controls: available for pending and flagged reports */}
-              {['flagged', 'pending'].includes(showDetailModal.status) && (
+              {/* Moderation Controls: strict outlier-only (flagged reports) */}
+              {showDetailModal.status === 'flagged' && (
                 <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
                   <button
                     onClick={() => {
                       handleReportAction(showDetailModal.id, 'approve');
                     }}
                     disabled={actionLoadingId === showDetailModal.id}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    <span>Validate & Approve</span>
+                    <span>Validate & Approve Outlier</span>
                   </button>
                   <button
                     onClick={() => {
                       handleReportAction(showDetailModal.id, 'reject');
                     }}
                     disabled={actionLoadingId === showDetailModal.id}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-xs disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                   >
                     <XCircle className="w-4 h-4" />
-                    <span>Reject Submission</span>
+                    <span>Reject Outlier</span>
                   </button>
                 </div>
               )}

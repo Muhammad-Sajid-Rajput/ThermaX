@@ -108,14 +108,14 @@ export function getHotspotColor(hs) {
 
 /**
  * Computes a balanced hotspot perimeter envelope radius in meters based on cluster density.
- * Kept tight and accurate to localized thermal microclimates (450m - 1200m)
- * rather than engulfing wide multi-neighborhood swathes.
+ * Kept tight and accurate to localized thermal microclimates (200m - 1000m)
+ * tied directly to the 1 km DBSCAN spatial clustering neighborhood sweep.
  *
  * @param {number} reportCount - Number of reports in the cluster
  * @returns {number} Radius in meters
  */
 export function getHotspotRadius(reportCount = 1) {
   const count = Number.isFinite(Number(reportCount)) ? Math.max(1, Number(reportCount)) : 1;
-  return Math.min(450 + count * 80, 1200);
+  return Math.min(200 + count * 50, 1000);
 }
 

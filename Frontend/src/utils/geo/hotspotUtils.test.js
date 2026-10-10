@@ -72,19 +72,19 @@ describe('getHotspotColor (TVI tier derivation)', () => {
 
 describe('getHotspotRadius (balanced urban envelope scaling)', () => {
   it('returns tight baseline radius for single report or null', () => {
-    expect(getHotspotRadius(1)).toBe(530);
-    expect(getHotspotRadius()).toBe(530);
-    expect(getHotspotRadius(null)).toBe(530);
+    expect(getHotspotRadius(1)).toBe(250);
+    expect(getHotspotRadius()).toBe(250);
+    expect(getHotspotRadius(null)).toBe(250);
   });
 
   it('scales radius moderately with cluster reports', () => {
-    expect(getHotspotRadius(4)).toBe(770);
-    expect(getHotspotRadius(6)).toBe(930);
+    expect(getHotspotRadius(4)).toBe(400);
+    expect(getHotspotRadius(6)).toBe(500);
   });
 
-  it('caps at maximum 1200m for dense clusters', () => {
-    expect(getHotspotRadius(15)).toBe(1200);
-    expect(getHotspotRadius(50)).toBe(1200);
+  it('caps at maximum 1000m for dense clusters', () => {
+    expect(getHotspotRadius(16)).toBe(1000);
+    expect(getHotspotRadius(50)).toBe(1000);
   });
 });
 

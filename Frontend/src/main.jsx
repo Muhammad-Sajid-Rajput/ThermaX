@@ -28,6 +28,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <App />
       <Toaster
         position="top-right"
+        containerClassName="no-print"
         toastOptions={{
           style: {
             borderRadius: '18px',

@@ -431,8 +431,9 @@ function insightsParams({ city, province, area, days, includeSynthetic }) {
   if (province) params.province = province;
   if (city) params.city = city;
   if (area && area.trim()) params.area = area.trim();
-  // Include synthetic/seed data by default so demo cities populate full analytics
-  params.includeSynthetic = includeSynthetic !== undefined ? String(includeSynthetic) : 'true';
+  if (includeSynthetic !== undefined) {
+    params.includeSynthetic = String(includeSynthetic);
+  }
   return params;
 }
 
@@ -455,15 +456,6 @@ export async function fetchExportHistory() {
   return response.data;
 }
 
-export async function generateExportBriefing(options = {}) {
-  const response = await api.post('/api/exports/generate', options);
-  return response.data;
-}
-
-export async function generateMitigationReport(payload) {
-  const response = await api.post('/api/report/generate', payload);
-  return response.data;
-}
 
 // ─── WEATHER API ──────────────────────────────────────────────────────────────
 export async function fetchCurrentWeather(lat, lng) {

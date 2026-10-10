@@ -214,7 +214,7 @@ function ReportsPage() {
                         &nbsp;·&nbsp;
                         {rpt.source}
                         &nbsp;·&nbsp;
-                        {formatTimestamp(rpt.timestamp)}
+                        {formatTimestamp(rpt.createdAt || rpt.timestamp)}
                       </p>
                     </div>
                     {/* Status + severity badge */}
