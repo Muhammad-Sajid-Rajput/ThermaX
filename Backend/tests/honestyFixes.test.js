@@ -16,7 +16,6 @@ import app from '../app.js';
 import { User, ROLES } from '../models/User.js';
 import { Report } from '../models/Report.js';
 import { generateAccessToken } from '../utils/jwt.js';
-import { generateCSV } from '../services/csvExporterService.js';
 import { aggregateReportData } from '../services/reportAggregationService.js';
 import Hotspot from '../models/Hotspot.js';
 import HotspotPublication from '../models/HotspotPublication.js';
@@ -44,67 +43,17 @@ function makeReport(userId, overrides = {}) {
   });
 }
 
-describe('CSV export — formula-injection guard', () => {
-  it("neutralizes =, +, - and @ prefixes in free-text cells", () => {
-    const csv = generateCSV({
-      reports: [
-        {
-          reportRef: 'HTX-1',
-          createdAt: new Date('2026-01-01T00:00:00Z'),
-          district: '=cmd|/c calc',
-          city: '+Karachi',
-          latitude: 24.86,
-          longitude: 67.0,
-          severityLevel: 4,
-          ambientTemp: 39.5,
-          category: '@urban_heat_island',
-          status: '-pending',
-        },
-      ],
-    });
-    const row = csv.split('\n')[1];
-    expect(row).toContain(`"'=cmd|/c calc"`);
-    expect(row).toContain(`"'+Karachi"`);
-    expect(row).toContain(`"'@urban_heat_island"`);
-    expect(row).toContain(`"'-pending"`);
-    // No raw formula-prefix cell survives: every quoted text cell that
-    // starts with a dangerous char must be quote-prefixed.
-    for (const cell of row.split(',')) {
-      const inner = cell.replace(/^"|"$/g, '');
-      expect(/^[=+\-@]/.test(inner)).toBe(false);
-    }
-  });
-
-  it('leaves plain values untouched', () => {
-    const csv = generateCSV({
-      reports: [
-        {
-          reportRef: 'HTX-2',
-          createdAt: new Date('2026-01-01T00:00:00Z'),
-          district: 'Korangi',
-          city: 'Karachi',
-          latitude: 24.86,
-          longitude: 67.0,
-          severityLevel: 4,
-          category: 'urban_heat_island',
-          status: 'pending',
-        },
-      ],
-    });
-    expect(csv).toContain('"Korangi"');
-    expect(csv).not.toContain(`"'Korangi"`);
-  });
-});
-
 describe('export format — honest contract', () => {
-  it("rejects format 'pdf' with 400 instead of silently serving HTML", async () => {
-    const admin = await makeUser(ROLES.ADMIN, 'pdfreject');
-    const res = await request(app)
-      .post('/api/v1/exports/generate')
-      .set('Authorization', `Bearer ${admin.token}`)
-      .send({ city: 'Karachi', format: 'pdf' });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/not implemented/i);
+  it("rejects unsupported formats with 400 instead of silently serving HTML", async () => {
+    const admin = await makeUser(ROLES.ADMIN, 'formatreject');
+    for (const format of ['pdf', 'csv']) {
+      const res = await request(app)
+        .post('/api/v1/exports/generate')
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ city: 'Karachi', format });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/not available/i);
+    }
   });
 
   it('defaults to html and says so in the response', async () => {

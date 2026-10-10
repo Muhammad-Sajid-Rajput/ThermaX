@@ -91,19 +91,15 @@ afterEach(() => {
 });
 
 describe('insights — auth (admin-only)', () => {
-  it('rejects unauthenticated requests with 401 on both endpoints', async () => {
+  it('rejects unauthenticated requests with 401', async () => {
     const a = await request(app).get('/api/v1/insights').query({ city: 'Karachi' });
-    const b = await request(app).get('/api/v1/insights/export').query({ city: 'Karachi' });
     expect(a.status).toBe(401);
-    expect(b.status).toBe(401);
   });
 
-  it('rejects a non-admin with 403 on both endpoints', async () => {
+  it('rejects a non-admin with 403', async () => {
     const token = await makeUser(ROLES.USER, 'citizen');
     const a = await authed(token, '/api/v1/insights', { city: 'Karachi' });
-    const b = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
     expect(a.status).toBe(403);
-    expect(b.status).toBe(403);
   });
 
   it('is also reachable on the legacy /api mount for admins', async () => {
@@ -563,113 +559,6 @@ describe('insights — hotspots, directives and takeaways', () => {
   });
 });
 
-describe('insights — exports', () => {
-  it('serves CSV as an attachment with the documented sections', async () => {
-    const token = await adminToken();
-    await seedReports(12);
-    await seedHotspot();
-    await publish();
-    const res = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
-    expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/csv/);
-    expect(res.headers['content-disposition']).toBe('attachment; filename=insights-karachi-30d.csv');
-    for (const name of [
-      'SUMMARY',
-      'TAKEAWAYS',
-      'SEVERITY_DISTRIBUTION',
-      'VOLUME_SERIES',
-      'TEMP_SERIES',
-      'HOTSPOT_RANKING',
-      'TOP_DIRECTIVES',
-    ]) {
-      expect(res.text).toContain(`SECTION,${name}`);
-    }
-    // Data-quality footnote travels with every export.
-    expect(res.text).toContain('dataQuality.verifiedCount,12');
-    expect(res.text).toContain('dataQuality.syntheticExcluded,true');
-    expect(res.text).toContain('dataQuality.hotspotRunId,"run-new"');
-    // TVI / tier / directive ids appear in the ranking.
-    expect(res.text).toContain('1,"CL-01","Gulshan-e-Iqbal",12,0.72,"","heat;reports;population","critical",46.2,44.1,24.9,67.1,"open-cooling-centers;water-points"');
-  });
-
-  it('neutralizes formula injection in free-text cells', async () => {
-    const token = await adminToken();
-    await seedHotspot({ district: '=HYPERLINK("http://evil.test")' });
-    await publish();
-
-    const ranking = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
-    expect(ranking.text).toContain(`"'=HYPERLINK(""http://evil.test"")"`);
-
-    const scoped = await authed(token, '/api/v1/insights/export', {
-      city: 'Karachi',
-      area: '=cmd|calc',
-      format: 'csv',
-    });
-    expect(scoped.text).toContain(`scope.area,"'=cmd|calc"`);
-
-    for (const csv of [ranking.text, scoped.text]) {
-      // No cell may start with a raw formula prefix.
-      expect(csv).not.toMatch(/(^|,)"?[=+@]/m);
-    }
-  });
-
-  it('keeps a negative temperature delta numeric, not guarded text', async () => {
-    const token = await adminToken();
-    await seedReports(10, { areaName: 'Gulshan-e-Iqbal', ambientTemp: 38 });
-    await seedReports(10, { areaName: 'Saddar', ambientTemp: 42 });
-    const res = await authed(token, '/api/v1/insights/export', {
-      city: 'Karachi',
-      area: 'Gulshan',
-      format: 'csv',
-    });
-    expect(res.text).toContain('baseline.areaAvgTempDelta,-2');
-    expect(res.text).not.toContain("'-2");
-  });
-
-  it('marks withheld series in CSV when below the trend threshold', async () => {
-    const token = await adminToken();
-    await seedReports(3);
-    const res = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
-    expect(res.text).toContain('trends withheld: fewer than 10 verified reports in this window');
-    expect(res.text).toContain('dataQuality.trendEligible,false');
-  });
-
-  it('serves JSON as an attachment equal to GET /insights (default and format=json)', async () => {
-    const token = await adminToken();
-    await seedReports(12);
-    await seedHotspot();
-    await publish();
-
-    const body = (await authed(token, '/api/v1/insights', { city: 'Karachi', days: 7 })).body;
-    for (const query of [
-      { city: 'Karachi', days: 7 },
-      { city: 'Karachi', days: 7, format: 'json' },
-    ]) {
-      const res = await authed(token, '/api/v1/insights/export', query);
-      expect(res.status).toBe(200);
-      expect(res.headers['content-type']).toMatch(/application\/json/);
-      expect(res.headers['content-disposition']).toBe('attachment; filename=insights-karachi-7d.json');
-      const strip = (p) => ({ ...p, scope: { ...p.scope, from: undefined, to: undefined } });
-      expect(strip(JSON.parse(res.text))).toEqual(strip(body));
-    }
-  });
-
-  it('answers format=pdf (and any other format) with an honest 400', async () => {
-    const token = await adminToken();
-    for (const format of ['pdf', 'html', 'xlsx']) {
-      const res = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format });
-      expect(res.status, format).toBe(400);
-      expect(res.body.error).toBe('Unsupported format');
-      expect(res.body.message).toMatch(/PDF/);
-    }
-  });
-
-  it('validates export parameters like the main endpoint', async () => {
-    const token = await adminToken();
-    const res = await authed(token, '/api/v1/insights/export', { city: 'Atlantis', format: 'csv' });
-    expect(res.status).toBe(400);
-  });
-});
 
 describe('insights — database failures', () => {
   it('answers 503, not an empty payload, when the database is unreachable', async () => {
@@ -680,13 +569,10 @@ describe('insights — database failures', () => {
     }));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const a = await authed(token, '/api/v1/insights', { city: 'Karachi' });
-    const b = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
-    for (const res of [a, b]) {
-      expect(res.status).toBe(503);
-      expect(res.body.summary).toBeUndefined();
-      expect(res.body.message).toBe('Database unavailable');
-    }
+    const res = await authed(token, '/api/v1/insights', { city: 'Karachi' });
+    expect(res.status).toBe(503);
+    expect(res.body.summary).toBeUndefined();
+    expect(res.body.message).toBe('Database unavailable');
   });
 });
 
@@ -907,7 +793,7 @@ describe('insights — actionability upgrade (F1–F8)', () => {
     expect(empty).toBeNull();
   });
 
-  it('end-to-end: scope.briefRef format and CSV export contains new ACTION_PLAN and CAUSE_BREAKDOWN sections', async () => {
+  it('end-to-end: scope.briefRef format contains ACTION_PLAN and CAUSE_BREAKDOWN sections', async () => {
     const token = await adminToken();
     await seedReports(15, {
       areaName: 'Gulshan-e-Iqbal',
@@ -923,14 +809,6 @@ describe('insights — actionability upgrade (F1–F8)', () => {
     expect(jsonRes.body.actionPlan).toBeDefined();
     expect(jsonRes.body.causeBreakdown).toBeDefined();
     expect(jsonRes.body.escalation).toBeDefined();
-
-    const csvRes = await authed(token, '/api/v1/insights/export', { city: 'Karachi', format: 'csv' });
-    expect(csvRes.status).toBe(200);
-    expect(csvRes.text).toContain('SECTION,ACTION_PLAN');
-    expect(csvRes.text).toContain('Indicative band — not a costed estimate.');
-    expect(csvRes.text).toContain('SECTION,CAUSE_BREAKDOWN');
-    expect(csvRes.text).toContain('ministerBrief,');
-    expect(csvRes.text).toContain('scope.briefRef,');
   });
 });
 

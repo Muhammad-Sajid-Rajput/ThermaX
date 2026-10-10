@@ -3,7 +3,6 @@ import path from 'path';
 import GeneratedReport from '../models/GeneratedReport.js';
 import { aggregateReportData } from '../services/reportAggregationService.js';
 import { generateBriefingHTMLBuffer } from '../services/briefingExportService.js';
-import { generateCSV } from '../services/csvExporterService.js';
 import { isDatabaseError } from '../utils/dbErrors.js';
 
 const EXPORT_DIR = path.join(process.cwd(), 'uploads/exports');
@@ -44,13 +43,11 @@ export async function generateExport(req, res) {
     return res.status(400).json({ error: 'Invalid city', message: 'A non-empty city string is required.' });
   }
 
-  // Honest format contract: only 'html' and 'csv' exist. A real PDF engine
-  // is parked (Future Work) — 'pdf' is rejected instead of silently
-  // delivering an HTML file mislabeled as PDF.
-  if (!['html', 'csv'].includes(format)) {
+  // Honest format contract: only 'html' exists.
+  if (format !== 'html') {
     return res.status(400).json({
       error: 'Unsupported format',
-      message: `Format '${format}' is not available. PDF export is not implemented yet — use 'html' or 'csv'.`,
+      message: `Format '${format}' is not available. Only 'html' export is supported.`,
     });
   }
 
@@ -97,17 +94,10 @@ export async function generateExport(req, res) {
     });
 
     const ref = `EXP-${Date.now().toString().slice(-6)}`;
-    const ext = format === 'csv' ? 'csv' : 'html';
-    const filename = `${ref}_${citySlug}.${ext}`;
+    const filename = `${ref}_${citySlug}.html`;
     filePath = path.join(EXPORT_DIR, filename);
 
-    let contentBuffer;
-    if (format === 'csv') {
-      const csvStr = generateCSV(aggregated);
-      contentBuffer = Buffer.from(csvStr, 'utf-8');
-    } else {
-      contentBuffer = await generateBriefingHTMLBuffer(aggregated);
-    }
+    const contentBuffer = await generateBriefingHTMLBuffer(aggregated);
 
     fs.writeFileSync(filePath, contentBuffer);
 

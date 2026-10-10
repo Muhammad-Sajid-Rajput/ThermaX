@@ -76,7 +76,7 @@ describe('export generate — city validation', () => {
     const res = await request(app)
       .post('/api/v1/exports/generate')
       .set('Authorization', `Bearer ${token}`)
-      .send({ format: 'csv' });
+      .send({ format: 'html' });
     expect(res.status).toBe(400);
   });
 
