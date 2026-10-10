@@ -179,21 +179,19 @@ describe('Guarded Heat-Index Backfill (backfill-heatindex.js)', () => {
     expect(stats.skipReasons['no-cache-weather-match']).toBe(1);
   });
 
-  it('skips synthetic and unverified reports', async () => {
-    // Synthetic report
+  it('skips unverified reports', async () => {
+    // Unverified report (pending)
     await Report.create({
-      status: 'verified',
-      isSynthetic: true,
+      status: 'pending',
       latitude: baseLat,
       longitude: baseLng,
       snappedLocation: { lat: baseLat, lng: baseLng },
       observedAt: now,
     });
 
-    // Unverified report
+    // Unverified report (rejected)
     await Report.create({
-      status: 'pending',
-      isSynthetic: false,
+      status: 'rejected',
       latitude: baseLat,
       longitude: baseLng,
       snappedLocation: { lat: baseLat, lng: baseLng },

@@ -94,7 +94,7 @@ function HeatmapControl() {
       const [heatRes, hotRes, repRes] = await Promise.all([
         fetchHeatmap().catch(() => ({ data: [] })),
         fetchHotspots().catch(() => ({ data: [] })),
-        fetchReports().catch(() => ({ data: [] })),
+        fetchReports({ status: 'verified', limit: 1000 }).catch(() => ({ data: [] })),
       ]);
 
       const hPoints = heatRes?.data || [];
@@ -122,6 +122,7 @@ function HeatmapControl() {
 
   const formattedReports = useMemo(() => {
     return reportsData
+      .filter((r) => (r.status || '').toLowerCase() === 'verified')
       .map((r) => ({
         ...r,
         id: r._id || r.id || 'Report',

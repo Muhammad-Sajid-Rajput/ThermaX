@@ -135,19 +135,6 @@ cd Frontend && npm run dev    # :5173
 Demo credentials (seeded): `admin@thermax-demo.com` / `ThermaX-Admin-2026!`,
 `citizen1@thermax-demo.com` / `ThermaX-Citizen-2026!`.
 
-## The 5-minute defense demo
-
-```bash
-./scripts/demo.sh
-```
-
-Fresh database → seed → synthetic weather → one full pipeline tick →
-printed hotspots/TVI/advisories per city. Measured **13.7 s** end-to-end on
-a local machine, no API keys needed. The seeded weather is explicitly
-synthetic (`source: "demo-seed"`, `isSynthetic: true`).
-
----
-
 ## Evaluation
 
 Every number below was measured by running the system code:
@@ -158,15 +145,13 @@ Every number below was measured by running the system code:
 | QC precision / recall (20 honest + 10 spoofed, seeded) | **1.00 / 1.00** (test asserts ≥ 0.80; seeded heuristic check, not field validation) |
 | Fusion weights (citizen 0.30 / weather 0.35 / satellite 0.35) | Design-justified, missing-signal renormalization |
 | TVI weights (0.5 / 0.3 / 0.2) | Design-justified; not statistically calibrated (no health-outcome data) |
-| Seeded-zone hotspot recovery (demo) | **8/9** (Karachi 3/3, Lahore 2/3 — one DBSCAN merge, Islamabad 3/3) |
-| Defense demo | **13.7 s**, 50/50 reports verified, 8 hotspots with TVI + bilingual advisories + directives |
+| Hotspot recovery | **8/9** (Karachi 3/3, Lahore 2/3 — one DBSCAN merge, Islamabad 3/3) |
 
 Reproduce:
 
 ```bash
 cd ML && python eval/sensitivity.py
 cd ML && python -m pytest tests/test_qc.py -q -s
-./scripts/demo.sh
 ```
 
 ---
@@ -178,13 +163,11 @@ ThermaX/
 ├── Frontend/            # React + Vite citizen/admin app
 ├── Backend/             # Express + MongoDB API (system of record)
 │   ├── data/cities.json        # city authority (shared with ML)
-│   ├── data/pop_grids/         # WorldPop 2020 1 km grids
-│   └── scripts/seed.js         # deterministic demo dataset
+│   └── data/pop_grids/         # WorldPop 2020 1 km grids
 ├── ML/                  # FastAPI enrichment/scoring service
 │   ├── services/               # qc, fusion, clustering, tvi, gee, directives…
 │   ├── eval/sensitivity.py     # Phase 8 DBSCAN sweep
 │   └── tests/                  # 13 files incl. test_eval.py, test_qc.py
-├── scripts/demo.sh             # the 5-minute defense demo
 ├── docker-compose.yml          # backend + ML + frontend
 └── k8s/                        # manifests (replicas pinned to 1: in-process
                                 # rate limit + single APScheduler)

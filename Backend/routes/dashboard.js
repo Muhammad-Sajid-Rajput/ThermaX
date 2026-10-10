@@ -10,24 +10,17 @@ const router = express.Router();
 
 router.get('/snapshot', optionalAuth, async (req, res) => {
   try {
-    // No-fabrication policy: every production KPI counts real reports
-    // only. Synthetic demo rows are excluded by default and reported as
-    // their own separate count below.
-    const REAL = { isSynthetic: { $ne: true } };
     // Phase 5/6: hotspot KPIs resolve the publication pointer first so they
     // count exactly the current run per city — the same set /hotspots serves.
     // Counting {status:'active'} alone would double-count the retained
     // previous run.
     const runFilter = await currentHotspotRunFilter();
-    const [totalReports, pendingReports, approvedReports, rejectedReports, activeHotspots, syntheticReports] = await Promise.all([
-      Report.countDocuments(REAL),
-      Report.countDocuments({ ...REAL, status: 'pending' }),
-      Report.countDocuments({ ...REAL, status: 'verified' }),
-      Report.countDocuments({ ...REAL, status: 'rejected' }),
+    const [totalReports, pendingReports, approvedReports, rejectedReports, activeHotspots] = await Promise.all([
+      Report.countDocuments({}),
+      Report.countDocuments({ status: 'pending' }),
+      Report.countDocuments({ status: 'verified' }),
+      Report.countDocuments({ status: 'rejected' }),
       Hotspot.countDocuments({ status: 'active', ...runFilter }),
-      // Honest labeling: seed/demo rows are counted separately so the admin
-      // can tell real submissions apart from synthetic demo data.
-      Report.countDocuments({ isSynthetic: true }),
     ]);
 
     // Real per-day aggregation over the last 7 calendar days (UTC):
@@ -39,7 +32,7 @@ router.get('/snapshot', optionalAuth, async (req, res) => {
       dayStarts.push(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i)));
     }
     const perDay = await Report.aggregate([
-      { $match: { createdAt: { $gte: dayStarts[0] }, isSynthetic: { $ne: true } } },
+      { $match: { createdAt: { $gte: dayStarts[0] } } },
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
@@ -74,7 +67,6 @@ router.get('/snapshot', optionalAuth, async (req, res) => {
       activeHotspots,
       criticalHotspots,
       criticalRiskTierHotspots,
-      syntheticReports,
       // Derived from the live DB connection — never a hardcoded claim.
       systemHealth: mongoose.connection.readyState === 1 ? 'operational' : 'degraded',
       lastUpdated: new Date().toISOString(),

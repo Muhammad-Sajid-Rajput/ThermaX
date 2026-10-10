@@ -17,7 +17,6 @@ import { toDto } from '../routes/hotspots.js';
  *  - days is one of 7 / 30 / 90 (default 30)
  *  - aggregates count status 'verified' only; flagged reports are counted in
  *    dataQuality but excluded from every aggregate
- *  - synthetic rows are excluded unless includeSynthetic is explicitly true
  *  - time series are withheld (empty arrays) below the trend threshold
  *  - takeaways are deterministic templates filled from payload numbers only;
  *    a template whose inputs are null/insufficient is omitted
@@ -373,7 +372,7 @@ export const PROVINCES_CONFIG = {
   },
 };
 
-function parseQuery({ city, province, area, days, includeSynthetic } = {}) {
+function parseQuery({ city, province, area, days } = {}) {
   const cities = getCities();
   const supported = cities.map((c) => c.name);
 
@@ -472,8 +471,6 @@ function parseQuery({ city, province, area, days, includeSynthetic } = {}) {
     timeZone: cityDef?.timezone || 'Asia/Karachi',
     areaTerm,
     days: windowDays,
-    // Same semantics as the existing export flow: only an explicit opt-in.
-    includeSynthetic: includeSynthetic === true || includeSynthetic === 'true',
   };
 }
 
@@ -1234,12 +1231,12 @@ function buildTakeaways({
  * Build the single-source-of-truth insights payload. The page renders it,
  * the JSON export downloads it verbatim, the CSV export flattens it.
  *
- * @param {{city?: string, area?: string, days?: number|string, includeSynthetic?: boolean|string}} query
+ * @param {{city?: string, area?: string, days?: number|string}} query
  * @param {{now?: Date}} [options] - `now` exists for deterministic tests.
  * @throws {InsightsValidationError} on bad parameters (HTTP 400).
  */
 export async function buildInsights(query = {}, { now = new Date() } = {}) {
-  const { city, provinceConfig, isProvinceQuery, timeZone, areaTerm, days, includeSynthetic } =
+  const { city, provinceConfig, isProvinceQuery, timeZone, areaTerm, days } =
     parseQuery(query);
   const minReports = minReportsForTrend();
 
@@ -1278,7 +1275,6 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
     baselineScope = {
       $and: [
         provinceFilter,
-        ...(!includeSynthetic ? [{ isSynthetic: { $ne: true } }] : []),
       ],
     };
 
@@ -1286,13 +1282,11 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
       $and: [
         provinceFilter,
         ...(areaFilter ? [areaFilter] : []),
-        ...(!includeSynthetic ? [{ isSynthetic: { $ne: true } }] : []),
       ],
     };
   } else {
     const cityScope = {
       city,
-      ...(!includeSynthetic && { isSynthetic: { $ne: true } }),
     };
     const areaRegex = areaTerm ? { $regex: escapeRegex(areaTerm), $options: 'i' } : null;
     areaScope = {
@@ -1448,7 +1442,6 @@ export async function buildInsights(query = {}, { now = new Date() } = {}) {
       flaggedCount,
       trendEligible,
       minReportsForTrend: minReports,
-      syntheticExcluded: !includeSynthetic,
       hotspotRunId: isProvinceQuery ? null : (singlePub?.currentRunId ?? null),
       hotspotRuns: validPublications.map((p) => ({ city: p.city, runId: p.currentRunId })),
       hotspotEmptyReason,

@@ -107,6 +107,7 @@ describe('/heatmap — no invented severity', () => {
       snappedLocation: { lat: 24.861, lng: 67.001 },
       severityLevel: 5,
       city: 'HeatCity',
+      status: 'verified',
     });
     // Severity-less report created directly (route validation requires
     // severity, but legacy rows may lack it).
@@ -116,7 +117,7 @@ describe('/heatmap — no invented severity', () => {
       longitude: 67.0099,
       snappedLocation: { lat: 24.87, lng: 67.01 },
       city: 'HeatCity',
-      status: 'pending',
+      status: 'verified',
     });
     expect(noSev.severityLevel).toBeUndefined();
 
@@ -130,7 +131,7 @@ describe('/heatmap — no invented severity', () => {
     await noSev.deleteOne();
   });
 
-  it('plots snapped grid points (never exact GPS), and excludes flagged + synthetic rows', async () => {
+  it('plots snapped grid points (never exact GPS), and excludes flagged rows', async () => {
     const citizen = await makeUser(ROLES.USER, 'hmcitizen2');
     const exactLat = 24.86234;
     const exactLng = 67.00287;
@@ -140,6 +141,7 @@ describe('/heatmap — no invented severity', () => {
       snappedLocation: { lat: 24.862, lng: 67.003 },
       severityLevel: 4,
       city: 'HeatCity2',
+      status: 'verified',
     });
     const flagged = await makeReport(citizen.user._id, {
       latitude: 24.86333,
@@ -148,14 +150,6 @@ describe('/heatmap — no invented severity', () => {
       severityLevel: 5,
       city: 'HeatCity2',
       status: 'flagged',
-    });
-    const synthetic = await makeReport(citizen.user._id, {
-      latitude: 24.86444,
-      longitude: 67.00555,
-      snappedLocation: { lat: 24.864, lng: 67.006 },
-      severityLevel: 5,
-      city: 'HeatCity2',
-      isSynthetic: true,
     });
 
     const res = await request(app).get('/api/v1/heatmap?city=HeatCity2');
@@ -166,12 +160,10 @@ describe('/heatmap — no invented severity', () => {
     expect(raw).not.toContain(String(exactLng));
     // Snapped point of the real report is plotted…
     expect(res.body.heatmap.find((p) => p.lat === 24.862 && p.lng === 67.003)).toBeDefined();
-    // …but flagged and synthetic rows are not.
+    // …but flagged rows are not.
     expect(res.body.heatmap.find((p) => p.lat === 24.863)).toBeUndefined();
-    expect(res.body.heatmap.find((p) => p.lat === 24.864)).toBeUndefined();
     await real.deleteOne();
     await flagged.deleteOne();
-    await synthetic.deleteOne();
   });
 });
 
@@ -210,41 +202,18 @@ describe('aggregateReportData — no Karachi default', () => {
   });
 });
 
-describe('aggregateReportData — synthetic exclusion (no-fabrication policy)', () => {
-  it('excludes synthetic rows by default; includes them only on deliberate opt-in', async () => {
-    const citizen = await makeUser(ROLES.USER, 'synthcitizen');
-    await makeReport(citizen.user._id, { city: 'Karachi', isSynthetic: true });
-    await makeReport(citizen.user._id, { city: 'Karachi', isSynthetic: false });
-
-    const def = await aggregateReportData({ city: 'Karachi' });
-    const withSynth = await aggregateReportData({ city: 'Karachi', includeSynthetic: true });
-    expect(withSynth.totalReports).toBe(def.totalReports + 1);
-    expect(def.reports.every((r) => !r.isSynthetic)).toBe(true);
-  });
-});
-
-describe('/dashboard/snapshot — synthetic rows excluded from KPIs by default', () => {
-  it('counts real reports only; synthetic rows appear solely in syntheticReports', async () => {
+describe('/dashboard/snapshot — counts reports accurately', () => {
+  it('counts reports in KPIs and trend chart', async () => {
     const citizen = await makeUser(ROLES.USER, 'dashcitizen');
     const real = await makeReport(citizen.user._id, { city: 'DashCity' });
-    const synth = await makeReport(citizen.user._id, { city: 'DashCity', isSynthetic: true });
 
     const res = await request(app).get('/api/v1/dashboard/snapshot');
     expect(res.status).toBe(200);
-
-    // The real report is counted; the synthetic one is not in any KPI…
     expect(res.body.totalReports).toBeGreaterThanOrEqual(1);
     const trendTotal = res.body.charts.trend.reduce((a, b) => a + b.reports, 0);
     expect(trendTotal).toBeGreaterThanOrEqual(1);
-    // …it is visible only via its dedicated honest count.
-    expect(res.body.syntheticReports).toBeGreaterThanOrEqual(1);
 
-    // The synthetic report alone must not inflate the totals: delete the
-    // real one and the KPI delta must be exactly 1.
     await real.deleteOne();
-    const res2 = await request(app).get('/api/v1/dashboard/snapshot');
-    expect(res2.body.totalReports).toBe(res.body.totalReports - 1);
-    await synth.deleteOne();
   });
 });
 

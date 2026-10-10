@@ -18,7 +18,7 @@ import {
   Image as ImageIcon,
   Tag,
 } from 'lucide-react';
-import { fetchReports, updateModerationStatus, formatTimestamp } from '../../services/api';
+import { fetchReports, fetchReportStats, updateModerationStatus, formatTimestamp } from '../../services/api';
 import { csvCell } from '../../utils/csv';
 
 function ReportManagement() {
@@ -36,6 +36,14 @@ function ReportManagement() {
     search: '',
   });
 
+  const [globalStats, setGlobalStats] = useState({
+    total: 0,
+    pending: 0,
+    validated: 0,
+    flagged: 0,
+    rejected: 0,
+  });
+
   const flaggedSelectedCount = selectedReports.filter((id) =>
     reports.some((r) => r.id === id && r.status === 'flagged')
   ).length;
@@ -44,11 +52,29 @@ function ReportManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const refreshStats = useCallback(async () => {
+    try {
+      const s = await fetchReportStats();
+      if (s) {
+        setGlobalStats({
+          total: s.total,
+          pending: s.pending,
+          validated: s.verified,
+          flagged: s.flagged,
+          rejected: s.rejected,
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   const loadReports = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetchReports({
         status: filters.status === 'all' ? undefined : filters.status,
+        limit: 1000,
       });
 
       const raw = response?.data || [];
@@ -66,9 +92,16 @@ function ReportManagement() {
       }));
 
       setReports(normalized);
-      // Client-side filters (search) are applied by the effect below
-      // which watches `reports` — calling applyFilters here directly would
-      // capture a stale closure over `filters` (exhaustive-deps).
+
+      if (response?.stats) {
+        setGlobalStats({
+          total: response.stats.total,
+          pending: response.stats.pending,
+          validated: response.stats.verified,
+          flagged: response.stats.flagged,
+          rejected: response.stats.rejected,
+        });
+      }
     } catch (err) {
       console.error('Failed to load reports:', err);
       toast.error('Failed to load real reports from database.');
@@ -78,6 +111,10 @@ function ReportManagement() {
       setLoading(false);
     }
   }, [filters.status]);
+
+  useEffect(() => {
+    refreshStats();
+  }, [refreshStats]);
 
   const applyFilters = useCallback(
     (data = reports) => {
@@ -170,12 +207,14 @@ function ReportManagement() {
             : 'Report rejected and removed from active list'
       );
       await loadReports();
+      await refreshStats();
       if (showDetailModal && showDetailModal.id === reportId) {
         setShowDetailModal((prev) => ({ ...prev, status: decision }));
       }
     } catch {
       toast.error('Moderation action failed. Please try again.');
       await loadReports();
+      await refreshStats();
     } finally {
       setActionLoadingId(null);
     }
@@ -200,6 +239,7 @@ function ReportManagement() {
       toast.success(`${targets.length} outlier report(s) ${label}`);
       setSelectedReports([]);
       await loadReports();
+      await refreshStats();
     } catch {
       toast.error('Bulk moderation failed.');
     } finally {
@@ -261,13 +301,15 @@ function ReportManagement() {
     currentPage * itemsPerPage
   );
 
-  const stats = {
-    total: reports.length,
-    pending: reports.filter((r) => r.status === 'pending').length,
-    validated: reports.filter((r) => r.status === 'verified').length,
-    flagged: reports.filter((r) => r.status === 'flagged').length,
-    rejected: reports.filter((r) => r.status === 'rejected').length,
-  };
+  const stats = globalStats.total > 0
+    ? globalStats
+    : {
+        total: reports.length,
+        pending: reports.filter((r) => r.status === 'pending').length,
+        validated: reports.filter((r) => r.status === 'verified').length,
+        flagged: reports.filter((r) => r.status === 'flagged').length,
+        rejected: reports.filter((r) => r.status === 'rejected').length,
+      };
 
   return (
     <div className="space-y-6">
@@ -286,7 +328,10 @@ function ReportManagement() {
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
           <button
-            onClick={loadReports}
+            onClick={() => {
+              loadReports();
+              refreshStats();
+            }}
             disabled={loading}
             className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-xs"
             title="Refresh reports"

@@ -34,6 +34,14 @@ router.get(
   reportController.getReports
 );
 
+// Get global moderation stats (admin view)
+router.get(
+  '/stats',
+  authenticate,
+  authorizeAdmin,
+  reportController.getReportStats
+);
+
 // Get one report with full enrichment refs (admin moderation detail view).
 // Placed after the literal routes above so '/:id' never shadows them.
 router.get(

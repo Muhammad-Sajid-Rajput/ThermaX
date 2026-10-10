@@ -39,10 +39,6 @@ PIPELINE_INTERVAL_MINUTES = int(os.getenv("PIPELINE_INTERVAL_MINUTES", 30))
 # Shared secret the backend sends as X-Service-Key on every ML call.
 # Empty in local dev (endpoints stay open); set it in staging/prod.
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY", "")
-# Demo/demo-seed reports (isSynthetic: true) are excluded from clustering by
-# default — the public hotspot map must never be built from fabricated demo
-# data. Set to "true" only for a deliberate demo run against the seed set.
-INCLUDE_SYNTHETIC_REPORTS = os.getenv("INCLUDE_SYNTHETIC_REPORTS", "false").lower() == "true"
 # Deployment environment: "production" triggers fail-fast behavior (e.g.
 # refusing to boot without ML_SERVICE_KEY). Anything else is dev/test.
 ENV_NAME = os.getenv("ENV", os.getenv("NODE_ENV", "development")).lower()

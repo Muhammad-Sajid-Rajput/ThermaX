@@ -108,19 +108,4 @@ describe('public report privacy DTO (pre-Phase-6 review)', () => {
     expect(asAdmin.status).toBe(200);
     expect(asAdmin.body.reports.map((r) => String(r._id))).toContain(String(rejected._id));
   });
-
-  it('public listing excludes synthetic rows; admins still see them', async () => {
-    const admin = await makeUser(ROLES.ADMIN, 'synadmin');
-    const citizen = await makeUser(ROLES.USER, 'syncitizen2');
-    const synth = await makeReport(citizen.user, { isSynthetic: true });
-
-    const pub = await request(app).get('/api/v1/reports');
-    expect(pub.body.reports.map((r) => String(r.id))).not.toContain(String(synth._id));
-
-    const asAdmin = await request(app)
-      .get('/api/v1/reports')
-      .set('Authorization', `Bearer ${admin.token}`);
-    expect(asAdmin.body.reports.map((r) => String(r._id))).toContain(String(synth._id));
-    await synth.deleteOne();
-  });
 });

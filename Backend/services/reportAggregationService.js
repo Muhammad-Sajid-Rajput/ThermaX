@@ -8,18 +8,13 @@ import { currentHotspotRunFilter } from '../utils/currentHotspotRunFilter.js';
 export async function aggregateReportData(filters = {}) {
   // No city default: a missing city must be rejected by the caller (400),
   // never silently scoped to Karachi.
-  const { city, fromDate, toDate, includeSynthetic } = filters;
+  const { city, fromDate, toDate } = filters;
   const query = {};
   if (city) query.city = city;
   if (fromDate || toDate) {
     query.createdAt = {};
     if (fromDate) query.createdAt.$gte = new Date(fromDate);
     if (toDate) query.createdAt.$lte = new Date(toDate);
-  }
-  // No-fabrication policy: synthetic (seed/demo) rows never feed exported
-  // analytics unless the caller deliberately opts in (includeSynthetic).
-  if (!includeSynthetic) {
-    query.isSynthetic = { $ne: true };
   }
 
   // DB failures propagate to the caller — never answer with fabricated

@@ -37,7 +37,7 @@ import importlib
 import threading
 import uuid
 
-from config import CITY_NAMES, MONGO_URI, INCLUDE_SYNTHETIC_REPORTS
+from config import CITY_NAMES, MONGO_URI
 from services.clustering_service import run_dbscan_clustering
 from services.pipeline_runner import enrich_report_pipeline
 from services.pop_grid import pop_density_at
@@ -74,10 +74,7 @@ def build_city_points(db, city):
     public hotspot map. A report is clustered into exactly one city — the
     city resolved server-side at submission. Legacy reports with no city
     are excluded from every city's run until the backfill script attributes
-    them. Synthetic (seed/demo) reports are excluded unless the deliberate
-    demo opt-in INCLUDE_SYNTHETIC_REPORTS=true is set — the public hotspot
-    map must never be built from fabricated demo data. Malformed rows are
-    skipped individually — one bad document never kills the batch.
+    them. Malformed rows are skipped individually — one bad document never kills the batch.
     Returns (points, skipped).
     """
     query = {
@@ -85,8 +82,6 @@ def build_city_points(db, city):
         "city": city,
         "enrichmentFailedAt": {"$exists": False},
     }
-    if not INCLUDE_SYNTHETIC_REPORTS:
-        query["isSynthetic"] = {"$ne": True}
     cursor = db.reports.find(query)
     points, skipped = [], 0
     for r in cursor:

@@ -10,15 +10,11 @@ const router = express.Router();
 router.get('/', optionalAuth, async (req, res) => {
   try {
     // Privacy + honesty: the public heatmap plots grid-anonymized snapped
-    // points — never a citizen's exact GPS. Moderation-internal statuses
-    // (flagged/rejected) are excluded; demo rows are included only when
-    // INCLUDE_SYNTHETIC_REPORTS=true.
+    // points — never a citizen's exact GPS. Only verified reports feed the
+    // heatmap; pending, flagged, and rejected submissions are excluded.
     const query = {
-      status: { $in: ['pending', 'verified'] },
+      status: 'verified',
     };
-    if (process.env.INCLUDE_SYNTHETIC_REPORTS !== 'true' && req.query.includeSynthetic !== 'true') {
-      query.isSynthetic = { $ne: true };
-    }
     if (typeof req.query.city === 'string' && req.query.city.trim()) {
       const cityParam = req.query.city.trim();
       const supported = getCities().map((c) => c.name);

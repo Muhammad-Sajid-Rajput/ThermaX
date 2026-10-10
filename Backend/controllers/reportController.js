@@ -89,12 +89,6 @@ export const getReports = async (req, res) => {
     } else if (!isAdmin) {
       filter.status = { $in: PUBLIC_REPORT_STATUSES };
     }
-    // No-fabrication policy: synthetic demo rows appear only when
-    // INCLUDE_SYNTHETIC_REPORTS=true or for admins.
-    const includeSynthetic = isAdmin || process.env.INCLUDE_SYNTHETIC_REPORTS === 'true' || req.query.includeSynthetic === 'true';
-    if (!includeSynthetic) {
-      filter.isSynthetic = { $ne: true };
-    }
     if (severity && severity !== 'all') {
       const parsedSeverity = parseInt(severity, 10);
       if (!Number.isInteger(parsedSeverity) || parsedSeverity < 1 || parsedSeverity > 5) {
@@ -160,16 +154,53 @@ export const getReports = async (req, res) => {
           };
         });
 
+    let stats = undefined;
+    if (isAdmin) {
+      const counts = await Report.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]);
+      const statusMap = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+      const totalAll = await Report.countDocuments({});
+      stats = {
+        total: totalAll,
+        pending: statusMap.pending || 0,
+        verified: statusMap.verified || 0,
+        flagged: statusMap.flagged || 0,
+        rejected: statusMap.rejected || 0,
+      };
+    }
+
     res.json({
       message: 'Reports retrieved successfully',
       reports: payload,
       total: payload.length,
+      stats,
     });
   } catch (error) {
     console.error('getReports DB error:', error.message);
     res
       .status(503)
       .json({ error: 'Service unavailable', message: 'Database unavailable. Please try again.' });
+  }
+};
+
+export const getReportStats = async (req, res) => {
+  try {
+    const counts = await Report.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]);
+    const statusMap = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+    const totalAll = await Report.countDocuments({});
+    res.json({
+      total: totalAll,
+      pending: statusMap.pending || 0,
+      verified: statusMap.verified || 0,
+      flagged: statusMap.flagged || 0,
+      rejected: statusMap.rejected || 0,
+    });
+  } catch (error) {
+    console.error('getReportStats error:', error.message);
+    res.status(503).json({ error: 'Service unavailable', message: 'Failed to compute report stats.' });
   }
 };
 

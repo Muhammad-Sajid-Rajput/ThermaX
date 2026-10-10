@@ -191,8 +191,14 @@ export async function fetchReports(filters = {}) {
   return {
     data: response.data?.reports || response.data || [],
     total: response.data?.total || 0,
+    stats: response.data?.stats || null,
     source: 'api',
   };
+}
+
+export async function fetchReportStats(filters = {}) {
+  const response = await api.get('/api/report/stats', { params: filters });
+  return response.data;
 }
 
 export async function fetchMyReports() {
@@ -326,7 +332,7 @@ export async function fetchAdminStats() {
 
 export async function fetchReportsCenter(filters = {}) {
   const [reportsRes, hotspotsRes, heatmapRes] = await Promise.all([
-    fetchReports(filters),
+    fetchReports({ status: 'verified', limit: 1000, ...filters }),
     fetchHotspots(filters),
     fetchHeatmap(filters),
   ]);
@@ -426,14 +432,11 @@ export async function markNotificationRead(id) {
 // downloads it verbatim (client-side Blob), the CSV button hits the export
 // endpoint. `area` is an optional literal substring; empty values are dropped
 // so the server never sees `area=`.
-function insightsParams({ city, province, area, days, includeSynthetic }) {
+function insightsParams({ city, province, area, days }) {
   const params = { days };
   if (province) params.province = province;
   if (city) params.city = city;
   if (area && area.trim()) params.area = area.trim();
-  if (includeSynthetic !== undefined) {
-    params.includeSynthetic = String(includeSynthetic);
-  }
   return params;
 }
 

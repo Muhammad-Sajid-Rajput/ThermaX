@@ -92,7 +92,7 @@ const SaaSDashboard = () => {
           fetchDashboardSnapshot(filters).catch(() => null),
           fetchHotspots().catch(() => ({ data: [] })),
           fetchHeatmap().catch(() => ({ data: [] })),
-          fetchReports().catch(() => ({ data: [] })),
+          fetchReports({ status: 'verified', limit: 1000 }).catch(() => ({ data: [] })),
         ]);
         if (!snapshotData) {
           throw new Error('Failed to load dashboard data');

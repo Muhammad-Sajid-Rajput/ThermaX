@@ -68,10 +68,9 @@ Provides decision-oriented, area-scoped executive reports for municipal stakehol
     - `city`: Required, allowlisted (`Karachi`, `Lahore`, `Islamabad`). Unknown city returns 400.
     - `area`: Optional, trimmed literal substring filter on `areaName` (case-insensitive, ReDoS protected).
     - `days`: Optional time window (`7`, `30`, `90`; default `30`). Other values return 400.
-    - `includeSynthetic`: Optional boolean (default `false`).
   - **Payload Structure**:
     - `scope`: `{ city, area, days, from, to }`
-    - `dataQuality`: `{ reportCount, verifiedCount, flaggedCount, trendEligible, minReportsForTrend, syntheticExcluded, hotspotRunId }`
+    - `dataQuality`: `{ reportCount, verifiedCount, flaggedCount, trendEligible, minReportsForTrend, hotspotRunId }`
     - `summary`: `{ totalReports, avgTemp, peakTemp, avgSeverity, activeHotspots, criticalHotspots }`
     - `baseline`: `{ cityAvgTemp, areaAvgTempDelta, cityReportCount }`
     - `takeaways`: Deterministic executive takeaway bullets.

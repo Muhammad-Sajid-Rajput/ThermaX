@@ -136,7 +136,8 @@ const MiniMap = ({
       1: '#94a3b8',
     };
 
-    const newLayers = reports
+    const newLayers = (reports || [])
+      .filter((report) => (report.status || '').toLowerCase() === 'verified')
       .map((report) => {
         // Public DTO carries the snapped (anonymized) location.
         const loc = report.location ?? {};

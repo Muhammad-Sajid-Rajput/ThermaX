@@ -294,32 +294,3 @@ def test_enrichment_failed_marker_set_and_cleared(monkeypatch):
     assert "enrichmentFailedAt" not in recovered, "stamp cleared on success"
 
 
-# ── synthetic-data exclusion ───────────────────────────────────────────────
-
-def test_synthetic_reports_never_cluster(monkeypatch):
-    """Seed/demo rows (isSynthetic: true) must not feed the public hotspot
-    map — unless the deliberate INCLUDE_SYNTHETIC_REPORTS=true demo opt-in
-    is set. Regression test for the no-fabrication policy."""
-    holder = _install_mongo_stubs(monkeypatch)
-    db = holder["get_db"]()
-    _seed_verified(db, "k", "Karachi", [KARACHI_CENTERS[0]])  # 5 real, verified
-    # 5 synthetic demo rows in the SAME tight cluster — none may join it.
-    for i in range(5):
-        db.reports.insert_one({
-            "_id": _FakeObjectId(f"syn-{i}"),
-            "city": "Karachi", "status": "verified",
-            "isSynthetic": True,
-            "latitude": 24.860 + i * 0.001, "longitude": 67.010 + i * 0.001,
-            "ambientTemp": 42.0, "severityLevel": 4,
-        })
-
-    points, _ = build_city_points(db, "Karachi")
-    assert len(points) == 5
-    assert all(p["id"].startswith("k-") for p in points)
-
-    res = run_city_pipeline(db, "Karachi")
-    assert res["status"] == "COMPLETED"
-    hotspots = current_hotspots(db, "Karachi")
-    assert len(hotspots) == 1
-    assert hotspots[0]["reportCount"] == 5
-    assert all(m.startswith("k-") for m in hotspots[0]["memberReportIds"])

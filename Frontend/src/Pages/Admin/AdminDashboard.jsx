@@ -129,11 +129,12 @@ function AdminDashboard() {
           r.longitude ?? r.location?.lng ?? null,
         ],
       }));
-      // Never pin reports without coordinates at a fabricated city center:
-      // only reports with real coordinates are plotted on the map.
+      // Only verified reports with real coordinates are plotted on the map.
       const locatableReports = formattedReports.filter(
         (r) =>
-          Number.isFinite(r.coordinates[0]) && Number.isFinite(r.coordinates[1])
+          (r.status || '').toLowerCase() === 'verified' &&
+          Number.isFinite(r.coordinates[0]) &&
+          Number.isFinite(r.coordinates[1])
       );
       const unlocatableCount = formattedReports.length - locatableReports.length;
 

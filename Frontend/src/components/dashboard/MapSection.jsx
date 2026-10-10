@@ -225,7 +225,10 @@ const LeafletMapInner = ({
     layerRefs.current.reportMarkers = [];
 
     if (layers.reports && reportsData?.length > 0) {
-      const newMarkers = reportsData
+      const verifiedReports = reportsData.filter(
+        (rpt) => (rpt.status || '').toLowerCase() === 'verified'
+      );
+      const newMarkers = verifiedReports
         .map((rpt) => {
           // Public DTO carries the snapped (anonymized) location; admin
           // documents carry exact coordinates via the `coordinates` virtual.
@@ -503,12 +506,16 @@ const MapSection = ({
   const { finalHeatmap, finalHotspots, finalReports } = useMemo(() => {
     let finalHeatmap = heatmap || [];
     let finalHotspots = hotspots || [];
-    let finalReports = reports || [];
+    let rawReports = points?.length > 0 ? points : reports || [];
 
     if (points?.length > 0) {
       finalHeatmap = formatHeatmapPoints(points);
-      finalReports = points;
     }
+
+    // Only verified reports should be displayed on the map
+    const finalReports = rawReports.filter(
+      (r) => (r.status || '').toLowerCase() === 'verified'
+    );
 
     return {
       finalHeatmap,

@@ -1,9 +1,8 @@
-"""Security regression tests: production fail-fast and synthetic exclusion.
+"""Security regression tests: production fail-fast.
 
 - Booting the ML service with ENV=production and no ML_SERVICE_KEY must
   raise instead of serving open endpoints. Dev/test (non-production) keeps
   the controlled open behavior.
-- Synthetic (seed/demo) reports are excluded from clustering by default.
 """
 import asyncio
 

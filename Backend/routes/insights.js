@@ -23,7 +23,7 @@ function sendError(res, error, action) {
   });
 }
 
-// GET /api/v1/insights?city=&area=&days=&includeSynthetic=
+// GET /api/v1/insights?city=&area=&days=
 router.get('/', async (req, res) => {
   try {
     res.json(await buildInsights(req.query));

@@ -37,7 +37,7 @@ export async function getExportHistory(req, res) {
 }
 
 export async function generateExport(req, res) {
-  const { city, format = 'html', fromDate, toDate, includeSynthetic } = req.body || {};
+  const { city, format = 'html', fromDate, toDate } = req.body || {};
 
   if (typeof city !== 'string' || !city.trim()) {
     return res.status(400).json({ error: 'Invalid city', message: 'A non-empty city string is required.' });
@@ -83,14 +83,10 @@ export async function generateExport(req, res) {
 
   let filePath = null;
   try {
-    // No-fabrication policy: synthetic (seed/demo) rows are excluded from
-    // exported briefings unless the caller deliberately opts in with
-    // includeSynthetic: true — e.g. the FYP demo running on the seed set.
     const aggregated = await aggregateReportData({
       city: city.trim(),
       fromDate,
       toDate,
-      includeSynthetic: includeSynthetic === true,
     });
 
     const ref = `EXP-${Date.now().toString().slice(-6)}`;

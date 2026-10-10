@@ -194,7 +194,6 @@ describe('insights — payload shape', () => {
       flaggedCount: 0,
       trendEligible: true,
       minReportsForTrend: DEFAULT_MIN_REPORTS_FOR_TREND,
-      syntheticExcluded: true,
       hotspotRunId: 'run-new',
       hotspotRuns: [{ city: 'Karachi', runId: 'run-new' }],
       hotspotEmptyReason: null,
@@ -280,7 +279,7 @@ describe('insights — area filter is a literal substring', () => {
   });
 });
 
-describe('insights — verified-only, synthetic, window, city scoping', () => {
+describe('insights — verified-only, window, city scoping', () => {
   it('counts only verified reports in aggregates', async () => {
     const token = await adminToken();
     await seedReports(4, { status: 'verified', ambientTemp: 40 });
@@ -301,27 +300,12 @@ describe('insights — verified-only, synthetic, window, city scoping', () => {
     expect(res.body.baseline.cityReportCount).toBe(4);
   });
 
-  it('excludes synthetic rows by default and includes them only on includeSynthetic=true', async () => {
+  it('counts verified reports accurately', async () => {
     const token = await adminToken();
     await seedReports(3);
-    await seedReports(2, { isSynthetic: true });
 
     const def = await authed(token, '/api/v1/insights', { city: 'Karachi' });
     expect(def.body.summary.totalReports).toBe(3);
-    expect(def.body.dataQuality.syntheticExcluded).toBe(true);
-
-    const opted = await authed(token, '/api/v1/insights', {
-      city: 'Karachi',
-      includeSynthetic: 'true',
-    });
-    expect(opted.body.summary.totalReports).toBe(5);
-    expect(opted.body.dataQuality.syntheticExcluded).toBe(false);
-
-    const junk = await authed(token, '/api/v1/insights', {
-      city: 'Karachi',
-      includeSynthetic: 'yes',
-    });
-    expect(junk.body.summary.totalReports).toBe(3);
   });
 
   it('honours the time window', async () => {

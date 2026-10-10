@@ -14,12 +14,12 @@ import { buildCacheKey } from '../services/weatherService.js';
  *
  * Scans:
  *  1. WeatherSnapshots where heatIndex is null
- *  2. Verified, non-synthetic reports with no weather snapshot at all
+ *  2. Verified reports with no weather snapshot at all
  *
  * Matches against real Weather cache records:
  *  - Exact cacheKey grid cell match (buildCacheKey(lat, lng) on snappedLocation)
  *  - Time proximity: Weather observedAt within ±hoursWindow of report observedAt
- *  - Verified reports only, non-synthetic only
+ *  - Verified reports only
  *  - Never overwrites existing non-null heatIndex
  *  - Provenance: stamped with heatIndexSource: 'weather-cache-backfill'
  */
@@ -69,10 +69,6 @@ export async function runBackfill(options = {}) {
     }
     if (report.status !== 'verified') {
       recordSkip('unverified-report');
-      continue;
-    }
-    if (report.isSynthetic) {
-      recordSkip('synthetic-report');
       continue;
     }
 
@@ -149,11 +145,10 @@ export async function runBackfill(options = {}) {
   }
 
   // -------------------------------------------------------------------------
-  // PASS 2: Verified, non-synthetic reports with NO snapshot at all
+  // PASS 2: Verified reports with NO snapshot at all
   // -------------------------------------------------------------------------
   const reportsWithoutSnapshot = await Report.find({
     status: 'verified',
-    isSynthetic: { $ne: true },
     $or: [
       { weatherSnapshotRef: null },
       { weatherSnapshotRef: { $exists: false } },
