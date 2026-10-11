@@ -164,13 +164,10 @@ ThermaX/
 ├── Backend/             # Express + MongoDB API (system of record)
 │   ├── data/cities.json        # city authority (shared with ML)
 │   └── data/pop_grids/         # WorldPop 2020 1 km grids
-├── ML/                  # FastAPI enrichment/scoring service
-│   ├── services/               # qc, fusion, clustering, tvi, gee, directives…
-│   ├── eval/sensitivity.py     # Phase 8 DBSCAN sweep
-│   └── tests/                  # 13 files incl. test_eval.py, test_qc.py
-├── docker-compose.yml          # backend + ML + frontend
-└── k8s/                        # manifests (replicas pinned to 1: in-process
-                                # rate limit + single APScheduler)
+└── ML/                  # FastAPI enrichment/scoring service
+    ├── services/               # qc, fusion, clustering, tvi, gee, directives…
+    ├── eval/sensitivity.py     # Phase 8 DBSCAN sweep
+    └── tests/                  # 13 files incl. test_eval.py, test_qc.py
 ```
 
 ---
