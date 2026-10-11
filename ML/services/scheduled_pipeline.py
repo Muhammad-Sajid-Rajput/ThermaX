@@ -72,9 +72,12 @@ def build_city_points(db, city):
     VERIFIED reports only: pending (unenriched/unchecked), QC-flagged
     (suspect), rejected, and enrichment-failed reports must never feed the
     public hotspot map. A report is clustered into exactly one city — the
-    city resolved server-side at submission. Legacy reports with no city
-    are excluded from every city's run until the backfill script attributes
-    them. Malformed rows are skipped individually — one bad document never kills the batch.
+    city resolved server-side at submission.
+
+    Legacy reports without a city are excluded until attributed by the backfill
+    script. Malformed rows are skipped individually so a single bad document
+    never aborts the batch.
+
     Returns (points, skipped).
     """
     query = {

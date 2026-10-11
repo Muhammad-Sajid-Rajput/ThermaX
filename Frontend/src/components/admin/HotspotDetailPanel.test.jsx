@@ -79,6 +79,19 @@ describe('HotspotDetailPanel', () => {
       />
     );
     expect(within(view.container).getByText('2-component TVI (population unavailable for this city)')).toBeTruthy();
+    expect(within(view.container).getByText(/Score factors: Heat \(63%\), Reports \(38%\) — adjusted for available data/)).toBeTruthy();
+  });
+
+  it('falls back to default static weight caption when tviWeightsUsed is absent', () => {
+    const view = render(
+      <HotspotDetailPanel
+        hotspot={{
+          ...hotspot,
+          tviWeightsUsed: null,
+        }}
+      />
+    );
+    expect(within(view.container).getByText(/Score factors: Heat \(50%\), Reports \(30%\), Population \(20%\)/)).toBeTruthy();
   });
 
   it('renders nothing without a hotspot', () => {

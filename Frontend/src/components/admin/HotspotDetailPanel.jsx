@@ -78,6 +78,16 @@ export default function HotspotDetailPanel({ hotspot, className = '', embedded =
 
   const advisoryText = advisory?.en || advisory?.ur || '';
 
+  const FACTOR_NAMES = { heat: 'Heat', reports: 'Reports', population: 'Population' };
+  const factorsList = ['heat', 'reports', 'population']
+    .filter((k) => typeof weightsUsed[k] === 'number')
+    .map((k) => `${FACTOR_NAMES[k] || k} (${Math.round(weightsUsed[k] * 100)}%)`);
+
+  const scoreFactorsText =
+    factorsList.length > 0
+      ? `Score factors: ${factorsList.join(', ')}`
+      : 'Score factors: Heat (50%), Reports (30%), Population (20%)';
+
   return (
     <div
       className={
@@ -118,7 +128,7 @@ export default function HotspotDetailPanel({ hotspot, className = '', embedded =
               />
             ))}
             <p className="text-[10px] text-slate-400 mt-1">
-              Score factors: Heat (50%), Reports (30%), Population (20%)
+              {scoreFactorsText}
               {Object.keys(weightsUsed).length > 0 && Object.keys(weightsUsed).length < 3
                 && ' — adjusted for available data'}
             </p>

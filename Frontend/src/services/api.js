@@ -213,17 +213,11 @@ export async function fetchMyReports() {
 /**
  * Build the multipart body for report submission.
  *
- * The backend route uses `upload.single('image')` and reads the report
- * fields from the `reportData` JSON field. A File placed inside a plain
- * JSON object would serialize to `{}` and silently drop the photo, so the
- * file must travel as its own multipart part.
+ * Reads the report fields from the `reportData` JSON field.
  */
-export function buildReportFormData(payload, imageFile) {
+export function buildReportFormData(payload) {
   const body = new FormData();
   body.append('reportData', JSON.stringify(payload));
-  if (imageFile) {
-    body.append('image', imageFile);
-  }
   return body;
 }
 

@@ -154,27 +154,10 @@ export const getReports = async (req, res) => {
           };
         });
 
-    let stats = undefined;
-    if (isAdmin) {
-      const counts = await Report.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ]);
-      const statusMap = Object.fromEntries(counts.map((c) => [c._id, c.count]));
-      const totalAll = await Report.countDocuments({});
-      stats = {
-        total: totalAll,
-        pending: statusMap.pending || 0,
-        verified: statusMap.verified || 0,
-        flagged: statusMap.flagged || 0,
-        rejected: statusMap.rejected || 0,
-      };
-    }
-
     res.json({
       message: 'Reports retrieved successfully',
       reports: payload,
       total: payload.length,
-      stats,
     });
   } catch (error) {
     console.error('getReports DB error:', error.message);

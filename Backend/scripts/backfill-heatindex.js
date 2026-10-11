@@ -236,7 +236,6 @@ export async function runBackfill(options = {}) {
         weatherCondition: best.condition ?? null,
         source: best.source || 'weatherapi',
         heatIndexSource: 'weather-cache-backfill',
-        isSynthetic: false,
         fetchedAt: new Date(),
         observedAt: best.observedAt || reportTime,
       });

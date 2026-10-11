@@ -52,20 +52,11 @@ describe('normalizeModerationDecision', () => {
 });
 
 describe('buildReportFormData', () => {
-  it('packs reportData JSON and the image file as separate multipart parts', () => {
+  it('packs reportData JSON into FormData', () => {
     const payload = { latitude: 24.86, longitude: 67.0, severity: 4 };
-    const file = new File(['bytes'], 'heat.jpg', { type: 'image/jpeg' });
-    const body = buildReportFormData(payload, file);
+    const body = buildReportFormData(payload);
     expect(body).toBeInstanceOf(FormData);
     expect(JSON.parse(body.get('reportData'))).toEqual(payload);
-    const imagePart = body.get('image');
-    expect(imagePart).toBeInstanceOf(File);
-    expect(imagePart.name).toBe('heat.jpg');
-  });
-
-  it('omits the image part when no file was chosen', () => {
-    const body = buildReportFormData({ latitude: 24.86 }, null);
-    expect(body.get('reportData')).toContain('24.86');
     expect(body.get('image')).toBeNull();
   });
 });
@@ -77,7 +68,7 @@ describe('submitHeatReport', () => {
 
   it('passes onUploadProgress through to axios for multipart uploads', async () => {
     const onUploadProgress = vi.fn();
-    const body = buildReportFormData({ latitude: 24.86 }, null);
+    const body = buildReportFormData({ latitude: 24.86 });
     await submitHeatReport(body, { onUploadProgress });
     expect(mockPost()).toHaveBeenCalledTimes(1);
     const [, , config] = mockPost().mock.calls[0];
@@ -88,7 +79,7 @@ describe('submitHeatReport', () => {
   });
 
   it('omits onUploadProgress when no callback is given', async () => {
-    const body = buildReportFormData({ latitude: 24.86 }, null);
+    const body = buildReportFormData({ latitude: 24.86 });
     await submitHeatReport(body);
     const [, , config] = mockPost().mock.calls[0];
     expect(config.onUploadProgress).toBeUndefined();

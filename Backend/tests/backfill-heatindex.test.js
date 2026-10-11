@@ -89,7 +89,6 @@ describe('Guarded Heat-Index Backfill (backfill-heatindex.js)', () => {
     expect(snapshot.humidity).toBe(60);
     expect(snapshot.temperature).toBe(37.0);
     expect(snapshot.heatIndexSource).toBe('weather-cache-backfill');
-    expect(snapshot.isSynthetic).toBe(false);
   });
 
   it('updates existing snapshot where heatIndex is null, but never overwrites existing heatIndex', async () => {

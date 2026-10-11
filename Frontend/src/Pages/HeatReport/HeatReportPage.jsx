@@ -4,7 +4,6 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import MiniMap from './MiniMap';
 import { detectAreaName, submitHeatReport, buildReportFormData, getSubmissionErrorMessage } from '../../services/api';
-import UploadProgress from '../../components/ui/UploadProgress';
 import { fetchCurrentWeather } from '../../services/weatherService';
 import useWeather from '../../hooks/data/useWeather';
 import useUserLocationStore from '../../stores/userLocationStore';
@@ -111,7 +110,6 @@ function HeatReport() {
   }, [isAuthenticated, requireAuth]);
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadError, setUploadError] = useState(null); // safe message string after a failed submission
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errors, setErrors] = useState({});
@@ -270,15 +268,8 @@ function HeatReport() {
       };
       const body = buildReportFormData(reportPayload);
 
-      setUploadProgress(null);
-      await submitHeatReport(body, {
-        onUploadProgress: (event) => {
-          if (event.total) {
-            setUploadProgress(Math.round((event.loaded * 100) / event.total));
-          }
-        },
-      });
-      setUploadProgress(null);
+      setUploadError(null);
+      await submitHeatReport(body);
       setShowSuccessModal(true);
       setTimeout(() => {
         navigate('/my-reports');
@@ -290,7 +281,6 @@ function HeatReport() {
       const message = getSubmissionErrorMessage(err);
       setUploadError(message);
       toast.error(message);
-      setUploadProgress(null);
       setIsSubmitting(false);
     }
   };
@@ -875,8 +865,18 @@ function HeatReport() {
                 </button>
               )}
             </div>
-            {/* Upload progress + failure — visible while the photo is being sent */}
-            <UploadProgress progress={uploadProgress} error={uploadError} />
+            {uploadError && (
+              <div
+                role="alert"
+                className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3"
+              >
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold text-red-800 mb-0.5">Submission failed</p>
+                  <p className="text-red-700">{uploadError}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         {/* Sidebar Map Section — sticky on desktop */}

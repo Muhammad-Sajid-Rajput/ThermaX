@@ -92,16 +92,7 @@ function ReportManagement() {
       }));
 
       setReports(normalized);
-
-      if (response?.stats) {
-        setGlobalStats({
-          total: response.stats.total,
-          pending: response.stats.pending,
-          validated: response.stats.verified,
-          flagged: response.stats.flagged,
-          rejected: response.stats.rejected,
-        });
-      }
+      await refreshStats();
     } catch (err) {
       console.error('Failed to load reports:', err);
       toast.error('Failed to load real reports from database.');
@@ -110,7 +101,7 @@ function ReportManagement() {
     } finally {
       setLoading(false);
     }
-  }, [filters.status]);
+  }, [filters.status, refreshStats]);
 
   useEffect(() => {
     refreshStats();

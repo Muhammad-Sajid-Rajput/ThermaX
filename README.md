@@ -113,7 +113,8 @@ City authority is shared: `Backend/data/cities.json` (14 canonical metropolitan 
 ```bash
 # 1. Backend
 cd Backend && npm ci && cp .env.example .env   # set JWT_SECRET, MONGO_URI
-npm run seed        # deterministic demo dataset (1 admin, 3 citizens, ~50 reports)
+# Bootstrap initial admin account (or pass ADMIN_PASSWORD in env):
+node scripts/create-admin.js "System Admin" admin@thermax.local "AdminPassword123!"
 
 # 2. ML service
 cd ../ML && python -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -132,8 +133,7 @@ cd ML && .venv/bin/python -m uvicorn main:app --port 8000   # :8000 (starts the 
 cd Frontend && npm run dev    # :5173
 ```
 
-Demo credentials (seeded): `admin@thermax-demo.com` / `ThermaX-Admin-2026!`,
-`citizen1@thermax-demo.com` / `ThermaX-Citizen-2026!`.
+Admin credentials: created via `node scripts/create-admin.js`. Citizen accounts register via the `/signup` view.
 
 ## Evaluation
 
