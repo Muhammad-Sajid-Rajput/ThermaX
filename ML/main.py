@@ -8,6 +8,7 @@
 - In-memory sliding-window rate limit: 100 req/min per IP → 429.
 - JSON body guard: payloads over ML_MAX_BODY_BYTES → 413.
 """
+import os
 import importlib
 import hmac
 import time
@@ -245,5 +246,6 @@ if __name__ == "__main__":
         uvicorn = importlib.import_module("uvicorn")
         is_prod = os.getenv("ENV_NAME", "").lower() == "production" or os.getenv("NODE_ENV", "").lower() == "production"
         uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=not is_prod)
-    except Exception:
-        print("[ML Microservice] Run 'pip install -r requirements.txt' to start uvicorn server.")
+    except Exception as err:
+        print(f"[ML Microservice] Error starting uvicorn server: {err}")
+        print("[ML Microservice] Run 'pip install -r requirements.txt' to install dependencies.")
