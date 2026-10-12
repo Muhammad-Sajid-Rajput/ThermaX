@@ -86,8 +86,7 @@ const authReducer = (state, action) => {
     case AUTH_ACTIONS.TOKEN_REFRESHED:
       return { ...state, token: action.payload };
     case AUTH_ACTIONS.CLEAR_ERROR:
-      if (state.error === null) return state;
-      return { ...state, error: null };
+      return { ...state, error: null, isLoading: false };
     default:
       return state;
   }
@@ -107,7 +106,7 @@ export const AuthProvider = ({ children }) => {
     (async () => {
       const token = authStorage.getToken();
       if (!token) {
-        if (state.isAuthenticated) {
+        if (state.isAuthenticated || state.isLoading) {
           dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
         }
         return;
@@ -119,17 +118,14 @@ export const AuthProvider = ({ children }) => {
           authStorage.setCurrentUser(user);
           const currentToken = authStorage.getToken() || token;
           dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user, token: currentToken } });
+        } else {
+          authStorage.clearAuth();
+          dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
         }
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        const status = err?.response?.status;
-        if (status === 401 || status === 403) {
-          const refreshToken = authStorage.getRefreshToken();
-          if (!refreshToken) {
-            authStorage.clearAuth();
-            dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
-          }
-        }
+        authStorage.clearAuth();
+        dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: null });
       }
     })();
     return () => {
@@ -211,7 +207,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const verifyEmailOtp = useCallback(async (email, code) => {
-    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     try {
       const data = await verifyEmail(email, code);
       if (!data?.user) {
@@ -226,7 +221,7 @@ export const AuthProvider = ({ children }) => {
         error?.response?.data?.error ||
         error?.message ||
         'Verification failed';
-      dispatch({ type: AUTH_ACTIONS.LOGIN_FAILURE, payload: errorMessage });
+      dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       return { success: false, error: errorMessage };
     }
   }, []);

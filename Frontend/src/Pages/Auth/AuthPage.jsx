@@ -53,6 +53,8 @@ const AuthPage = () => {
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [otpNotice, setOtpNotice] = useState(null);
   const [loginSuccessNotice, setLoginSuccessNotice] = useState(null);
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isSubmittingSignup, setIsSubmittingSignup] = useState(false);
 
   // Forgot password state
   const [showForgotView, setShowForgotView] = useState(false);
@@ -175,29 +177,34 @@ const AuthPage = () => {
     e.preventDefault();
     if (!validateLogin()) return;
     setLoginSuccessNotice(null);
-    const result = await login(loginData);
-    if (result.success) {
-      if (location.state?.from) {
-        navigate(from, { replace: true });
-      } else {
-        const userRole = String(result.user?.role || '').toUpperCase();
-        if (userRole === 'ADMIN') {
-          navigate('/admin');
+    setIsSubmittingLogin(true);
+    try {
+      const result = await login(loginData);
+      if (result.success) {
+        if (location.state?.from) {
+          navigate(from, { replace: true });
         } else {
-          navigate('/dashboard');
+          const userRole = String(result.user?.role || '').toUpperCase();
+          if (userRole === 'ADMIN') {
+            navigate('/admin');
+          } else {
+            navigate('/dashboard');
+          }
         }
+      } else if (result.code === 'EMAIL_NOT_VERIFIED' || /verify/i.test(result.error || '')) {
+        const emailToVerify = loginData.email.trim();
+        setVerificationEmail(emailToVerify);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('thermax_verify_email', emailToVerify);
+        }
+        setShowOtpView(true);
+        setOtpNotice({
+          type: 'info',
+          text: 'Your email is not verified yet. Please enter the 6-digit verification code sent to your email.',
+        });
       }
-    } else if (result.code === 'EMAIL_NOT_VERIFIED' || /verify/i.test(result.error || '')) {
-      const emailToVerify = loginData.email.trim();
-      setVerificationEmail(emailToVerify);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('thermax_verify_email', emailToVerify);
-      }
-      setShowOtpView(true);
-      setOtpNotice({
-        type: 'info',
-        text: 'Your email is not verified yet. Please enter the 6-digit verification code sent to your email.',
-      });
+    } finally {
+      setIsSubmittingLogin(false);
     }
   };
 
@@ -243,22 +250,27 @@ const AuthPage = () => {
     e.preventDefault();
     if (!validateSignup()) return;
     const { confirmPassword: _confirmPassword, ...data } = signupData;
-    const result = await signup(data);
-    if (result.success) {
-      if (result.isEmailVerified) {
-        navigate('/dashboard');
-      } else {
-        const emailToVerify = data.email.trim();
-        setVerificationEmail(emailToVerify);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('thermax_verify_email', emailToVerify);
+    setIsSubmittingSignup(true);
+    try {
+      const result = await signup(data);
+      if (result.success) {
+        if (result.isEmailVerified) {
+          navigate('/dashboard');
+        } else {
+          const emailToVerify = data.email.trim();
+          setVerificationEmail(emailToVerify);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('thermax_verify_email', emailToVerify);
+          }
+          setShowOtpView(true);
+          setOtpNotice({
+            type: 'success',
+            text: result.message || 'Account created! Enter the 6-digit verification code sent to your email.',
+          });
         }
-        setShowOtpView(true);
-        setOtpNotice({
-          type: 'success',
-          text: result.message || 'Account created! Enter the 6-digit verification code sent to your email.',
-        });
       }
+    } finally {
+      setIsSubmittingSignup(false);
     }
   };
 
@@ -917,11 +929,11 @@ const AuthPage = () => {
                   {/* Submit Button */}
                   <button
                     type="submit"
-                    disabled={isLoading}
-                    aria-busy={isLoading}
+                    disabled={isSubmittingLogin}
+                    aria-busy={isSubmittingLogin}
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-green-600/20 hover:shadow-green-600/30 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.98] focus:outline-none focus:ring-4 focus:ring-green-600/20 cursor-pointer"
                   >
-                    {isLoading ? (
+                    {isSubmittingLogin ? (
                       <span className="flex items-center gap-2">
                         <Loader2 className="w-5 h-5 animate-spin" />
                         Signing in...
@@ -1082,11 +1094,11 @@ const AuthPage = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading}
-                aria-busy={isLoading}
+                disabled={isSubmittingSignup}
+                aria-busy={isSubmittingSignup}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-green-600/20 hover:shadow-green-600/30 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.98] mt-1 focus:outline-none focus:ring-4 focus:ring-green-600/20"
               >
-                {isLoading ? (
+                {isSubmittingSignup ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Creating account...
