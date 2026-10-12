@@ -50,9 +50,10 @@ app.use(
 const rawFrontendOrigins = process.env.FRONTEND_URL || 'http://localhost:5173';
 const allowedFrontendOrigins = rawFrontendOrigins
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 const localOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const vercelPattern = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vercel\.app$/i;
 
 app.use(
   cors({
@@ -61,15 +62,16 @@ app.use(
         callback(null, true);
         return;
       }
-      if (allowedFrontendOrigins.includes(origin)) {
+      const normalized = origin.trim().replace(/\/+$/, '');
+      if (
+        allowedFrontendOrigins.includes(normalized) ||
+        vercelPattern.test(normalized) ||
+        (NODE_ENV === 'development' && localOriginPattern.test(normalized))
+      ) {
         callback(null, true);
         return;
       }
-      if (NODE_ENV === 'development' && localOriginPattern.test(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`CORS policy violation: ${origin} is not allowed`));
+      callback(null, false);
     },
     credentials: true,
   })
