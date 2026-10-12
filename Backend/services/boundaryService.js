@@ -72,6 +72,25 @@ export function getCities() {
  * Checks all 12 cities against their metro bounding boxes. Overlapping
  * bboxes resolve deterministically to the nearest city center.
  */
+const PAKISTAN_BOUNDS = {
+  minLat: 23.0,
+  maxLat: 37.5,
+  minLng: 60.5,
+  maxLng: 78.0,
+};
+
+export function isLocationInPakistan(lat, lng) {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
+  return (
+    latNum >= PAKISTAN_BOUNDS.minLat &&
+    latNum <= PAKISTAN_BOUNDS.maxLat &&
+    lngNum >= PAKISTAN_BOUNDS.minLng &&
+    lngNum <= PAKISTAN_BOUNDS.maxLng
+  );
+}
+
 export function resolveCity(lat, lng) {
   const latNum = Number(lat);
   const lngNum = Number(lng);
@@ -93,6 +112,17 @@ export function resolveCity(lat, lng) {
       if (!best || distSq < best.distSq) best = { name: city.name, distSq };
     }
   }
+
+  // If outside all metro bboxes but within Pakistan, resolve to nearest supported city center
+  if (!best && isLocationInPakistan(latNum, lngNum)) {
+    for (const city of cityDefs) {
+      const dLat = latNum - (city.center?.lat ?? 0);
+      const dLng = lngNum - (city.center?.lng ?? 0);
+      const distSq = dLat * dLat + dLng * dLng;
+      if (!best || distSq < best.distSq) best = { name: city.name, distSq };
+    }
+  }
+
   return best ? best.name : null;
 }
 

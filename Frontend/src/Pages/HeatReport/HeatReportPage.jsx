@@ -259,11 +259,20 @@ function HeatReport() {
         temperature = ambientWeather?.heatIndex ?? ambientWeather?.temperature;
       }
 
+      let parsedObservedAt = null;
+      if (form.observedAt) {
+        const d = new Date(form.observedAt);
+        if (!isNaN(d.getTime())) {
+          parsedObservedAt = d.getTime() > Date.now() ? new Date().toISOString() : d.toISOString();
+        }
+      }
+
       const reportPayload = {
         ...form,
         description: form.description.trim(),
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
+        observedAt: parsedObservedAt || new Date().toISOString(),
         temperature,
       };
       const body = buildReportFormData(reportPayload);

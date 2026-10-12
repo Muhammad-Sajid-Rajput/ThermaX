@@ -56,10 +56,15 @@ function parseObservedAt(raw) {
     err.statusCode = 400;
     throw err;
   }
-  if (d.getTime() > Date.now() + 5 * 60 * 1000) {
+  // If the date is excessively in the future (> 14h, outside any timezone offset), reject
+  if (d.getTime() > Date.now() + 14 * 60 * 60 * 1000) {
     const err = new Error('observedAt cannot be in the future.');
     err.statusCode = 400;
     throw err;
+  }
+  // If ahead of server UTC due to local client timezone or slight clock skew, clamp to now
+  if (d.getTime() > Date.now()) {
+    return new Date();
   }
   return d;
 }
