@@ -170,6 +170,86 @@ router.put('/:id/status', authorizeAdmin, strictLimiter, async (req, res) => {
   }
 });
 
+// Delete account (current user or Admin)
+router.delete('/me', async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.role === ROLES.ADMIN) {
+      const adminCount = await User.countDocuments({ role: ROLES.ADMIN, isActive: true });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          error: 'Action blocked',
+          message: 'Cannot delete the last remaining administrator account.',
+        });
+      }
+    }
+
+    const RefreshToken = (await import('../models/RefreshToken.js')).default;
+    await RefreshToken.deleteMany({ user: userId });
+
+    const Report = (await import('../models/Report.js')).default;
+    await Report.deleteMany({ user: userId });
+
+    await User.findByIdAndDelete(userId);
+
+    res.clearCookie('refreshToken');
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to delete account',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred deleting account',
+    });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const userRole = (req.user?.role ? String(req.user.role).toLowerCase() : '');
+    const isSelf = req.user._id.toString() === req.params.id;
+    if (!isSelf && userRole !== ROLES.ADMIN) {
+      return res.status(403).json({ error: 'Access denied', message: 'Unauthorized' });
+    }
+
+    const targetUser = await User.findById(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Not found', message: 'User not found' });
+    }
+
+    if (targetUser.role === ROLES.ADMIN) {
+      const adminCount = await User.countDocuments({ role: ROLES.ADMIN, isActive: true });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          error: 'Action blocked',
+          message: 'Cannot delete the last remaining administrator account.',
+        });
+      }
+    }
+
+    const RefreshToken = (await import('../models/RefreshToken.js')).default;
+    await RefreshToken.deleteMany({ user: targetUser._id });
+
+    const Report = (await import('../models/Report.js')).default;
+    await Report.deleteMany({ user: targetUser._id });
+
+    await User.findByIdAndDelete(targetUser._id);
+
+    if (isSelf) {
+      res.clearCookie('refreshToken');
+    }
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    res.status(dbFailureStatus(error)).json({
+      error: 'Failed to delete account',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred deleting account',
+    });
+  }
+});
 
 export { router as userRoutes };
 export default router;

@@ -20,19 +20,38 @@ import {
   Phone,
   Building2,
   ExternalLink,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
-import { fetchMyReports, fetchCurrentUser, formatTimestamp } from '../../services/api';
+import { fetchMyReports, fetchCurrentUser, formatTimestamp, deleteAccount } from '../../services/api';
 import { toast } from 'react-hot-toast';
 import Panel from '../../components/ui/Panel';
 import SectionHeading from '../../components/ui/SectionHeading';
 
 function ProfilePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const [profileUser, setProfileUser] = useState(user);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setIsDeletingAccount(true);
+    try {
+      await deleteAccount(profileUser?._id);
+      toast.success('Your account has been deleted.');
+      await logout();
+      navigate('/signup');
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete account.';
+      toast.error(msg);
+      setIsDeletingAccount(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   // Sync profileUser with AuthContext and fetch /me if createdAt is missing
   useEffect(() => {
@@ -283,13 +302,14 @@ function ProfilePage() {
 
               {/* Action Buttons */}
               <div className="pt-4 border-t border-slate-100">
-                <Link
-                  to="/report"
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-50 text-red-600 border border-red-200/80 px-4 py-2.5 text-xs font-semibold shadow-2xs transition-all hover:bg-red-600 hover:text-white hover:border-red-600 cursor-pointer group"
                 >
-                  <Flame className="w-4 h-4" />
-                  Submit New Heat Report
-                </Link>
+                  <Trash2 className="w-4 h-4 text-red-600 group-hover:text-white transition-colors" />
+                  Delete Account
+                </button>
               </div>
             </Panel>
           </div>
@@ -485,6 +505,56 @@ function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-scale-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600 shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Your Account?</h3>
+                <p className="text-xs text-slate-500">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-6 bg-red-50/50 p-3 rounded-xl border border-red-100">
+              All your profile details, contributed reports, and account access for <strong className="text-slate-900">{profileUser?.email}</strong> will be permanently removed from ThermaX.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeletingAccount}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-red-700 shadow-sm shadow-red-600/30 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingAccount ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Yes, Delete My Account
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

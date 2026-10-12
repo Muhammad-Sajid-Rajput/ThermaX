@@ -225,6 +225,13 @@ export async function fetchCurrentUser() {
   return response.data?.user ?? null;
 }
 
+export async function deleteAccount(userId) {
+  const url = userId ? `/api/users/${userId}` : '/api/users/me';
+  const response = await api.delete(url);
+  authStorage.clearAuth();
+  return response.data;
+}
+
 /**
  * Safe, meaningful message for a failed report submission — mirrors the
  * getWeatherErrorMessage style in services/weatherService.js.
