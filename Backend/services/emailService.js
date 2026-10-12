@@ -5,7 +5,7 @@ const isDummyKey = !apiKey || apiKey.includes('your_resend_api_key');
 
 // Use dummy key if missing to prevent initialization crash
 const resend = new Resend(isDummyKey ? 're_1234567890' : apiKey);
-const FROM_ADDRESS = process.env.RESEND_FROM || 'ThermaX <onboarding@resend.dev>';
+const FROM_ADDRESS = process.env.RESEND_FROM || 'ThermaX <noreply@muhammadsajid.dev>';
 
 const esc = (str) =>
   String(str || '')
