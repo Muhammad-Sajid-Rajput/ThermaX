@@ -45,11 +45,14 @@ const AuthPage = () => {
 
   // Email verification (OTP) state
   const [showOtpView, setShowOtpView] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState(() => {
+    return (typeof window !== 'undefined' && sessionStorage.getItem('thermax_verify_email')) || '';
+  });
   const [otpCode, setOtpCode] = useState('');
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [otpNotice, setOtpNotice] = useState(null);
+  const [loginSuccessNotice, setLoginSuccessNotice] = useState(null);
 
   // Forgot password state
   const [showForgotView, setShowForgotView] = useState(false);
@@ -109,6 +112,7 @@ const AuthPage = () => {
     setShowForgotView(false);
     setOtpNotice(null);
     setForgotNotice(null);
+    setLoginSuccessNotice(null);
     setFormErrors({});
     clearError?.();
     navigate(tab === 'login' ? '/login' : '/signup', { replace: true });
@@ -148,6 +152,9 @@ const AuthPage = () => {
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
     }
+    if (loginSuccessNotice) {
+      setLoginSuccessNotice(null);
+    }
   };
 
   const validateLogin = () => {
@@ -167,6 +174,7 @@ const AuthPage = () => {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!validateLogin()) return;
+    setLoginSuccessNotice(null);
     const result = await login(loginData);
     if (result.success) {
       if (location.state?.from) {
@@ -180,11 +188,15 @@ const AuthPage = () => {
         }
       }
     } else if (result.code === 'EMAIL_NOT_VERIFIED' || /verify/i.test(result.error || '')) {
-      setVerificationEmail(loginData.email);
+      const emailToVerify = loginData.email.trim();
+      setVerificationEmail(emailToVerify);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('thermax_verify_email', emailToVerify);
+      }
       setShowOtpView(true);
       setOtpNotice({
         type: 'info',
-        text: result.error || 'Please enter the 6-digit verification code sent to your email.',
+        text: 'Your email is not verified yet. Please enter the 6-digit verification code sent to your email.',
       });
     }
   };
@@ -236,7 +248,11 @@ const AuthPage = () => {
       if (result.isEmailVerified) {
         navigate('/dashboard');
       } else {
-        setVerificationEmail(data.email);
+        const emailToVerify = data.email.trim();
+        setVerificationEmail(emailToVerify);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('thermax_verify_email', emailToVerify);
+        }
         setShowOtpView(true);
         setOtpNotice({
           type: 'success',
@@ -248,34 +264,60 @@ const AuthPage = () => {
 
   const handleVerifyOtpSubmit = async (e) => {
     e.preventDefault();
+    const targetEmail = (
+      verificationEmail ||
+      loginData.email ||
+      signupData.email ||
+      (typeof window !== 'undefined' && sessionStorage.getItem('thermax_verify_email')) ||
+      ''
+    ).trim();
+
+    if (!targetEmail) {
+      setOtpNotice({ type: 'error', text: 'Please enter your email address to verify.' });
+      return;
+    }
     if (!otpCode || otpCode.trim().length !== 6) {
       setOtpNotice({ type: 'error', text: 'Please enter a valid 6-digit code.' });
       return;
     }
     setIsVerifyingOtp(true);
     setOtpNotice(null);
-    const result = await verifyEmailOtp(verificationEmail, otpCode.trim());
+    const result = await verifyEmailOtp(targetEmail, otpCode.trim());
     setIsVerifyingOtp(false);
     if (result.success) {
-      const userRole = String(result.user?.role || '').toUpperCase();
-      if (userRole === 'ADMIN') {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('thermax_verify_email');
       }
+      setOtpCode('');
+      setShowOtpView(false);
+      setActiveTab('login');
+      setLoginData({ email: targetEmail, password: '' });
+      setLoginSuccessNotice('Email verified successfully! Please enter your password to sign in.');
+      navigate('/login', { replace: true });
     } else {
       setOtpNotice({ type: 'error', text: result.error || 'Invalid or expired OTP code.' });
     }
   };
 
   const handleResendOtp = async () => {
-    if (!verificationEmail) return;
+    const targetEmail = (
+      verificationEmail ||
+      loginData.email ||
+      signupData.email ||
+      (typeof window !== 'undefined' && sessionStorage.getItem('thermax_verify_email')) ||
+      ''
+    ).trim();
+
+    if (!targetEmail) {
+      setOtpNotice({ type: 'error', text: 'Please enter your email to resend code.' });
+      return;
+    }
     setIsResendingOtp(true);
     setOtpNotice({ type: 'info', text: 'Resending verification code...' });
-    const result = await resendVerificationOtp(verificationEmail);
+    const result = await resendVerificationOtp(targetEmail);
     setIsResendingOtp(false);
     if (result.success) {
-      setOtpNotice({ type: 'success', text: result.message || 'Verification code resent.' });
+      setOtpNotice({ type: 'success', text: result.message || 'Verification code resent to your email.' });
     } else {
       setOtpNotice({ type: 'error', text: result.error || 'Failed to resend code.' });
     }
@@ -490,6 +532,14 @@ const AuthPage = () => {
             </p>
           </div>
 
+          {/* Success Alert */}
+          {loginSuccessNotice && !showOtpView && !showForgotView && activeTab === 'login' && (
+            <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center gap-3 animate-fade-in duration-300">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <p className="text-sm font-semibold text-emerald-800">{loginSuccessNotice}</p>
+            </div>
+          )}
+
           {/* Error Alert */}
           {error && !showOtpView && (
             <div className="mb-4 bg-red-50 border border-red-100 rounded-2xl p-3 flex flex-col gap-2 animate-fade-in duration-300">
@@ -503,7 +553,11 @@ const AuthPage = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setVerificationEmail(loginData.email || signupData.email);
+                    const emailToVerify = loginData.email || signupData.email;
+                    setVerificationEmail(emailToVerify);
+                    if (typeof window !== 'undefined' && emailToVerify) {
+                      sessionStorage.setItem('thermax_verify_email', emailToVerify);
+                    }
                     setShowOtpView(true);
                   }}
                   className="self-start ml-11 text-xs font-bold text-green-700 hover:text-green-800 underline cursor-pointer"
@@ -545,6 +599,32 @@ const AuthPage = () => {
               )}
 
               <form onSubmit={handleVerifyOtpSubmit} className="space-y-3">
+                {!verificationEmail && (
+                  <div>
+                    <label htmlFor="otp-email-input" className="block text-[10px] font-bold text-slate-700 mb-1 px-1 uppercase tracking-wider opacity-70">
+                      Email Address
+                    </label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-green-600 transition-colors" />
+                      <input
+                        id="otp-email-input"
+                        type="email"
+                        value={loginData.email || signupData.email || ''}
+                        onChange={(e) => {
+                          const val = e.target.value.trim();
+                          setVerificationEmail(val);
+                          if (typeof window !== 'undefined') {
+                            sessionStorage.setItem('thermax_verify_email', val);
+                          }
+                        }}
+                        placeholder="you@example.com"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-green-600 focus:ring-4 focus:ring-green-600/10 bg-slate-50/40 focus:bg-white outline-none text-sm font-medium"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="otp-input" className="block text-[10px] font-bold text-slate-700 mb-1 px-1 uppercase tracking-wider opacity-70">
                     6-Digit Verification Code
@@ -572,7 +652,7 @@ const AuthPage = () => {
                       Verifying...
                     </span>
                   ) : (
-                    'Verify & Sign In'
+                    'Verify & Continue to Log In'
                   )}
                 </button>
               </form>

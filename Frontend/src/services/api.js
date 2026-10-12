@@ -157,12 +157,6 @@ export async function logoutUser() {
 
 export async function verifyEmail(email, code) {
   const response = await api.post('/api/auth/verify-email', { email, code });
-  if (response.data?.token || response.data?.accessToken) {
-    authStorage.setToken(response.data.accessToken || response.data.token);
-  }
-  if (response.data?.refreshToken) {
-    authStorage.setRefreshToken(response.data.refreshToken);
-  }
   return response.data;
 }
 

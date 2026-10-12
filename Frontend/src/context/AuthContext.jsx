@@ -217,10 +217,8 @@ export const AuthProvider = ({ children }) => {
       if (!data?.user) {
         throw new Error(data?.message || 'Verification failed');
       }
-      dispatch({
-        type: AUTH_ACTIONS.LOGIN_SUCCESS,
-        payload: { user: data.user, token: data.token || data.accessToken },
-      });
+      authStorage.clearAuth();
+      dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
       return { success: true, user: data.user, message: data.message };
     } catch (error) {
       const errorMessage =
