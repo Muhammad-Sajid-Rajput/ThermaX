@@ -13,8 +13,9 @@
 import EnrichmentFailure from '../models/EnrichmentFailure.js';
 
 const MAX_ATTEMPTS = 3;
-const ATTEMPT_TIMEOUT_MS = 5000;
-const BACKOFF_MS = [500, 2000]; // waits before attempts 2 and 3
+// Render free-tier cold starts take 25–40s; allow 45s so sleeping instances can wake up
+const ATTEMPT_TIMEOUT_MS = 45000;
+const BACKOFF_MS = [2000, 5000]; // waits before attempts 2 and 3
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -36,7 +37,12 @@ async function postOnce(endpoint) {
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new Error(`ML service responded with HTTP ${res.status}`);
+      let detail = '';
+      try {
+        const body = await res.text();
+        detail = body ? ` - ${body}` : '';
+      } catch {}
+      throw new Error(`ML service responded with HTTP ${res.status}${detail}`);
     }
     return res;
   } finally {
