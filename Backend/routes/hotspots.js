@@ -89,6 +89,17 @@ export function toDto(h) {
   };
 }
 
+const CITY_ALIASES = {
+  kotri: 'Hyderabad',
+  jamshoro: 'Hyderabad',
+  pindi: 'Rawalpindi',
+  isb: 'Islamabad',
+  lhr: 'Lahore',
+  khi: 'Karachi',
+  fsd: 'Faisalabad',
+  fbd: 'Faisalabad',
+};
+
 router.get('/', optionalAuth, async (req, res) => {
   try {
     // Reader path for the Phase 5 publication pointer: resolve each city's
@@ -97,15 +108,22 @@ router.get('/', optionalAuth, async (req, res) => {
     const cityParam = req.query.city;
     let runSelectors;
     if (cityParam) {
-      const supported = getCities().map((c) => c.name);
-      if (!supported.includes(cityParam)) {
-        return res.status(400).json({
-          error: 'Unknown city',
-          message: `Supported cities: ${supported.join(', ')}.`,
+      const lower = String(cityParam).trim().toLowerCase();
+      const supportedCities = getCities();
+      const matchedCity =
+        CITY_ALIASES[lower] ||
+        supportedCities.find((c) => c.name.toLowerCase() === lower)?.name;
+
+      if (!matchedCity) {
+        return res.json({
+          message: 'Hotspots retrieved successfully',
           hotspots: [],
+          total: 0,
+          lastUpdated: new Date().toISOString(),
         });
       }
-      const pub = await HotspotPublication.findOne({ city: cityParam });
+
+      const pub = await HotspotPublication.findOne({ city: matchedCity });
       if (!pub) {
         return res.json({
           message: 'Hotspots retrieved successfully',
@@ -114,7 +132,7 @@ router.get('/', optionalAuth, async (req, res) => {
           lastUpdated: new Date().toISOString(),
         });
       }
-      runSelectors = [{ city: cityParam, runId: pub.currentRunId }];
+      runSelectors = [{ city: matchedCity, runId: pub.currentRunId }];
     } else {
       const pubs = await HotspotPublication.find({});
       runSelectors = pubs.map((p) => ({ city: p.city, runId: p.currentRunId }));

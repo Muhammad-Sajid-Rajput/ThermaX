@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet.heat';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Map, Eye, EyeOff, RotateCcw, Maximize, Minimize, Navigation } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import useFullscreen from '../../hooks/ui/useFullscreen';
 import useUserLocationStore from '../../stores/userLocationStore';
 import { buildHotspotPopup, buildReportPopup } from '../../utils/popupBuilders';
@@ -490,6 +491,11 @@ const MapSection = ({
           setCenterOverride([res.lat, res.lng]);
           setZoomOverride(12);
           setResetTrigger((prev) => prev + 1);
+        } else {
+          toast.error(
+            'Location blocked in your browser. Click the 🔒 lock icon in your address bar to allow location access.',
+            { duration: 5000 }
+          );
         }
       });
     }

@@ -87,6 +87,17 @@ const useUserLocationStore = create((set, get) => ({
     });
   },
 
+  setManualLocation: (lat, lng, cityName) =>
+    set({
+      lat,
+      lng,
+      cityName,
+      accuracy: 100,
+      status: 'ready',
+      error: null,
+      requested: true,
+    }),
+
   clearLocation: () =>
     set({
       lat: null,

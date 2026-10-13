@@ -1,11 +1,26 @@
+const CITY_ALIASES = {
+  kotri: 'Hyderabad',
+  jamshoro: 'Hyderabad',
+  pindi: 'Rawalpindi',
+  isb: 'Islamabad',
+  lhr: 'Lahore',
+  khi: 'Karachi',
+  fsd: 'Faisalabad',
+  fbd: 'Faisalabad',
+};
+
 /**
  * Normalizes city names for display and querying (e.g. "karachi" -> "Karachi").
- * Supports any location across Pakistan.
+ * Maps local suburbs/districts like Kotri/Jamshoro to canonical cluster cities.
  */
 export function normalizeCity(name) {
   if (!name || typeof name !== 'string') return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (CITY_ALIASES[lower]) {
+    return CITY_ALIASES[lower];
+  }
   return trimmed
     .split(/\s+/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
